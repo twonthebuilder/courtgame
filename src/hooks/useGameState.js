@@ -1,7 +1,14 @@
 import { useState } from 'react';
-import { fetchWithRetry } from '../lib/api';
 import { copyToClipboard } from '../lib/clipboard';
-import { API_KEY, DEFAULT_GAME_CONFIG } from '../lib/config';
+import { DEFAULT_GAME_CONFIG } from '../lib/config';
+import {
+  getLlmClientErrorMessage,
+  parseCaseResponse,
+  parseJuryResponse,
+  parseMotionResponse,
+  parseVerdictResponse,
+  requestLlmJson,
+} from '../lib/llmClient';
 import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
@@ -61,19 +68,12 @@ const useGameState = () => {
     setConfig({ role, difficulty, jurisdiction });
 
     try {
-      const res = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Generate' }] }],
-            systemInstruction: { parts: [{ text: getGeneratorPrompt(difficulty, jurisdiction, role) }] },
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      const data = JSON.parse(res.candidates[0].content.parts[0].text);
+      const payload = await requestLlmJson({
+        userPrompt: 'Generate',
+        systemPrompt: getGeneratorPrompt(difficulty, jurisdiction, role),
+        responseLabel: 'case',
+      });
+      const data = parseCaseResponse(payload);
 
       setHistory({
         case: data,
@@ -87,7 +87,7 @@ const useGameState = () => {
       setGameState('playing');
     } catch (err) {
       console.error(err);
-      setError('Docket creation failed. Please try again.');
+      setError(getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.'));
       setGameState('start');
     }
   };
@@ -100,19 +100,12 @@ const useGameState = () => {
   const submitStrikes = async (strikes) => {
     setLoadingMsg('Judge is ruling on strikes...');
     try {
-      const res = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Strike' }] }],
-            systemInstruction: { parts: [{ text: getJuryStrikePrompt(history.case, strikes, config.role) }] },
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      const data = JSON.parse(res.candidates[0].content.parts[0].text);
+      const payload = await requestLlmJson({
+        userPrompt: 'Strike',
+        systemPrompt: getJuryStrikePrompt(history.case, strikes, config.role),
+        responseLabel: 'jury',
+      });
+      const data = parseJuryResponse(payload);
 
       setHistory((prev) => ({
         ...prev,
@@ -129,7 +122,7 @@ const useGameState = () => {
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
-      setError('Strike failed.');
+      setError(getLlmClientErrorMessage(err, 'Strike failed.'));
       setLoadingMsg(null);
     }
   };
@@ -142,19 +135,12 @@ const useGameState = () => {
   const submitMotion = async (text) => {
     setLoadingMsg('Filing motion...');
     try {
-      const res = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Motion' }] }],
-            systemInstruction: { parts: [{ text: getMotionPrompt(history.case, text, config.difficulty) }] },
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      const data = JSON.parse(res.candidates[0].content.parts[0].text);
+      const payload = await requestLlmJson({
+        userPrompt: 'Motion',
+        systemPrompt: getMotionPrompt(history.case, text, config.difficulty),
+        responseLabel: 'motion',
+      });
+      const data = parseMotionResponse(payload);
 
       setHistory((prev) => ({
         ...prev,
@@ -164,7 +150,7 @@ const useGameState = () => {
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
-      setError('Motion failed.');
+      setError(getLlmClientErrorMessage(err, 'Motion failed.'));
       setLoadingMsg(null);
     }
   };
@@ -180,31 +166,18 @@ const useGameState = () => {
       const seatedJurors = history.jury.skipped
         ? []
         : history.case.jurors.filter((j) => history.jury.seatedIds.includes(j.id));
-      const res = await fetchWithRetry(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Verdict' }] }],
-            systemInstruction: {
-              parts: [
-                {
-                  text: getFinalVerdictPrompt(
-                    history.case,
-                    history.motion.ruling,
-                    seatedJurors,
-                    text,
-                    config.difficulty
-                  ),
-                },
-              ],
-            },
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      const data = JSON.parse(res.candidates[0].content.parts[0].text);
+      const payload = await requestLlmJson({
+        userPrompt: 'Verdict',
+        systemPrompt: getFinalVerdictPrompt(
+          history.case,
+          history.motion.ruling,
+          seatedJurors,
+          text,
+          config.difficulty
+        ),
+        responseLabel: 'verdict',
+      });
+      const data = parseVerdictResponse(payload);
 
       setHistory((prev) => ({
         ...prev,
@@ -213,7 +186,7 @@ const useGameState = () => {
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
-      setError('Verdict failed.');
+      setError(getLlmClientErrorMessage(err, 'Verdict failed.'));
       setLoadingMsg(null);
     }
   };
