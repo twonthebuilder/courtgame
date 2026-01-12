@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import ActionFooter from '../layout/ActionFooter';
 
 /** @typedef {import('../../lib/types').MotionResult} MotionResult */
 
@@ -51,7 +52,7 @@ const MotionSection = ({ onSubmit, ruling, isLocked }) => {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <div className="flex justify-end">
+      <ActionFooter>
         <button
           onClick={() => onSubmit(text)}
           disabled={!text.trim()}
@@ -59,7 +60,7 @@ const MotionSection = ({ onSubmit, ruling, isLocked }) => {
         >
           File Motion
         </button>
-      </div>
+      </ActionFooter>
     </div>
   );
 };

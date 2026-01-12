@@ -5,9 +5,12 @@ import CaseHeader from './components/docket/CaseHeader';
 import JurySection from './components/docket/JurySection';
 import MotionSection from './components/docket/MotionSection';
 import VerdictSection from './components/docket/VerdictSection';
+import ActionFooter from './components/layout/ActionFooter';
+import DocketHeader from './components/layout/DocketHeader';
+import PaperContainer from './components/layout/PaperContainer';
+import PhaseSection from './components/layout/PhaseSection';
 import InitializationScreen from './components/screens/InitializationScreen';
 import StartScreen from './components/screens/StartScreen';
-import DocketSection from './components/ui/DocketSection';
 import LoadingView from './components/ui/LoadingView';
 import useGameState from './hooks/useGameState';
 
@@ -83,31 +86,22 @@ export default function PocketCourt() {
       {/* THE LIVING DOCKET */}
       <main className="max-w-3xl mx-auto p-4 md:p-8">
         {/* Paper Container */}
-        <div className="bg-white shadow-xl min-h-[80vh] p-8 md:p-12 relative animate-in fade-in slide-in-from-bottom-8 duration-700">
+        <PaperContainer>
           {/* Paper Header */}
-          <div className="border-b-4 border-slate-900 pb-4 mb-8 flex justify-between items-end">
-            <div>
-              <h1 className="text-4xl font-black font-serif text-slate-900 uppercase tracking-tighter leading-none">
-                {history.case.title}
-              </h1>
-              <p className="text-sm font-bold text-slate-500 mt-2 uppercase tracking-widest">
-                Official Docket • {config.jurisdiction}
-              </p>
-            </div>
-            <div className="text-right">
-              <div className="text-xs font-bold text-slate-400 uppercase">Docket No.</div>
-              <div className="font-mono text-slate-600">{docketNumber}</div>
-            </div>
-          </div>
+          <DocketHeader
+            title={history.case.title}
+            jurisdiction={config.jurisdiction}
+            docketNumber={docketNumber}
+          />
 
           {/* 1. Case Info */}
-          <DocketSection title="Case Information" icon={BookOpen}>
+          <PhaseSection title="Case Information" icon={BookOpen}>
             <CaseHeader data={history.case} />
-          </DocketSection>
+          </PhaseSection>
 
           {/* 2. Jury Section (If Applicable) */}
           {!history.jury.skipped && (
-            <DocketSection title="Jury Selection" icon={Users}>
+            <PhaseSection title="Jury Selection" icon={Users}>
               <JurySection
                 pool={history.case.jurors}
                 isLocked={history.jury.locked}
@@ -118,7 +112,7 @@ export default function PocketCourt() {
                 onStrike={toggleStrikeSelection}
               />
               {!history.jury.locked && (
-                <div className="mt-4 text-right">
+                <ActionFooter>
                   <button
                     onClick={() => submitStrikes(history.jury.myStrikes)}
                     disabled={!history.jury.myStrikes || history.jury.myStrikes.length !== 2}
@@ -126,48 +120,48 @@ export default function PocketCourt() {
                   >
                     Confirm Strikes
                   </button>
-                </div>
+                </ActionFooter>
               )}
-            </DocketSection>
+            </PhaseSection>
           )}
 
           {/* 3. Motions Section */}
           {/* Appears if jury skipped OR jury locked */}
           {(history.jury.skipped || history.jury.locked) && (
-            <DocketSection title="Pre-Trial Motions" icon={FileText}>
+            <PhaseSection title="Pre-Trial Motions" icon={FileText}>
               <MotionSection
                 isLocked={history.motion.locked}
                 ruling={history.motion.ruling}
                 onSubmit={submitMotion}
               />
-            </DocketSection>
+            </PhaseSection>
           )}
 
           {/* 4. Trial Section */}
           {/* Appears if motion locked */}
           {history.motion && history.motion.locked && (
-            <DocketSection title="Trial Phase" icon={Gavel}>
+            <PhaseSection title="Trial Phase" icon={Gavel}>
               <ArgumentSection
                 isLocked={history.trial.locked}
                 isJuryTrial={history.case.is_jury_trial}
                 onSubmit={submitArgument}
               />
-            </DocketSection>
+            </PhaseSection>
           )}
 
           {/* 5. Verdict Section */}
           {history.trial && history.trial.locked && (
-            <DocketSection title="Final Judgment" icon={Scale} className="border-none mb-0 pb-0">
+            <PhaseSection title="Final Judgment" icon={Scale} className="border-none mb-0 pb-0">
               <VerdictSection result={history.trial.verdict} />
-              <div className="mt-12 text-center pt-8 border-t border-slate-100">
+              <ActionFooter className="mt-12 justify-center pt-8 border-t border-slate-100">
                 <button
                   onClick={resetGame}
                   className="text-slate-400 hover:text-slate-800 font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-2 mx-auto"
                 >
                   <RefreshCw className="w-4 h-4" /> Start New Case
                 </button>
-              </div>
-            </DocketSection>
+              </ActionFooter>
+            </PhaseSection>
           )}
 
           {/* Loading Indicator */}
@@ -179,7 +173,7 @@ export default function PocketCourt() {
 
           {/* Invisible div for auto-scrolling */}
           <div ref={scrollRef} />
-        </div>
+        </PaperContainer>
       </main>
     </div>
   );
