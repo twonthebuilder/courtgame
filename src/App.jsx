@@ -9,152 +9,20 @@ import InitializationScreen from './components/screens/InitializationScreen';
 import StartScreen from './components/screens/StartScreen';
 import DocketSection from './components/ui/DocketSection';
 import LoadingView from './components/ui/LoadingView';
+import { fetchWithRetry } from './lib/api';
+import { copyToClipboard } from './lib/clipboard';
+import {
+  getFinalVerdictPrompt,
+  getGeneratorPrompt,
+  getJuryStrikePrompt,
+  getMotionPrompt,
+} from './lib/prompts';
 
 /* ========================================================================
    MODULE: utils/constants.js
    Action: Move this to a dedicated constants file.
    ======================================================================== */
 const API_KEY = ""; // System injects key at runtime
-
-/* ========================================================================
-   MODULE: utils/helpers.js
-   Action: Move utility functions here.
-   ======================================================================== */
-const copyToClipboard = (text) => {
-  if (!navigator.clipboard) {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      textArea.style.top = "0";
-      document.body.appendChild(textArea);
-      textArea.focus();
-      textArea.select();
-      try {
-        document.execCommand('copy');
-      } catch (err) {
-        console.error('Fallback copy failed', err);
-      }
-      document.body.removeChild(textArea);
-      return;
-  }
-  navigator.clipboard.writeText(text);
-};
-
-const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
-  try {
-    const response = await fetch(url, options);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-  } catch (e) {
-    if (retries > 0) {
-      await new Promise(r => setTimeout(r, backoff));
-      return fetchWithRetry(url, options, retries - 1, backoff * 2);
-    }
-    throw e;
-  }
-};
-
-/* ========================================================================
-   MODULE: utils/prompts.js
-   Action: Group all LLM Prompt Generators here.
-   ======================================================================== */
-
-const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
-  let tone = "";
-  if (difficulty === 'silly') tone = "wacky, humorous, and absurd. Think cartoons.";
-  else if (difficulty === 'regular') tone = "mundane, everyday disputes. Traffic, small contracts.";
-  else if (difficulty === 'nuance') tone = "complex, serious, morally ambiguous crimes.";
-
-  return `
-    You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
-    Narrative tone should be ${tone}
-    
-    1. DETERMINE TRIAL TYPE:
-    - If case is minor/mundane -> is_jury_trial = false (Bench Trial).
-    - If case is crime/tort/public interest -> is_jury_trial = true.
-    
-    2. JURY POOL (Generate 8 regardless, used only if jury trial):
-    - Name, age, job, and a HIDDEN BIAS.
-    
-    Return ONLY valid JSON:
-    {
-      "title": "Case Name",
-      "defendant": "Name",
-      "charge": "Charge",
-      "is_jury_trial": boolean,
-      "judge": { "name": "Name", "philosophy": "Style", "background": "History", "bias": "Bias" },
-      "jurors": [
-        {"id": 1, "name": "Name", "age": 30, "job": "Job", "bias_hint": "Public description", "hidden_bias": "Secret bias"}
-      ],
-      "facts": ["Fact 1", "Fact 2", "Fact 3"],
-      "witnesses": [{"name": "Name", "role": "Role", "statement": "Statement"}],
-      "evidence": ["Item 1", "Item 2"],
-      "opposing_statement": "Opening statement"
-    }
-  `;
-};
-
-const getJuryStrikePrompt = (caseData, playerStrikes, playerRole) => {
-  const opponentRole = playerRole === 'defense' ? 'Prosecutor' : 'Defense Attorney';
-  return `
-    Phase: VOIR DIRE. Case: ${caseData.title}.
-    Player (${playerRole}) struck IDs: ${JSON.stringify(playerStrikes)}.
-    
-    As AI ${opponentRole}, strike 2 jurors who hurt YOUR case.
-    
-    Return ONLY valid JSON:
-    {
-      "opponent_strikes": [id1, id2],
-      "opponent_reasoning": "Why the AI struck these jurors.",
-      "seated_juror_ids": [list of remaining ids],
-      "judge_comment": "Judge's brief comment on the final jury."
-    }
-  `;
-};
-
-const getMotionPrompt = (caseData, argument, difficulty) => `
-    Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
-    Motion: "${argument}"
-    Bias: ${caseData.judge.bias}.
-    Difficulty: ${difficulty}.
-    
-    Return JSON:
-    {
-      "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
-      "outcome_text": "Explanation.",
-      "score": number (0-100)
-    }
-`;
-
-const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argument, difficulty) => {
-  const isBench = !caseData.is_jury_trial;
-  return `
-    Phase: VERDICT. Type: ${isBench ? 'BENCH' : 'JURY'}.
-    Case: ${JSON.stringify(caseData)}
-    Motion Result: ${motionResult.ruling} (${motionResult.score})
-    Jury: ${JSON.stringify(seatedJurors)}
-    Argument: "${argument}"
-    
-    1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
-    ${!isBench ? `2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.` : ''}
-    3. LEGENDARY CHECK (>100 score).
-    
-    Return JSON:
-    {
-      "jury_verdict": "Guilty/Not Guilty/Hung/NA",
-      "jury_reasoning": "Reasoning...",
-      "jury_score": number (or 0 if N/A),
-      "judge_score": number,
-      "judge_opinion": "Opinion...",
-      "final_ruling": "Outcome",
-      "is_jnov": boolean,
-      "final_weighted_score": number,
-      "achievement_title": "Title or null"
-    }
-  `;
-};
-
 
 /* ========================================================================
    MODULE: App.jsx
