@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
+import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../lib/config';
 
 /**
  * Entry screen for selecting a game mode, jurisdiction, and side.
@@ -9,8 +10,8 @@ import { Gavel, Scale, Shield } from 'lucide-react';
  * @returns {JSX.Element} The start screen layout.
  */
 const StartScreen = ({ onStart }) => {
-  const [difficulty, setDifficulty] = useState('regular');
-  const [jurisdiction, setJurisdiction] = useState('USA');
+  const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
+  const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
@@ -25,17 +26,17 @@ const StartScreen = ({ onStart }) => {
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Game Mode</label>
           <div className="grid grid-cols-3 gap-2">
-            {['silly', 'regular', 'nuance'].map((d) => (
+            {DIFFICULTY_OPTIONS.map((option) => (
               <button
-                key={d}
-                onClick={() => setDifficulty(d)}
-                className={`p-2 rounded-lg text-sm font-bold capitalize transition-all border-2 ${
-                  difficulty === d
+                key={option.value}
+                onClick={() => setDifficulty(option.value)}
+                className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                  difficulty === option.value
                     ? 'bg-amber-100 text-amber-900 border-amber-300'
                     : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
                 }`}
               >
-                {d}
+                {option.label}
               </button>
             ))}
           </div>
@@ -43,17 +44,17 @@ const StartScreen = ({ onStart }) => {
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Jurisdiction</label>
           <div className="grid grid-cols-3 gap-2">
-            {['USA', 'Canada', 'Fictional'].map((j) => (
+            {JURISDICTIONS.map((option) => (
               <button
-                key={j}
-                onClick={() => setJurisdiction(j)}
-                className={`p-2 rounded-lg text-sm font-bold capitalize transition-all border-2 ${
-                  jurisdiction === j
+                key={option.value}
+                onClick={() => setJurisdiction(option.value)}
+                className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                  jurisdiction === option.value
                     ? 'bg-slate-800 text-white border-slate-800'
                     : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
                 }`}
               >
-                {j}
+                {option.label}
               </button>
             ))}
           </div>
