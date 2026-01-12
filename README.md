@@ -82,6 +82,17 @@ courtgame/
 ├── index.html        ✅ (entry point)
 ├── package.json      ✅ (dependencies)
 ├── vite.config.js    ✅ (build config)
+```
+
+---
+
+## Documentation
+
+- [Architecture overview](docs/architecture.md)
+- [Gameplay flow](docs/gameplay-flow.md)
+- [LLM client notes](docs/llm-client.md)
+- [Game state](docs/game-state.md)
+- [Configuration](docs/configuration.md)
 
 ---
 
