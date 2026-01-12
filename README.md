@@ -77,7 +77,7 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 ```bash
 # Clone repo
 git clone https://github.com/antwon99/courtgame.git
-cd pocket-court
+cd courtgame
 
 # Install dependencies
 npm install
