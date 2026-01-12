@@ -1,10 +1,12 @@
 import { Trophy } from 'lucide-react';
 
+/** @typedef {import('../../lib/types').VerdictResult} VerdictResult */
+
 /**
  * Presents the final verdict, scores, and judge/jury reasoning once the trial concludes.
  *
  * @param {object} props - Component props.
- * @param {object} props.result - Final verdict payload with scores and reasoning.
+ * @param {VerdictResult} props.result - Final verdict payload with scores and reasoning.
  * @returns {JSX.Element} The verdict presentation.
  */
 const VerdictSection = ({ result }) => {

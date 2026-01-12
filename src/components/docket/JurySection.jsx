@@ -1,12 +1,14 @@
+/** @typedef {import('../../lib/types').Juror} Juror */
+
 /**
  * Manages jury selection presentation for voir dire and displays seated jurors when locked.
  *
  * @param {object} props - Component props.
- * @param {Array} props.pool - Full juror pool.
- * @param {Array} props.seatedIds - IDs of seated jurors.
- * @param {Array} props.opponentStrikes - Opposing counsel strike IDs.
+ * @param {Juror[]} props.pool - Full juror pool.
+ * @param {number[]} props.seatedIds - IDs of seated jurors.
+ * @param {number[]} props.opponentStrikes - Opposing counsel strike IDs.
  * @param {(id: number) => void} props.onStrike - Callback to strike/unstrike a juror.
- * @param {Array} props.myStrikes - Player strike IDs.
+ * @param {number[]} props.myStrikes - Player strike IDs.
  * @param {boolean} props.isLocked - Whether jury selection is finalized.
  * @param {string} props.judgeComment - Judge comment after selection.
  * @returns {JSX.Element} The jury selection UI.

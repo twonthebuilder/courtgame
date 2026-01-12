@@ -1,11 +1,13 @@
 import { useState } from 'react';
 
+/** @typedef {import('../../lib/types').MotionResult} MotionResult */
+
 /**
  * Collects and displays the player's pre-trial motion and the judge's ruling.
  *
  * @param {object} props - Component props.
  * @param {(text: string) => void} props.onSubmit - Callback to submit the motion text.
- * @param {object} props.ruling - Judge ruling payload.
+ * @param {MotionResult} props.ruling - Judge ruling payload.
  * @param {boolean} props.isLocked - Whether the motion phase is finalized.
  * @returns {JSX.Element} The motion section UI.
  */

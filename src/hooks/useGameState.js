@@ -16,15 +16,35 @@ import {
   getMotionPrompt,
 } from '../lib/prompts';
 
+/** @typedef {import('../lib/types').CaseData} CaseData */
+/** @typedef {import('../lib/types').HistoryState} HistoryState */
+/** @typedef {import('../lib/types').Juror} Juror */
+/** @typedef {import('../lib/types').MotionResult} MotionResult */
+/** @typedef {import('../lib/types').VerdictResult} VerdictResult */
+
 /**
  * Manage the Pocket Court game state and actions in one place.
  *
- * @returns {object} Game state values and action handlers.
+ * @returns {{
+ *   gameState: string,
+ *   history: HistoryState,
+ *   config: {difficulty: string, jurisdiction: string, role: string},
+ *   loadingMsg: string | null,
+ *   error: string | null,
+ *   copied: boolean,
+ *   generateCase: (role: string, difficulty: string, jurisdiction: string) => Promise<void>,
+ *   submitStrikes: (strikes: number[]) => Promise<void>,
+ *   submitMotion: (text: string) => Promise<void>,
+ *   submitArgument: (text: string) => Promise<void>,
+ *   handleCopyFull: () => void,
+ *   resetGame: () => void,
+ *   toggleStrikeSelection: (id: number) => void,
+ * }} Game state values and action handlers.
  */
 const useGameState = () => {
   const [gameState, setGameState] = useState('start');
   const [loadingMsg, setLoadingMsg] = useState(null);
-  const [history, setHistory] = useState({});
+  const [history, setHistory] = useState(/** @type {HistoryState} */ ({}));
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -61,6 +81,7 @@ const useGameState = () => {
    * @param {string} role - Player role (defense or prosecution).
    * @param {string} difficulty - Difficulty setting.
    * @param {string} jurisdiction - Selected jurisdiction.
+   * @returns {Promise<void>} Resolves once the case is generated.
    */
   const generateCase = async (role, difficulty, jurisdiction) => {
     setGameState('initializing');
@@ -73,6 +94,7 @@ const useGameState = () => {
         systemPrompt: getGeneratorPrompt(difficulty, jurisdiction, role),
         responseLabel: 'case',
       });
+      /** @type {CaseData} */
       const data = parseCaseResponse(payload);
 
       setHistory({
@@ -96,6 +118,7 @@ const useGameState = () => {
    * Submit jury strikes and lock in the seated jurors.
    *
    * @param {number[]} strikes - Juror IDs selected for strikes.
+   * @returns {Promise<void>} Resolves once strikes are processed.
    */
   const submitStrikes = async (strikes) => {
     setLoadingMsg('Judge is ruling on strikes...');
@@ -131,6 +154,7 @@ const useGameState = () => {
    * Submit a pre-trial motion and store the ruling.
    *
    * @param {string} text - Motion text entered by the player.
+   * @returns {Promise<void>} Resolves once the motion ruling is stored.
    */
   const submitMotion = async (text) => {
     setLoadingMsg('Filing motion...');
@@ -140,6 +164,7 @@ const useGameState = () => {
         systemPrompt: getMotionPrompt(history.case, text, config.difficulty),
         responseLabel: 'motion',
       });
+      /** @type {MotionResult} */
       const data = parseMotionResponse(payload);
 
       setHistory((prev) => ({
@@ -159,13 +184,15 @@ const useGameState = () => {
    * Submit a closing argument and resolve the final verdict.
    *
    * @param {string} text - Closing argument text.
+   * @returns {Promise<void>} Resolves once the verdict is stored.
    */
   const submitArgument = async (text) => {
     setLoadingMsg('The Court is deliberating...');
     try {
-      const seatedJurors = history.jury.skipped
+      /** @type {Juror[]} */
+      const seatedJurors = history.jury?.skipped
         ? []
-        : history.case.jurors.filter((j) => history.jury.seatedIds.includes(j.id));
+        : history.case?.jurors.filter((j) => history.jury?.seatedIds?.includes(j.id));
       const payload = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
@@ -177,6 +204,7 @@ const useGameState = () => {
         ),
         responseLabel: 'verdict',
       });
+      /** @type {VerdictResult} */
       const data = parseVerdictResponse(payload);
 
       setHistory((prev) => ({
