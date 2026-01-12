@@ -68,7 +68,7 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 - **Frontend:** React (single-file architecture, will be modularized)
 - **AI:** **For now** Google Gemini 2.0 Flash (case generation, adjudication, deliberation)
 - **State:** React hooks only (no localStorage/sessionStorage)
-- **Styling:** Tailwind CSS + custom animations
+- **Styling:** Tailwind CSS + custom animations. Global styles live in `src/index.css`, and component-specific styles should be co-located instead of using a monolithic `App.css`.
 
 ## **Repo Structure**
 ```
