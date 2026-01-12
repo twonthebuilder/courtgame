@@ -1,3 +1,5 @@
+import React from 'react';
+
 /**
  * Provides a labeled docket section with an optional icon and consistent styling.
  *
@@ -8,7 +10,7 @@
  * @param {string} [props.className] - Additional class names to apply to the wrapper.
  * @returns {JSX.Element} The docket section wrapper.
  */
-const DocketSection = ({ title, children, icon: Icon, className = '' }) => (
+const PhaseSection = ({ title, children, icon: Icon, className = '' }) => (
   <section className={`border-b-2 border-slate-300 pb-8 mb-8 ${className}`}>
     <div className="flex items-center gap-2 mb-4 text-slate-400 uppercase tracking-widest text-xs font-bold">
       {Icon && <Icon className="w-4 h-4" />}
@@ -18,4 +20,4 @@ const DocketSection = ({ title, children, icon: Icon, className = '' }) => (
   </section>
 );
 
-export default DocketSection;
+export default PhaseSection;

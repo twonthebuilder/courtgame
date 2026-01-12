@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Gavel as GavelIcon } from 'lucide-react';
+import ActionFooter from '../layout/ActionFooter';
 
 /**
  * Collects the closing argument and displays it once the trial phase is locked.
@@ -33,7 +34,7 @@ const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial }) => {
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
-      <div className="flex justify-end">
+      <ActionFooter>
         <button
           onClick={() => onSubmit(text)}
           disabled={!text.trim()}
@@ -41,7 +42,7 @@ const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial }) => {
         >
           Rest Case <GavelIcon className="w-4 h-4" />
         </button>
-      </div>
+      </ActionFooter>
     </div>
   );
 };
