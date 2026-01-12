@@ -1,5 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Gavel, Scale, BookOpen, User, ArrowRight, RefreshCw, Shield, AlertTriangle, FileText, XCircle, MapPin, BrainCircuit, CheckCircle, ScrollText, ArrowUpCircle, Copy, Check, Swords, GraduationCap, Gavel as GavelIcon, Info, Drama, Landmark, Zap, Trophy, Crown, Sparkles, Users, Ban, MinusCircle, History, ClipboardCopy, Fingerprint, Stamp, Hourglass } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { BookOpen, Check, ClipboardCopy, FileText, Gavel, RefreshCw, Scale, Users } from 'lucide-react';
+import ArgumentSection from './components/docket/ArgumentSection';
+import CaseHeader from './components/docket/CaseHeader';
+import JurySection from './components/docket/JurySection';
+import MotionSection from './components/docket/MotionSection';
+import VerdictSection from './components/docket/VerdictSection';
+import InitializationScreen from './components/screens/InitializationScreen';
+import StartScreen from './components/screens/StartScreen';
+import DocketSection from './components/ui/DocketSection';
+import LoadingView from './components/ui/LoadingView';
 
 /* ========================================================================
    MODULE: utils/constants.js
@@ -59,6 +68,7 @@ const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
 
   return `
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
+    Narrative tone should be ${tone}
     
     1. DETERMINE TRIAL TYPE:
     - If case is minor/mundane -> is_jury_trial = false (Bench Trial).
@@ -145,346 +155,6 @@ const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argument, d
   `;
 };
 
-/* ========================================================================
-   MODULE: components/ui/DocketSection.jsx
-   Action: Shared UI wrapper for docket items.
-   ======================================================================== */
-const DocketSection = ({ title, children, icon: Icon, className = "" }) => (
-  <section className={`border-b-2 border-slate-300 pb-8 mb-8 ${className}`}>
-    <div className="flex items-center gap-2 mb-4 text-slate-400 uppercase tracking-widest text-xs font-bold">
-      {Icon && <Icon className="w-4 h-4" />}
-      {title}
-    </div>
-    {children}
-  </section>
-);
-
-const LoadingView = ({ message }) => (
-    <div className="py-8 text-center animate-pulse">
-        <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-2" />
-        <span className="text-slate-400 font-bold uppercase text-xs tracking-widest">{message}</span>
-    </div>
-);
-
-/* ========================================================================
-   MODULE: components/screens/InitializationScreen.jsx
-   Action: The "Court Clerk" loading screen.
-   ======================================================================== */
-const InitializationScreen = ({ role }) => {
-    const [step, setStep] = useState(0);
-    const [tipIndex, setTipIndex] = useState(0);
-    
-    const TIPS = [
-        "Judges have specific biases. Read their bio carefully.",
-        "In 'Silly' mode, humor is a valid legal strategy.",
-        "If you strike the same juror as the opposition, they are gone for sure.",
-        "A 'Bench Trial' means no jury—you only have to please the Judge.",
-        "Pre-Trial motions carry 40% of the weight. Don't slack off.",
-        "Nuance mode judges are strict textualists. Be precise.",
-        "Evidence suppression is a great way to cripple the prosecution."
-    ];
-
-    const steps = [
-        "Accessing Court Archives...",
-        "Digitizing Docket...",
-        "Assigning Presiding Judge...",
-        "Reviewing Conflict of Interest...",
-        "Checking Jury Pool Availability...",
-        "Notifying Opposing Counsel...",
-        "Finalizing Docket..."
-    ];
-
-    useEffect(() => {
-        setTipIndex(Math.floor(Math.random() * TIPS.length));
-        const interval = setInterval(() => {
-            setStep(prev => (prev < steps.length - 1 ? prev + 1 : prev));
-        }, 1200);
-        return () => clearInterval(interval);
-    }, []);
-
-    return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8 animate-in fade-in">
-            <div className="relative mb-8">
-                <RefreshCw className="w-16 h-16 text-amber-500 animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                    <GavelIcon className="w-6 h-6 text-slate-700" />
-                </div>
-            </div>
-            
-            <h2 className="text-2xl font-black text-slate-800 mb-2 uppercase tracking-tighter">
-                Building Case
-            </h2>
-            
-            <div className="h-8 mb-8">
-                <p className="text-slate-500 font-mono text-sm uppercase tracking-widest animate-pulse">
-                    {steps[step]}
-                </p>
-            </div>
-
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg max-w-md w-full shadow-sm">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                    <Info className="w-4 h-4 text-amber-600" />
-                    <span className="text-xs font-bold text-amber-600 uppercase">Pro Tip</span>
-                </div>
-                <p className="text-sm text-slate-700 font-medium italic">
-                    "{TIPS[tipIndex]}"
-                </p>
-            </div>
-        </div>
-    );
-};
-
-/* ========================================================================
-   MODULE: components/screens/StartScreen.jsx
-   ======================================================================== */
-const StartScreen = ({ onStart }) => {
-  const [difficulty, setDifficulty] = useState('regular');
-  const [jurisdiction, setJurisdiction] = useState('USA');
-  
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
-      <div className="bg-slate-800 p-6 rounded-full mb-6 shadow-xl border-4 border-amber-500"><Scale className="w-16 h-16 text-amber-500" /></div>
-      <h1 className="text-4xl md:text-6xl font-black text-slate-800 mb-2 tracking-tighter">POCKET<span className="text-amber-600">COURT</span></h1>
-      <p className="text-slate-500 mb-8 text-lg font-medium max-w-md">v15.0: GitHub Ready Edition</p>
-      <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 w-full max-w-md mb-8 space-y-6">
-        <div>
-           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Game Mode</label>
-           <div className="grid grid-cols-3 gap-2">
-              {['silly', 'regular', 'nuance'].map(d => (
-                  <button key={d} onClick={() => setDifficulty(d)} className={`p-2 rounded-lg text-sm font-bold capitalize transition-all border-2 ${difficulty === d ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'}`}>{d}</button>
-              ))}
-           </div>
-        </div>
-        <div>
-           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Jurisdiction</label>
-           <div className="grid grid-cols-3 gap-2">
-              {['USA', 'Canada', 'Fictional'].map(j => (
-                  <button key={j} onClick={() => setJurisdiction(j)} className={`p-2 rounded-lg text-sm font-bold capitalize transition-all border-2 ${jurisdiction === j ? 'bg-slate-800 text-white border-slate-800' : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'}`}>{j}</button>
-              ))}
-           </div>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
-        <button onClick={() => onStart('prosecution', difficulty, jurisdiction)} className="p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95"><Gavel className="w-5 h-5" /> PROSECUTION</button>
-        <button onClick={() => onStart('defense', difficulty, jurisdiction)} className="p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95"><Shield className="w-5 h-5" /> DEFENSE</button>
-      </div>
-    </div>
-  );
-};
-
-/* ========================================================================
-   MODULE: components/docket/CaseHeader.jsx
-   ======================================================================== */
-const CaseHeader = ({ data }) => (
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-lg border border-slate-200 font-serif">
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase">Defendant</h3>
-        <p className="text-xl font-bold text-slate-800">{data.defendant}</p>
-      </div>
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase">Charge</h3>
-        <p className="text-lg font-bold text-red-700">{data.charge}</p>
-      </div>
-      <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase">Judge</h3>
-        <p className="text-md font-bold text-slate-700">{data.judge.name}</p>
-        <p className="text-sm italic text-slate-500">{data.judge.bias}</p>
-      </div>
-    </div>
-    <div className="space-y-4 text-sm text-slate-700">
-       <div>
-         <h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Facts of the Case</h3>
-         <ul className="list-disc list-inside space-y-1">
-            {data.facts.map((f, i) => <li key={i}>{f}</li>)}
-         </ul>
-       </div>
-       <div className="bg-white p-3 rounded border border-slate-200 italic text-slate-600">
-          <span className="block text-xs font-bold text-slate-400 uppercase not-italic mb-1">Opposing Counsel</span>
-          "{data.opposing_statement}"
-       </div>
-    </div>
-  </div>
-);
-
-/* ========================================================================
-   MODULE: components/docket/JurySection.jsx
-   ======================================================================== */
-const JurySection = ({ pool, seatedIds, opponentStrikes, onStrike, myStrikes, isLocked, judgeComment }) => {
-  if (isLocked) {
-     const seated = pool.filter(j => seatedIds.includes(j.id));
-     return (
-        <div className="bg-white p-6 rounded-lg border border-slate-200">
-           <div className="flex justify-between items-start mb-4">
-              <div>
-                  <h3 className="font-bold text-slate-700 text-lg mb-1">Seated Jury</h3>
-                  <p className="text-sm text-slate-500 italic">"{judgeComment}"</p>
-              </div>
-              <div className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-400 font-bold uppercase">
-                  Voir Dire Complete
-              </div>
-           </div>
-           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {seated.map(j => (
-                  <div key={j.id} className="bg-slate-50 border border-slate-200 p-3 rounded text-center">
-                      <div className="font-bold text-slate-800">{j.name}</div>
-                      <div className="text-xs text-slate-500 uppercase">{j.job}</div>
-                  </div>
-              ))}
-           </div>
-           <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-400 flex gap-4">
-              <span>Defense Strikes: {myStrikes.length}</span>
-              <span>Prosecution Strikes: {opponentStrikes.length}</span>
-           </div>
-        </div>
-     );
-  }
-
-  return (
-    <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4">
-        <p className="text-sm text-slate-600 mb-4">Select <strong>2 jurors</strong> to strike from the pool. Opposing counsel will do the same.</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            {pool.map(j => (
-                <button 
-                    key={j.id}
-                    onClick={() => onStrike(j.id)}
-                    className={`p-3 rounded border-2 text-left transition-all ${
-                        myStrikes.includes(j.id) 
-                        ? 'border-red-500 bg-red-50 relative' 
-                        : 'border-slate-200 hover:border-amber-400'
-                    }`}
-                >
-                    {myStrikes.includes(j.id) && (
-                        <div className="absolute top-1 right-1 text-red-600 font-black text-xs">X</div>
-                    )}
-                    <div className="font-bold text-slate-800 text-sm truncate">{j.name}</div>
-                    <div className="text-xs text-slate-500 uppercase font-bold mb-1 truncate">{j.job}, {j.age}</div>
-                    <div className="text-xs text-slate-600 italic leading-tight">"{j.bias_hint}"</div>
-                </button>
-            ))}
-        </div>
-    </div>
-  );
-};
-
-/* ========================================================================
-   MODULE: components/docket/MotionSection.jsx
-   ======================================================================== */
-const MotionSection = ({ onSubmit, ruling, isLocked }) => {
-    const [text, setText] = useState("");
-
-    if (isLocked) {
-        return (
-            <div className="bg-white p-6 rounded-lg border border-slate-200 flex flex-col md:flex-row gap-6 animate-in fade-in">
-                <div className="flex-1">
-                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Your Motion</h4>
-                    <p className="font-serif text-slate-700 italic">"{text}"</p>
-                </div>
-                <div className="w-full md:w-1/3 bg-slate-50 p-4 rounded border border-slate-200 relative overflow-hidden">
-                    <div className={`absolute top-2 right-2 border-2 px-2 py-1 rounded text-xs font-black uppercase tracking-widest -rotate-12 ${
-                        ruling.ruling === 'GRANTED' ? 'border-green-600 text-green-600' : 
-                        ruling.ruling === 'DENIED' ? 'border-red-600 text-red-600' : 'border-amber-600 text-amber-600'
-                    }`}>
-                        {ruling.ruling}
-                    </div>
-                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Judge's Ruling</h4>
-                    <p className="text-sm text-slate-800 font-medium mt-6">"{ruling.outcome_text}"</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4">
-             <p className="text-sm text-slate-600 mb-3">Draft a pre-trial motion to <strong>Dismiss</strong> or <strong>Suppress Evidence</strong>.</p>
-             <textarea 
-                className="w-full h-32 p-3 border border-slate-300 rounded font-serif text-slate-800 mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-                placeholder="Your Honor, the defense moves to..."
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-            />
-            <div className="flex justify-end">
-                <button onClick={() => onSubmit(text)} disabled={!text.trim()} className="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-indigo-700">File Motion</button>
-            </div>
-        </div>
-    );
-};
-
-/* ========================================================================
-   MODULE: components/docket/ArgumentSection.jsx
-   ======================================================================== */
-const ArgumentSection = ({ onSubmit, verdict, isLocked, isJuryTrial }) => {
-    const [text, setText] = useState("");
-
-    if (isLocked) {
-        return (
-            <div className="bg-white p-6 rounded-lg border border-slate-200 animate-in fade-in">
-                <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Closing Argument</h4>
-                <p className="font-serif text-slate-800 whitespace-pre-wrap">{text}</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="bg-white p-6 rounded-lg border border-slate-200 shadow-sm animate-in fade-in slide-in-from-bottom-4">
-             <p className="text-sm text-slate-600 mb-3">
-                 {isJuryTrial ? "Address the Jury (Facts) and Judge (Law)." : "Address the Judge (Law & Facts)."}
-             </p>
-             <textarea 
-                className="w-full h-48 p-4 border border-slate-300 rounded font-serif text-lg text-slate-800 mb-4 focus:ring-2 focus:ring-amber-500 outline-none"
-                placeholder="Ladies and Gentlemen..."
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-            />
-            <div className="flex justify-end">
-                <button onClick={() => onSubmit(text)} disabled={!text.trim()} className="bg-amber-500 text-white px-8 py-3 rounded font-bold hover:bg-amber-600 flex items-center gap-2">
-                    Rest Case <GavelIcon className="w-4 h-4" />
-                </button>
-            </div>
-        </div>
-    );
-};
-
-/* ========================================================================
-   MODULE: components/docket/VerdictSection.jsx
-   ======================================================================== */
-const VerdictSection = ({ result }) => {
-    const isLegendary = result.final_weighted_score > 100;
-    const isGuilty = result.final_ruling.toLowerCase().includes('guilty') && !result.final_ruling.toLowerCase().includes('not');
-    
-    return (
-        <div className={`p-8 rounded-xl border-4 text-center relative overflow-hidden animate-in zoom-in ${isLegendary ? 'bg-amber-50 border-amber-400' : 'bg-slate-50 border-slate-300'}`}>
-            {isLegendary && (
-                <div className="absolute top-0 left-0 w-full bg-amber-400 text-amber-900 text-xs font-black uppercase tracking-widest py-1">Legendary Outcome</div>
-            )}
-            
-            <h2 className={`text-4xl font-black uppercase mb-2 mt-4 ${isGuilty ? 'text-red-700' : 'text-green-700'}`}>
-                {result.final_ruling}
-            </h2>
-            <div className="text-6xl font-black text-slate-800 mb-6">{Math.round(result.final_weighted_score)}<span className="text-lg text-slate-400 font-normal">/100</span></div>
-
-            {result.achievement_title && (
-                <div className="inline-block bg-white px-4 py-2 rounded-full border border-amber-300 text-amber-600 font-bold text-sm mb-6 shadow-sm">
-                    <Trophy className="w-4 h-4 inline mr-2" /> {result.achievement_title}
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                 <div className="bg-white p-4 rounded border border-slate-200">
-                     <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Judge's Opinion</h4>
-                     <p className="font-serif text-slate-700 text-sm">"{result.judge_opinion}"</p>
-                 </div>
-                 {result.jury_verdict !== "N/A" && (
-                    <div className="bg-white p-4 rounded border border-slate-200">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Jury Reasoning</h4>
-                        <p className="font-serif text-slate-700 text-sm">"{result.jury_reasoning}"</p>
-                    </div>
-                 )}
-            </div>
-        </div>
-    );
-};
-
 
 /* ========================================================================
    MODULE: App.jsx
@@ -497,8 +167,9 @@ export default function PocketCourt() {
   const [history, setHistory] = useState({}); 
   
   const [config, setConfig] = useState({ difficulty: 'regular', jurisdiction: 'USA', role: 'defense' });
-  const [error, setError] = useState(null);
+  const [_error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
 
   // --- ACTIONS ---
@@ -652,7 +323,7 @@ export default function PocketCourt() {
                 </div>
                 <div className="text-right">
                     <div className="text-xs font-bold text-slate-400 uppercase">Docket No.</div>
-                    <div className="font-mono text-slate-600">{Math.floor(Math.random() * 90000) + 10000}</div>
+                    <div className="font-mono text-slate-600">{docketNumber}</div>
                 </div>
              </div>
 
@@ -712,7 +383,6 @@ export default function PocketCourt() {
                  <DocketSection title="Trial Phase" icon={Gavel}>
                      <ArgumentSection 
                         isLocked={history.trial.locked}
-                        text={history.trial.text}
                         isJuryTrial={history.case.is_jury_trial}
                         onSubmit={submitArgument}
                      />
@@ -733,9 +403,8 @@ export default function PocketCourt() {
 
              {/* Loading Indicator */}
              {loadingMsg && (
-                 <div className="py-8 text-center animate-pulse" ref={scrollRef}>
-                     <RefreshCw className="w-8 h-8 text-amber-500 animate-spin mx-auto mb-2" />
-                     <span className="text-slate-400 font-bold uppercase text-xs tracking-widest">{loadingMsg}</span>
+                 <div ref={scrollRef}>
+                     <LoadingView message={loadingMsg} />
                  </div>
              )}
              
