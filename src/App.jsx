@@ -11,6 +11,8 @@ import DocketSection from './components/ui/DocketSection';
 import LoadingView from './components/ui/LoadingView';
 import useGameState from './hooks/useGameState';
 
+/** @typedef {import('./lib/types').HistoryState} HistoryState */
+
 /* ========================================================================
    MODULE: App.jsx
    Action: Main application logic and state management.
@@ -24,9 +26,9 @@ import useGameState from './hooks/useGameState';
 export default function PocketCourt() {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
+  const gameStateData = useGameState();
   const {
     gameState,
-    history,
     config,
     loadingMsg,
     copied,
@@ -37,7 +39,9 @@ export default function PocketCourt() {
     handleCopyFull,
     resetGame,
     toggleStrikeSelection,
-  } = useGameState();
+  } = gameStateData;
+  /** @type {HistoryState} */
+  const history = gameStateData.history;
 
   // Auto-scroll logic
   useEffect(() => {

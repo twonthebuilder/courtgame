@@ -1,8 +1,10 @@
+/** @typedef {import('../../lib/types').CaseData} CaseData */
+
 /**
  * Summarizes the headline case details, including judge, facts, and the opposing statement.
  *
  * @param {object} props - Component props.
- * @param {object} props.data - Case data object containing defendant, charge, judge, and facts.
+ * @param {CaseData} props.data - Case data object containing defendant, charge, judge, and facts.
  * @returns {JSX.Element} The case header section.
  */
 const CaseHeader = ({ data }) => (
