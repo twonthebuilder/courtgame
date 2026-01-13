@@ -10,9 +10,10 @@ import ActionFooter from '../layout/ActionFooter';
  * @param {(text: string) => void} props.onSubmit - Callback to submit the motion text.
  * @param {MotionResult} props.ruling - Judge ruling payload.
  * @param {boolean} props.isLocked - Whether the motion phase is finalized.
+ * @param {string} props.submittedText - Motion text stored in the docket history.
  * @returns {JSX.Element} The motion section UI.
  */
-const MotionSection = ({ onSubmit, ruling, isLocked }) => {
+const MotionSection = ({ onSubmit, ruling, isLocked, submittedText = '' }) => {
   const [text, setText] = useState('');
 
   if (isLocked) {
@@ -20,7 +21,7 @@ const MotionSection = ({ onSubmit, ruling, isLocked }) => {
       <div className="bg-white p-6 rounded-lg border border-slate-200 flex flex-col md:flex-row gap-6 animate-in fade-in">
         <div className="flex-1">
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Your Motion</h4>
-          <p className="font-serif text-slate-700 italic">"{text}"</p>
+          <p className="font-serif text-slate-700 italic">"{submittedText}"</p>
         </div>
         <div className="w-full md:w-1/3 bg-slate-50 p-4 rounded border border-slate-200 relative overflow-hidden">
           <div

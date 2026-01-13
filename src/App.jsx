@@ -134,6 +134,7 @@ export default function PocketCourt() {
                 isLocked={history.motion.locked}
                 ruling={history.motion.ruling}
                 onSubmit={submitMotion}
+                submittedText={history.motion.text}
               />
             </PhaseSection>
           )}
@@ -146,6 +147,7 @@ export default function PocketCourt() {
                 isLocked={history.trial.locked}
                 isJuryTrial={history.case.is_jury_trial}
                 onSubmit={submitArgument}
+                submittedText={history.trial.text}
               />
             </PhaseSection>
           )}
