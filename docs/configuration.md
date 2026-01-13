@@ -10,9 +10,10 @@ The Gemini API key is read from Vite's environment system.
 | --- | --- | --- |
 | `VITE_GEMINI_API_KEY` | API key used to call the Gemini model. | Yes |
 
-Set this value in a `.env` file at the project root for local development:
+Copy `.env.example` to `.env` at the project root for local development, then update the value:
 
 ```bash
+cp .env.example .env
 VITE_GEMINI_API_KEY=your_api_key_here
 ```
 
