@@ -33,6 +33,7 @@ export default function PocketCourt() {
   const {
     gameState,
     config,
+    error,
     loadingMsg,
     copied,
     generateCase,
@@ -53,7 +54,7 @@ export default function PocketCourt() {
 
   // --- MAIN RENDER ---
 
-  if (gameState === 'start') return <StartScreen onStart={generateCase} />;
+  if (gameState === 'start') return <StartScreen onStart={generateCase} error={error} />;
   if (gameState === 'initializing') return <InitializationScreen role={config.role} />;
 
   return (

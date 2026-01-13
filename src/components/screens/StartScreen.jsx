@@ -7,9 +7,10 @@ import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../li
  *
  * @param {object} props - Component props.
  * @param {(role: string, difficulty: string, jurisdiction: string) => void} props.onStart - Callback to start the game.
+ * @param {string | null} props.error - Error message to display when startup fails.
  * @returns {JSX.Element} The start screen layout.
  */
-const StartScreen = ({ onStart }) => {
+const StartScreen = ({ onStart, error }) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
 
@@ -22,6 +23,16 @@ const StartScreen = ({ onStart }) => {
         POCKET<span className="text-amber-600">COURT</span>
       </h1>
       <p className="text-slate-500 mb-8 text-lg font-medium max-w-md">v15.0: GitHub Ready Edition</p>
+      {error && (
+        <div className="w-full max-w-md mb-8 rounded-xl border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700 shadow-sm">
+          <p className="text-xs font-bold uppercase tracking-widest text-red-600">Startup error</p>
+          <p className="mt-2">{error}</p>
+          <p className="mt-2 text-red-600">
+            Hint: check your <code className="font-semibold">.env</code> for{' '}
+            <code className="font-semibold">VITE_GEMINI_API_KEY</code>.
+          </p>
+        </div>
+      )}
       <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 w-full max-w-md mb-8 space-y-6">
         <div>
           <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Game Mode</label>
