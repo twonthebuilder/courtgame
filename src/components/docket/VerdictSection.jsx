@@ -10,7 +10,7 @@ import { Trophy } from 'lucide-react';
  * @returns {JSX.Element} The verdict presentation.
  */
 const VerdictSection = ({ result }) => {
-  const isLegendary = result.final_weighted_score > 100;
+  const isLegendary = result.final_weighted_score >= 100;
   const isGuilty =
     result.final_ruling.toLowerCase().includes('guilty') &&
     !result.final_ruling.toLowerCase().includes('not');
