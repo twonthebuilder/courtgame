@@ -9,16 +9,17 @@ import ActionFooter from '../layout/ActionFooter';
  * @param {(text: string) => void} props.onSubmit - Callback to submit the argument text.
  * @param {boolean} props.isLocked - Whether the trial phase is finalized.
  * @param {boolean} props.isJuryTrial - Whether the case is a jury trial.
+ * @param {string} props.submittedText - Closing argument stored in the docket history.
  * @returns {JSX.Element} The argument section UI.
  */
-const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial }) => {
+const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial, submittedText = '' }) => {
   const [text, setText] = useState('');
 
   if (isLocked) {
     return (
       <div className="bg-white p-6 rounded-lg border border-slate-200 animate-in fade-in">
         <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Closing Argument</h4>
-        <p className="font-serif text-slate-800 whitespace-pre-wrap">{text}</p>
+        <p className="font-serif text-slate-800 whitespace-pre-wrap">{submittedText}</p>
       </div>
     );
   }
