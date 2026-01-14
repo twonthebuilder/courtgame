@@ -23,7 +23,9 @@ describe('docket section submitted text rendering', () => {
       />
     );
 
+    expect(screen.getByText('Defense Motion')).toBeInTheDocument();
     expect(screen.getByText('"Suppress evidence"')).toBeInTheDocument();
+    expect(screen.getByText('Prosecution Rebuttal')).toBeInTheDocument();
     expect(screen.getByText('"Opposing response"')).toBeInTheDocument();
   });
 
