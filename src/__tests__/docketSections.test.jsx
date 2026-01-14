@@ -11,13 +11,20 @@ describe('docket section submitted text rendering', () => {
     render(
       <MotionSection
         isLocked
-        onSubmit={() => {}}
-        submittedText="Suppress evidence"
+        motionPhase="motion_ruling_locked"
+        motionText="Suppress evidence"
+        motionBy="defense"
+        rebuttalText="Opposing response"
+        rebuttalBy="prosecution"
+        playerRole="defense"
+        isLoading={false}
+        onSubmitStep={() => {}}
         ruling={{ ruling: 'GRANTED', outcome_text: 'Granted', score: 88 }}
       />
     );
 
     expect(screen.getByText('"Suppress evidence"')).toBeInTheDocument();
+    expect(screen.getByText('"Opposing response"')).toBeInTheDocument();
   });
 
   it('shows the submitted closing argument when locked', () => {

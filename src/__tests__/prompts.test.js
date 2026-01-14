@@ -3,7 +3,9 @@ import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
+  getMotionDraftPrompt,
   getMotionPrompt,
+  getMotionRebuttalPrompt,
 } from '../lib/prompts';
 
 describe('prompt builders', () => {
@@ -27,15 +29,39 @@ describe('prompt builders', () => {
     expect(prompt).toContain('As AI Prosecutor');
   });
 
-  it('renders motion and verdict prompts with the expected context', () => {
+  it('renders motion exchange prompts with the expected context', () => {
+    const draftPrompt = getMotionDraftPrompt(
+      {
+        title: 'State v. Example',
+        charge: 'Theft',
+        facts: [],
+        judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
+      },
+      'regular'
+    );
+
+    expect(draftPrompt).toContain('Phase: PRE-TRIAL MOTION.');
+    expect(draftPrompt).toContain('Case: State v. Example.');
+
+    const rebuttalPrompt = getMotionRebuttalPrompt(
+      { title: 'State v. Example', charge: 'Theft', judge: { name: 'Hon. Reed', philosophy: 'Textualist' } },
+      'Suppress evidence',
+      'regular'
+    );
+
+    expect(rebuttalPrompt).toContain('Phase: PRE-TRIAL MOTION REBUTTAL.');
+    expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
+
     const motionPrompt = getMotionPrompt(
       { judge: { name: 'Hon. Reed', bias: 'Textualist' } },
       'Suppress evidence',
+      'Opposing response',
       'regular'
     );
 
     expect(motionPrompt).toContain('Judge Hon. Reed ruling on Pre-Trial Motion.');
     expect(motionPrompt).toContain('Motion: "Suppress evidence"');
+    expect(motionPrompt).toContain('Rebuttal: "Opposing response"');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },

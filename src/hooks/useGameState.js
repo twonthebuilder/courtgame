@@ -6,6 +6,7 @@ import {
   parseCaseResponse,
   parseJuryResponse,
   parseMotionResponse,
+  parseMotionTextResponse,
   parseVerdictResponse,
   requestLlmJson,
 } from '../lib/llmClient';
@@ -13,7 +14,9 @@ import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
+  getMotionDraftPrompt,
   getMotionPrompt,
+  getMotionRebuttalPrompt,
 } from '../lib/prompts';
 
 /** @typedef {import('../lib/types').CaseData} CaseData */
@@ -34,7 +37,9 @@ import {
  *   copied: boolean,
  *   generateCase: (role: string, difficulty: string, jurisdiction: string) => Promise<void>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
- *   submitMotion: (text: string) => Promise<void>,
+ *   submitMotionStep: (text: string) => Promise<void>,
+ *   triggerAiMotionSubmission: () => Promise<void>,
+ *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
  *   handleCopyFull: () => void,
  *   resetGame: () => void,
@@ -48,6 +53,24 @@ const useGameState = () => {
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+
+  /**
+   * Build the initial motion exchange state for the pre-trial phase.
+   *
+   * The exchange always follows defense motion -> prosecution rebuttal -> judge ruling.
+   * Player role only determines whether the player or AI submits each step.
+   *
+   * @returns {HistoryState['motion']} Initialized motion state payload.
+   */
+  const createMotionState = () => ({
+    motionText: '',
+    motionBy: 'defense',
+    rebuttalText: '',
+    rebuttalBy: 'prosecution',
+    ruling: null,
+    motionPhase: 'motion_submission',
+    locked: false,
+  });
 
   /**
    * Return to the start screen and clear transient UI state.
@@ -102,7 +125,7 @@ const useGameState = () => {
         jury: data.is_jury_trial
           ? { pool: data.jurors, myStrikes: [], locked: false }
           : { skipped: true },
-        motion: { locked: false },
+        motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         trial: { locked: false },
       });
 
@@ -140,7 +163,7 @@ const useGameState = () => {
           comment: data.judge_comment,
           locked: true,
         },
-        motion: { locked: false },
+        motion: createMotionState(),
       }));
       setLoadingMsg(null);
     } catch (err) {
@@ -151,17 +174,99 @@ const useGameState = () => {
   };
 
   /**
-   * Submit a pre-trial motion and store the ruling.
+   * Submit the current motion exchange step for the player.
    *
-   * @param {string} text - Motion text entered by the player.
-   * @returns {Promise<void>} Resolves once the motion ruling is stored.
+   * @param {string} text - Motion or rebuttal text entered by the player.
+   * @returns {Promise<void>} Resolves once the text is stored.
    */
-  const submitMotion = async (text) => {
-    setLoadingMsg('Filing motion...');
+  const submitMotionStep = async (text) => {
+    const trimmed = text.trim();
+    if (!trimmed || !history.motion?.motionPhase) return;
+    setError(null);
+
+    const isMotionStep = history.motion.motionPhase === 'motion_submission';
+    const expectedRole = isMotionStep ? history.motion.motionBy : history.motion.rebuttalBy;
+    if (expectedRole !== config.role) {
+      setError('It is not your turn to file this submission.');
+      return;
+    }
+
+    setHistory((prev) => ({
+      ...prev,
+      motion: {
+        ...prev.motion,
+        motionText: isMotionStep ? trimmed : prev.motion.motionText,
+        rebuttalText: isMotionStep ? prev.motion.rebuttalText : trimmed,
+        motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
+      },
+    }));
+  };
+
+  /**
+   * Trigger the AI submission for the current motion exchange step.
+   *
+   * @returns {Promise<void>} Resolves once the AI text is stored.
+   */
+  const triggerAiMotionSubmission = async () => {
+    if (!history.motion?.motionPhase) return;
+    setError(null);
+
+    const isMotionStep = history.motion.motionPhase === 'motion_submission';
+    const expectedRole = isMotionStep ? history.motion.motionBy : history.motion.rebuttalBy;
+    if (expectedRole === config.role) return;
+
+    setLoadingMsg(
+      isMotionStep
+        ? 'Opposing counsel is drafting a motion...'
+        : 'Opposing counsel is drafting a rebuttal...'
+    );
     try {
       const payload = await requestLlmJson({
-        userPrompt: 'Motion',
-        systemPrompt: getMotionPrompt(history.case, text, config.difficulty),
+        userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
+        systemPrompt: isMotionStep
+          ? getMotionDraftPrompt(history.case, config.difficulty)
+          : getMotionRebuttalPrompt(history.case, history.motion.motionText, config.difficulty),
+        responseLabel: 'motion_text',
+      });
+      const data = parseMotionTextResponse(payload);
+
+      setHistory((prev) => ({
+        ...prev,
+        motion: {
+          ...prev.motion,
+          motionText: isMotionStep ? data.text : prev.motion.motionText,
+          rebuttalText: isMotionStep ? prev.motion.rebuttalText : data.text,
+          motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
+        },
+      }));
+      setLoadingMsg(null);
+    } catch (err) {
+      console.error(err);
+      setError(getLlmClientErrorMessage(err, 'Motion drafting failed.'));
+      setLoadingMsg(null);
+    }
+  };
+
+  /**
+   * Request the judge ruling after both motion texts are available.
+   *
+   * @returns {Promise<void>} Resolves once the ruling is stored.
+   */
+  const requestMotionRuling = async () => {
+    if (!history.motion?.motionText || !history.motion?.rebuttalText) return;
+    if (history.motion.motionPhase === 'motion_ruling_locked') return;
+    setError(null);
+
+    setLoadingMsg('Judge is ruling on the motion...');
+    try {
+      const payload = await requestLlmJson({
+        userPrompt: 'Motion ruling',
+        systemPrompt: getMotionPrompt(
+          history.case,
+          history.motion.motionText,
+          history.motion.rebuttalText,
+          config.difficulty
+        ),
         responseLabel: 'motion',
       });
       /** @type {MotionResult} */
@@ -169,13 +274,18 @@ const useGameState = () => {
 
       setHistory((prev) => ({
         ...prev,
-        motion: { text, ruling: data, locked: true },
-        trial: { locked: false },
+        motion: {
+          ...prev.motion,
+          ruling: data,
+          motionPhase: 'motion_ruling_locked',
+          locked: true,
+        },
+        trial: { ...prev.trial, locked: false },
       }));
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
-      setError(getLlmClientErrorMessage(err, 'Motion failed.'));
+      setError(getLlmClientErrorMessage(err, 'Motion ruling failed.'));
       setLoadingMsg(null);
     }
   };
@@ -230,8 +340,20 @@ const useGameState = () => {
       log += `JURY SEATED (${history.jury.seatedIds.length}):\n${history.jury.comment}\n\n`;
     }
 
-    if (history.motion && history.motion.locked) {
-      log += `MOTION:\n"${history.motion.text}"\nRULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
+    if (history.motion) {
+      const motionLabel =
+        history.motion.motionBy === 'prosecution' ? 'Prosecution Motion' : 'Defense Motion';
+      const rebuttalLabel =
+        history.motion.rebuttalBy === 'prosecution' ? 'Prosecution Rebuttal' : 'Defense Rebuttal';
+      if (history.motion.motionText) {
+        log += `${motionLabel}:\n"${history.motion.motionText}"\n\n`;
+      }
+      if (history.motion.rebuttalText) {
+        log += `${rebuttalLabel}:\n"${history.motion.rebuttalText}"\n\n`;
+      }
+      if (history.motion.ruling) {
+        log += `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
+      }
     }
 
     if (history.trial && history.trial.locked) {
@@ -254,7 +376,9 @@ const useGameState = () => {
     copied,
     generateCase,
     submitStrikes,
-    submitMotion,
+    submitMotionStep,
+    triggerAiMotionSubmission,
+    requestMotionRuling,
     submitArgument,
     handleCopyFull,
     resetGame,

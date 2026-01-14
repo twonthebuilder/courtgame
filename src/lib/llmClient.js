@@ -295,6 +295,26 @@ export const parseMotionResponse = (payload) => {
 };
 
 /**
+ * Validate and return a motion text response.
+ *
+ * @param {object} payload - Parsed JSON payload.
+ * @returns {object} Sanitized motion text payload.
+ */
+export const parseMotionTextResponse = (payload) => {
+  if (!payload || typeof payload !== 'object') {
+    throw createLlmError('Motion text response is not an object.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion. Please try again.',
+      context: { payload },
+    });
+  }
+
+  assertString(payload.text, 'text', 'motion_text');
+
+  return payload;
+};
+
+/**
  * Validate and return a final verdict response.
  *
  * @param {object} payload - Parsed JSON payload.

@@ -50,6 +50,7 @@ describe('useGameState transitions', () => {
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
       .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 50 })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
@@ -66,14 +67,22 @@ describe('useGameState transitions', () => {
     expect(result.current.history.jury.skipped).toBe(true);
 
     await act(async () => {
-      await result.current.submitMotion('Suppress evidence');
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
     });
 
     await act(async () => {
       await result.current.submitArgument('Closing');
     });
 
-    const verdictCall = requestLlmJson.mock.calls[2][0];
+    const verdictCall = requestLlmJson.mock.calls[3][0];
     expect(verdictCall.systemPrompt).toContain('Jury: []');
     expect(result.current.history.trial.verdict.final_ruling).toBe('Acquitted');
   });
