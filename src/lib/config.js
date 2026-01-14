@@ -4,13 +4,6 @@
  */
 
 /**
- * API key for the Gemini model. Expected to be supplied via Vite env.
- *
- * @type {string}
- */
-export const API_KEY = import.meta.env.VITE_GEMINI_API_KEY ?? '';
-
-/**
  * Supported difficulty options for the game setup flow.
  *
  * @type {{value: string, label: string}[]}
