@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * Provides a labeled docket section with an optional icon and consistent styling.
  *
