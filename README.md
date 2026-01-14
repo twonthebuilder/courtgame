@@ -114,6 +114,15 @@ npm run dev
 
 ---
 
+## Testing
+```bash
+npm test
+```
+
+Tests are deterministic under the shared Vitest setup, which stubs `Math.random` to a fixed value and keeps timer/network behavior explicit in test suites.
+
+---
+
 ## Roadmap
 
 ### **v15 (Current - GitHub Launch)**
