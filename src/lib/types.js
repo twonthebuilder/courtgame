@@ -54,6 +54,25 @@
  */
 
 /**
+ * Motion phase identifiers for the pre-trial exchange.
+ *
+ * @typedef {'motion_submission' | 'rebuttal_submission' | 'motion_ruling_locked'} MotionPhase
+ */
+
+/**
+ * State for the pre-trial motion exchange.
+ *
+ * @typedef {object} MotionState
+ * @property {string} motionText - Defense motion text.
+ * @property {'defense' | 'prosecution'} motionBy - Role that filed the motion.
+ * @property {string} rebuttalText - Prosecution rebuttal text.
+ * @property {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
+ * @property {MotionResult | null} ruling - Judge ruling on the motion exchange.
+ * @property {MotionPhase} motionPhase - Current phase of the motion exchange.
+ * @property {boolean} locked - Whether the motion phase is finalized.
+ */
+
+/**
  * Final verdict payload for the trial phase.
  *
  * @typedef {object} VerdictResult
@@ -74,7 +93,7 @@
  * @typedef {object} HistoryState
  * @property {CaseData} [case] - Current case metadata.
  * @property {JuryState} [jury] - Jury selection state.
- * @property {{text?: string, ruling?: MotionResult, locked?: boolean}} [motion] - Motion phase data.
+ * @property {MotionState} [motion] - Motion phase data.
  * @property {{text?: string, verdict?: VerdictResult, locked?: boolean}} [trial] - Trial phase data.
  */
 

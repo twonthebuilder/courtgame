@@ -5,6 +5,7 @@ import {
   parseCaseResponse,
   parseJuryResponse,
   parseMotionResponse,
+  parseMotionTextResponse,
   parseVerdictResponse,
 } from './llmClient';
 
@@ -42,6 +43,11 @@ describe('llmClient response parsers', () => {
   it('accepts a valid motion response', () => {
     const payload = { ruling: 'Denied', outcome_text: 'Insufficient basis.' };
     expect(parseMotionResponse(payload)).toEqual(payload);
+  });
+
+  it('accepts a valid motion text response', () => {
+    const payload = { text: 'Motion to dismiss.' };
+    expect(parseMotionTextResponse(payload)).toEqual(payload);
   });
 
   it('accepts a valid verdict response', () => {

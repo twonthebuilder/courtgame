@@ -68,16 +68,67 @@ export const getJuryStrikePrompt = (caseData, playerStrikes, playerRole) => {
 };
 
 /**
+ * Builds the system prompt for drafting the initial pre-trial motion.
+ *
+ * @param {object} caseData - Case metadata including judge profile.
+ * @param {string} difficulty - Difficulty mode identifier.
+ * @returns {string} Prompt text for the motion drafting model.
+ */
+export const getMotionDraftPrompt = (caseData, difficulty) => `
+    Phase: PRE-TRIAL MOTION.
+    Role: Defense Attorney.
+    Case: ${caseData.title}.
+    Charge: ${caseData.charge}.
+    Facts: ${JSON.stringify(caseData.facts)}
+    Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
+    Difficulty: ${difficulty}.
+    
+    Draft a concise motion to Dismiss or Suppress Evidence.
+    
+    Return JSON:
+    {
+      "text": "Motion text"
+    }
+`;
+
+/**
+ * Builds the system prompt for drafting the rebuttal to a pre-trial motion.
+ *
+ * @param {object} caseData - Case metadata including judge profile.
+ * @param {string} motionText - The defense motion text to rebut.
+ * @param {string} difficulty - Difficulty mode identifier.
+ * @returns {string} Prompt text for the rebuttal drafting model.
+ */
+export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
+    Phase: PRE-TRIAL MOTION REBUTTAL.
+    Role: Prosecutor.
+    Case: ${caseData.title}.
+    Charge: ${caseData.charge}.
+    Motion: "${motionText}"
+    Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
+    Difficulty: ${difficulty}.
+    
+    Draft a concise rebuttal responding to the motion.
+    
+    Return JSON:
+    {
+      "text": "Rebuttal text"
+    }
+`;
+
+/**
  * Builds the system prompt for a pre-trial motion ruling.
  *
  * @param {object} caseData - Case metadata including judge profile.
- * @param {string} argument - Player's motion text.
+ * @param {string} motionText - Defense motion text.
+ * @param {string} rebuttalText - Prosecution rebuttal text.
  * @param {string} difficulty - Difficulty mode identifier.
  * @returns {string} Prompt text for the motion ruling model.
  */
-export const getMotionPrompt = (caseData, argument, difficulty) => `
+export const getMotionPrompt = (caseData, motionText, rebuttalText, difficulty) => `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
-    Motion: "${argument}"
+    Motion: "${motionText}"
+    Rebuttal: "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
     Difficulty: ${difficulty}.
     

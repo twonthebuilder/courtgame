@@ -38,7 +38,9 @@ export default function PocketCourt() {
     copied,
     generateCase,
     submitStrikes,
-    submitMotion,
+    submitMotionStep,
+    triggerAiMotionSubmission,
+    requestMotionRuling,
     submitArgument,
     handleCopyFull,
     resetGame,
@@ -51,6 +53,38 @@ export default function PocketCourt() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [history, loadingMsg]);
+
+  useEffect(() => {
+    if (!history.motion?.motionPhase || history.motion.motionPhase === 'motion_ruling_locked') return;
+
+    const isMotionStep = history.motion.motionPhase === 'motion_submission';
+    const expectedRole = isMotionStep ? history.motion.motionBy : history.motion.rebuttalBy;
+    const isPlayerTurn = expectedRole === config.role;
+    const missingText = isMotionStep ? !history.motion.motionText : !history.motion.rebuttalText;
+
+    if (!loadingMsg && !isPlayerTurn && missingText) {
+      triggerAiMotionSubmission();
+    }
+
+    if (
+      !loadingMsg &&
+      history.motion.motionPhase === 'rebuttal_submission' &&
+      history.motion.motionText &&
+      history.motion.rebuttalText
+    ) {
+      requestMotionRuling();
+    }
+  }, [
+    config.role,
+    history.motion?.motionBy,
+    history.motion?.motionPhase,
+    history.motion?.motionText,
+    history.motion?.rebuttalBy,
+    history.motion?.rebuttalText,
+    loadingMsg,
+    requestMotionRuling,
+    triggerAiMotionSubmission,
+  ]);
 
   // --- MAIN RENDER ---
 
@@ -132,9 +166,15 @@ export default function PocketCourt() {
             <PhaseSection title="Pre-Trial Motions" icon={FileText}>
               <MotionSection
                 isLocked={history.motion.locked}
+                motionPhase={history.motion.motionPhase}
+                motionText={history.motion.motionText}
+                motionBy={history.motion.motionBy}
+                rebuttalText={history.motion.rebuttalText}
+                rebuttalBy={history.motion.rebuttalBy}
                 ruling={history.motion.ruling}
-                onSubmit={submitMotion}
-                submittedText={history.motion.text}
+                playerRole={config.role}
+                isLoading={Boolean(loadingMsg)}
+                onSubmitStep={submitMotionStep}
               />
             </PhaseSection>
           )}
