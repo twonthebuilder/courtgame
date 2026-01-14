@@ -14,9 +14,8 @@ import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
-  getMotionDraftPrompt,
   getMotionPrompt,
-  getMotionRebuttalPrompt,
+  getOpposingCounselPrompt,
 } from '../lib/prompts';
 
 /** @typedef {import('../lib/types').CaseData} CaseData */
@@ -223,9 +222,13 @@ const useGameState = () => {
     try {
       const payload = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
-        systemPrompt: isMotionStep
-          ? getMotionDraftPrompt(history.case, config.difficulty)
-          : getMotionRebuttalPrompt(history.case, history.motion.motionText, config.difficulty),
+        systemPrompt: getOpposingCounselPrompt(
+          history.case,
+          config.difficulty,
+          history.motion.motionPhase,
+          expectedRole,
+          history.motion.motionText
+        ),
         responseLabel: 'motion_text',
       });
       const data = parseMotionTextResponse(payload);
@@ -265,7 +268,10 @@ const useGameState = () => {
           history.case,
           history.motion.motionText,
           history.motion.rebuttalText,
-          config.difficulty
+          config.difficulty,
+          history.motion.motionBy,
+          history.motion.rebuttalBy,
+          config.role
         ),
         responseLabel: 'motion',
       });
