@@ -33,15 +33,26 @@ const MotionSection = ({
 }) => {
   const [text, setText] = useState('');
   const isMotionStep = motionPhase === 'motion_submission';
+  const hasRuling = Boolean(ruling);
+  const isPhaseLocked = isLocked || hasRuling;
   const expectedRole = isMotionStep ? motionBy : rebuttalBy;
   const isPlayerTurn = expectedRole === playerRole;
   const roleLabel = (role) => (role === 'defense' ? 'Defense' : 'Prosecution');
+  const submissionLabel = isMotionStep ? 'Motion' : 'Rebuttal';
+  const playerSubmissionLabel = `${roleLabel(playerRole)} ${submissionLabel}`;
+  const playerPlaceholder = isMotionStep
+    ? playerRole === 'defense'
+      ? 'Your Honor, the defense moves to...'
+      : 'Your Honor, the prosecution moves to...'
+    : playerRole === 'defense'
+      ? 'The defense rebuts the motion by...'
+      : 'The prosecution rebuts the motion by...';
 
   useEffect(() => {
     setText('');
-  }, [motionPhase]);
+  }, [motionPhase, isPhaseLocked]);
 
-  if (isLocked) {
+  if (isPhaseLocked) {
     return (
       <div className="bg-white p-6 rounded-lg border border-slate-200 flex flex-col md:flex-row gap-6 animate-in fade-in">
         <div className="flex-1">
@@ -55,19 +66,36 @@ const MotionSection = ({
           <p className="font-serif text-slate-700 italic">"{rebuttalText}"</p>
         </div>
         <div className="w-full md:w-1/3 bg-slate-50 p-4 rounded border border-slate-200 relative overflow-hidden">
-          <div
-            className={`absolute top-2 right-2 border-2 px-2 py-1 rounded text-xs font-black uppercase tracking-widest -rotate-12 ${
-              ruling.ruling === 'GRANTED'
-                ? 'border-green-600 text-green-600'
-                : ruling.ruling === 'DENIED'
-                  ? 'border-red-600 text-red-600'
-                  : 'border-amber-600 text-amber-600'
-            }`}
-          >
-            {ruling.ruling}
-          </div>
-          <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Judge's Ruling</h4>
-          <p className="text-sm text-slate-800 font-medium mt-6">"{ruling.outcome_text}"</p>
+          {hasRuling ? (
+            <>
+              <div
+                className={`absolute top-2 right-2 border-2 px-2 py-1 rounded text-xs font-black uppercase tracking-widest -rotate-12 ${
+                  ruling.ruling === 'GRANTED'
+                    ? 'border-green-600 text-green-600'
+                    : ruling.ruling === 'DENIED'
+                      ? 'border-red-600 text-red-600'
+                      : 'border-amber-600 text-amber-600'
+                }`}
+              >
+                {ruling.ruling}
+              </div>
+              <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
+                Judge's Ruling
+              </h4>
+              <p className="text-sm text-slate-800 font-medium mt-6">
+                "{ruling.outcome_text}"
+              </p>
+            </>
+          ) : (
+            <>
+              <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
+                Judge's Ruling
+              </h4>
+              <p className="text-sm text-slate-500 italic mt-6">
+                Awaiting the court's decision.
+              </p>
+            </>
+          )}
         </div>
       </div>
     );
@@ -102,13 +130,12 @@ const MotionSection = ({
       </div>
       {isPlayerTurn ? (
         <>
+          <p className="text-xs font-bold text-slate-400 uppercase mb-2">
+            Your {playerSubmissionLabel}
+          </p>
           <textarea
             className="w-full h-32 p-3 border border-slate-300 rounded font-serif text-slate-800 mb-3 focus:ring-2 focus:ring-indigo-500 outline-none"
-            placeholder={
-              isMotionStep
-                ? 'Your Honor, the defense moves to...'
-                : 'The response to the motion is...'
-            }
+            placeholder={playerPlaceholder}
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -118,7 +145,9 @@ const MotionSection = ({
               disabled={!text.trim()}
               className="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-indigo-700"
             >
-              {isMotionStep ? 'File Motion' : 'File Rebuttal'}
+              {isMotionStep
+                ? `File ${roleLabel(playerRole)} Motion`
+                : `File ${roleLabel(playerRole)} Rebuttal`}
             </button>
           </ActionFooter>
         </>
