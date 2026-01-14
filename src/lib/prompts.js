@@ -110,7 +110,7 @@ export const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argu
     
     1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
-    3. LEGENDARY CHECK (>100 score).
+    3. LEGENDARY CHECK (100+ score).
     
     Return JSON:
     {
