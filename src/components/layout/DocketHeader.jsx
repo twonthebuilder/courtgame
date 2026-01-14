@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * Presents the docket title, jurisdiction, and docket number header strip.
  *

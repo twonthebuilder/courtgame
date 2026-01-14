@@ -85,7 +85,7 @@ export default function PocketCourt() {
       </header>
 
       {/* THE LIVING DOCKET */}
-      <main className="max-w-3xl mx-auto p-4 md:p-8">
+      <main className="w-full max-w-3xl md:max-w-4xl xl:max-w-5xl mx-auto p-4 md:p-8">
         {/* Paper Container */}
         <PaperContainer>
           {/* Paper Header */}

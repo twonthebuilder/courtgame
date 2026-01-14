@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * Aligns action buttons and controls to provide consistent section footers.
  *

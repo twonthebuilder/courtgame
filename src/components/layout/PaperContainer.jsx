@@ -1,5 +1,3 @@
-import React from 'react';
-
 /**
  * Provides the primary paper-like container for the living docket.
  *

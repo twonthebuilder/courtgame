@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
 import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../lib/config';
+import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 
 /**
  * Entry screen for selecting a game mode, jurisdiction, and side.
@@ -13,6 +14,25 @@ import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../li
 const StartScreen = ({ onStart, error }) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
+  const [provider, setProvider] = useState(AI_PROVIDERS[0]?.value ?? 'gemini');
+  const [apiKey, setApiKey] = useState('');
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [rememberKey, setRememberKey] = useState(false);
+  const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
+
+  useEffect(() => {
+    const storedKey = loadStoredApiKey();
+    if (storedKey) {
+      setApiKey(storedKey);
+      setRememberKey(true);
+    }
+    setHasLoadedStoredKey(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedStoredKey) return;
+    persistApiKey(apiKey, rememberKey);
+  }, [apiKey, rememberKey, hasLoadedStoredKey]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
@@ -33,41 +53,104 @@ const StartScreen = ({ onStart, error }) => {
           </p>
         </div>
       )}
-      <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 w-full max-w-md mb-8 space-y-6">
-        <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Game Mode</label>
-          <div className="grid grid-cols-3 gap-2">
-            {DIFFICULTY_OPTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setDifficulty(option.value)}
-                className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
-                  difficulty === option.value
-                    ? 'bg-amber-100 text-amber-900 border-amber-300'
-                    : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+      <div className="w-full max-w-md mb-8 space-y-6">
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">AI Setup</label>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+                  Provider
+                </label>
+                <select
+                  value={provider}
+                  onChange={(event) => setProvider(event.target.value)}
+                  className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 focus:border-amber-400 focus:outline-none"
+                >
+                  {AI_PROVIDERS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+                  API Key
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type={showApiKey ? 'text' : 'password'}
+                    value={apiKey}
+                    onChange={(event) => setApiKey(event.target.value)}
+                    placeholder="Paste your key"
+                    className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-700 focus:border-amber-400 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey((prev) => !prev)}
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold uppercase tracking-wide text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+                  >
+                    {showApiKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-slate-400">
+                  If you enable remember, the key is stored in this browser. Browser apps cannot
+                  fully secure keys—BYOK is recommended for personal use only.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-semibold text-slate-500">
+                <input
+                  type="checkbox"
+                  checked={rememberKey}
+                  onChange={(event) => setRememberKey(event.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-amber-500 focus:ring-amber-400"
+                />
+                Remember on this device
+              </label>
+            </div>
           </div>
         </div>
-        <div>
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">Jurisdiction</label>
-          <div className="grid grid-cols-3 gap-2">
-            {JURISDICTIONS.map((option) => (
-              <button
-                key={option.value}
-                onClick={() => setJurisdiction(option.value)}
-                className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
-                  jurisdiction === option.value
-                    ? 'bg-slate-800 text-white border-slate-800'
-                    : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
-                }`}
-              >
-                {option.label}
-              </button>
-            ))}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-6">
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+              Game Mode
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {DIFFICULTY_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setDifficulty(option.value)}
+                  className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                    difficulty === option.value
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
+                      : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+              Jurisdiction
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {JURISDICTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setJurisdiction(option.value)}
+                  className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                    jurisdiction === option.value
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

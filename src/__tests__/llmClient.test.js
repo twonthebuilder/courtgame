@@ -1,13 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fetchWithRetry } from '../lib/api';
-import {
-  LlmClientError,
-  getLlmClientErrorMessage,
-  requestLlmJson,
-} from '../lib/llmClient';
+import { getActiveApiKey } from '../lib/runtimeConfig';
+import { LlmClientError, getLlmClientErrorMessage, requestLlmJson } from '../lib/llmClient';
 
-vi.mock('../lib/config', () => ({
-  API_KEY: 'test-key',
+vi.mock('../lib/runtimeConfig', () => ({
+  getActiveApiKey: vi.fn(() => 'test-key'),
 }));
 
 vi.mock('../lib/api', () => ({
@@ -17,6 +14,7 @@ vi.mock('../lib/api', () => ({
 describe('llm client wrappers', () => {
   beforeEach(() => {
     fetchWithRetry.mockReset();
+    getActiveApiKey.mockReset().mockReturnValue('test-key');
   });
 
   afterEach(() => {
@@ -48,5 +46,19 @@ describe('llm client wrappers', () => {
 
     expect(getLlmClientErrorMessage(error, 'Fallback')).toBe('Try again later.');
     expect(getLlmClientErrorMessage(new Error('Oops'), 'Fallback')).toBe('Fallback');
+  });
+
+  it('keeps the missing key message unchanged', async () => {
+    getActiveApiKey.mockReturnValue('');
+
+    await expect(
+      requestLlmJson({
+        systemPrompt: 'System',
+        userPrompt: 'User',
+        responseLabel: 'case',
+      })
+    ).rejects.toMatchObject({
+      userMessage: 'LLM API key is missing. Please check configuration.',
+    });
   });
 });
