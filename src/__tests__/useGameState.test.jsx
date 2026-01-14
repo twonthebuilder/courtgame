@@ -99,4 +99,71 @@ describe('useGameState transitions', () => {
     expect(result.current.gameState).toBe('start');
     expect(result.current.error).toBe('Docket creation failed. Please try again.');
   });
+
+  it('enforces defense/prosecution turn order during the motion exchange', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'AI drafted motion.' });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('prosecution', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Our motion');
+    });
+
+    expect(result.current.error).toBe('It is not your turn to file this submission.');
+    expect(result.current.history.motion.motionText).toBe('');
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    expect(result.current.history.motion.motionText).toBe('AI drafted motion.');
+    expect(result.current.history.motion.motionPhase).toBe('rebuttal_submission');
+
+    await act(async () => {
+      await result.current.submitMotionStep('Our rebuttal');
+    });
+
+    expect(result.current.history.motion.rebuttalText).toBe('Our rebuttal');
+  });
+
+  it('locks the motion phase after a ruling is issued', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'AI rebuttal.' })
+      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 45 });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress the evidence.');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.motion.motionPhase).toBe('motion_ruling_locked');
+    expect(result.current.history.motion.locked).toBe(true);
+    expect(result.current.history.motion.ruling.ruling).toBe('DENIED');
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(requestLlmJson).toHaveBeenCalledTimes(3);
+  });
 });
