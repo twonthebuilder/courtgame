@@ -18,6 +18,10 @@ src/
   __tests__/  # Unit/integration tests
 ```
 
+## Styling
+
+Tailwind CSS is compiled through the PostCSS pipeline, with `src/index.css` as the entry point that imports Tailwind layers and shared global styles. Keep component-specific styles colocated with the relevant UI in `components/`, and avoid reintroducing monolithic stylesheet files.
+
 ## Screens
 
 **Responsibility:** Screens are top-level routes/entry points that control the full page view before the docket is shown.
