@@ -65,10 +65,10 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 
 ## Tech Stack
 
-- **Frontend:** React (single-file architecture, will be modularized)
+- **Frontend:** React with a modular structure (components, hooks, lib, screens)
 - **AI:** **For now** Google Gemini 2.0 Flash (case generation, adjudication, deliberation)
 - **State:** React hooks only (no localStorage/sessionStorage)
-- **Styling:** Tailwind CSS + custom animations
+- **Styling:** Tailwind CSS via PostCSS, with `src/index.css` as the build entry point for global styles and component-specific styles kept co-located.
 
 ## **Repo Structure**
 ```
@@ -77,11 +77,22 @@ courtgame/
 ├── src/
 ├── .gitignore
 ├── AGENTS.md
-├── README.md         
+├── README.md
 ├── eslint.config.js
 ├── index.html
 ├── package.json
 ├── vite.config.js
+```
+
+---
+
+## Documentation
+
+- [Architecture overview](docs/architecture.md)
+- [Gameplay flow](docs/gameplay-flow.md)
+- [LLM client notes](docs/llm-client.md)
+- [Game state](docs/game-state.md)
+- [Configuration](docs/configuration.md)
 
 ---
 
@@ -100,6 +111,15 @@ npm install
 # Run locally
 npm run dev
 ```
+
+---
+
+## Testing
+```bash
+npm test
+```
+
+Tests are deterministic under the shared Vitest setup, which stubs `Math.random` to a fixed value and keeps timer/network behavior explicit in test suites.
 
 ---
 
