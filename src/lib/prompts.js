@@ -117,18 +117,84 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
 `;
 
 /**
+ * Builds the system prompt for opposing counsel to draft a motion or rebuttal.
+ *
+ * @param {object} caseData - Case metadata including judge profile.
+ * @param {string} difficulty - Difficulty mode identifier.
+ * @param {'motion_submission' | 'rebuttal_submission'} phase - Motion exchange phase.
+ * @param {'defense' | 'prosecution'} opponentRole - Opposing counsel role.
+ * @param {string} [motionText] - Motion text to rebut when in rebuttal phase.
+ * @returns {string} Prompt text for the opposing counsel model.
+ */
+export const getOpposingCounselPrompt = (
+  caseData,
+  difficulty,
+  phase,
+  opponentRole,
+  motionText = ''
+) => {
+  const roleLabel = opponentRole === 'defense' ? 'Defense Attorney' : 'Prosecutor';
+  const isMotionPhase = phase === 'motion_submission';
+  const baseContext = `
+    Phase: PRE-TRIAL MOTION.
+    Role: ${roleLabel}.
+    Case: ${caseData.title}.
+    Charge: ${caseData.charge}.
+    Facts: ${JSON.stringify(caseData.facts)}
+    Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
+    Difficulty: ${difficulty}.
+  `;
+
+  if (isMotionPhase) {
+    return `
+      ${baseContext}
+      Draft a concise motion to Dismiss or Suppress Evidence.
+
+      Return JSON:
+      {
+        "text": "Motion text"
+      }
+    `;
+  }
+
+  return `
+    ${baseContext}
+    Motion: "${motionText}"
+
+    Draft a concise rebuttal responding to the motion.
+
+    Return JSON:
+    {
+      "text": "Rebuttal text"
+    }
+  `;
+};
+
+/**
  * Builds the system prompt for a pre-trial motion ruling.
  *
  * @param {object} caseData - Case metadata including judge profile.
  * @param {string} motionText - Defense motion text.
  * @param {string} rebuttalText - Prosecution rebuttal text.
  * @param {string} difficulty - Difficulty mode identifier.
+ * @param {'defense' | 'prosecution'} motionBy - Role that filed the motion.
+ * @param {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
+ * @param {'defense' | 'prosecution'} playerRole - Player role for context.
  * @returns {string} Prompt text for the motion ruling model.
  */
-export const getMotionPrompt = (caseData, motionText, rebuttalText, difficulty) => `
+export const getMotionPrompt = (
+  caseData,
+  motionText,
+  rebuttalText,
+  difficulty,
+  motionBy,
+  rebuttalBy,
+  playerRole
+) => `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
-    Motion: "${motionText}"
-    Rebuttal: "${rebuttalText}"
+    Player Role: ${playerRole}.
+    Motion (${motionBy}): "${motionText}"
+    Rebuttal (${rebuttalBy}): "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
     Difficulty: ${difficulty}.
     
