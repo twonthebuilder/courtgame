@@ -1,5 +1,5 @@
 import { fetchWithRetry } from './api';
-import { API_KEY } from './config';
+import { getActiveApiKey } from './runtimeConfig';
 
 const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
@@ -180,7 +180,8 @@ const assertNumberArray = (value, field, responseLabel) => {
  * @returns {Promise<object>} Parsed JSON payload.
  */
 export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel = 'response' }) => {
-  if (!API_KEY) {
+  const apiKey = getActiveApiKey();
+  if (!apiKey) {
     throw createLlmError('Missing Gemini API key.', {
       code: 'CONFIG_MISSING',
       userMessage: 'LLM API key is missing. Please check configuration.',
@@ -189,7 +190,7 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
   }
 
   try {
-    const response = await fetchWithRetry(`${GEMINI_ENDPOINT}?key=${API_KEY}`, {
+    const response = await fetchWithRetry(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
