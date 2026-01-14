@@ -6,6 +6,8 @@ import DocketHeader from './DocketHeader';
 import PaperContainer from './PaperContainer';
 import PhaseSection from './PhaseSection';
 
+globalThis.React = React;
+
 const IconStub = () => <svg data-testid="icon" />;
 
 describe('layout components', () => {
