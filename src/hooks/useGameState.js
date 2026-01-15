@@ -253,6 +253,23 @@ const useGameState = () => {
   };
 
   /**
+   * Derive a short internal counsel note based on the motion posture and ruling.
+   *
+   * @param {HistoryState['motion']} motionState - Motion exchange state.
+   * @param {MotionResult} ruling - Judge ruling payload.
+   * @returns {string} Internal counsel notes (1-2 sentences).
+   */
+  const deriveCounselNotes = (motionState, ruling) => {
+    if (!motionState || !ruling) return '';
+    const motionSide = motionState.motionBy === 'prosecution' ? 'Prosecution' : 'Defense';
+    const rebuttalSide = motionState.rebuttalBy === 'prosecution' ? 'Prosecution' : 'Defense';
+    const rulingText = ruling.ruling ? ruling.ruling.toLowerCase() : 'ruled on';
+    const outcomeSentence = ruling.outcome_text ? ` Outcome: ${ruling.outcome_text}` : '';
+
+    return `Judge ${rulingText} the ${motionSide.toLowerCase()} motion after a ${rebuttalSide.toLowerCase()} rebuttal.${outcomeSentence}`.trim();
+  };
+
+  /**
    * Request the judge ruling after both motion texts are available.
    *
    * @returns {Promise<void>} Resolves once the ruling is stored.
@@ -288,6 +305,7 @@ const useGameState = () => {
           motionPhase: 'motion_ruling_locked',
           locked: true,
         },
+        counselNotes: deriveCounselNotes(prev.motion, data),
         trial: { ...prev.trial, locked: false },
       }));
       setLoadingMsg(null);
