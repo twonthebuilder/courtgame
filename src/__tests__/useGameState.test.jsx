@@ -1,7 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import useGameState from '../hooks/useGameState';
+import { copyToClipboard } from '../lib/clipboard';
 import { requestLlmJson } from '../lib/llmClient';
+
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: vi.fn(),
+}));
 
 vi.mock('../lib/llmClient', async () => {
   const actual = await vi.importActual('../lib/llmClient');
@@ -51,6 +56,7 @@ describe('useGameState transitions', () => {
 
     expect(result.current.gameState).toBe('playing');
     expect(result.current.history.case.title).toBe('Bench Trial');
+    expect(result.current.history.counselNotes).toBe('');
   });
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
@@ -171,5 +177,28 @@ describe('useGameState transitions', () => {
     });
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
+  });
+
+  it('includes counsel notes in the copied docket when present', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    act(() => {
+      result.current.history.counselNotes = 'Remember to cite precedent.';
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    expect(copyToClipboard.mock.calls[0][0]).toContain(
+      'COUNSEL NOTES:\nRemember to cite precedent.'
+    );
   });
 });
