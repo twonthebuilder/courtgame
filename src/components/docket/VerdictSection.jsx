@@ -1,4 +1,5 @@
 import { Trophy } from 'lucide-react';
+import ExpandableText from '../shared/ExpandableText';
 
 /** @typedef {import('../../lib/types').VerdictResult} VerdictResult */
 
@@ -44,12 +45,18 @@ const VerdictSection = ({ result }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
         <div className="bg-white p-4 rounded border border-slate-200">
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Judge's Opinion</h4>
-          <p className="font-serif text-slate-700 text-sm">"{result.judge_opinion}"</p>
+          <ExpandableText
+            text={result.judge_opinion}
+            className="font-serif text-slate-700 text-sm before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+          />
         </div>
         {result.jury_verdict !== 'N/A' && (
           <div className="bg-white p-4 rounded border border-slate-200">
             <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Jury Reasoning</h4>
-            <p className="font-serif text-slate-700 text-sm">"{result.jury_reasoning}"</p>
+            <ExpandableText
+              text={result.jury_reasoning}
+              className="font-serif text-slate-700 text-sm before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+            />
           </div>
         )}
       </div>

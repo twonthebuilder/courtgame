@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import ActionFooter from '../layout/ActionFooter';
+import ExpandableText from '../shared/ExpandableText';
 
 /** @typedef {import('../../lib/types').MotionResult} MotionResult */
 
@@ -59,11 +60,17 @@ const MotionSection = ({
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
             {roleLabel(motionBy)} Motion
           </h4>
-          <p className="font-serif text-slate-700 italic">"{motionText}"</p>
+          <ExpandableText
+            text={motionText}
+            className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+          />
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-1 mt-4">
             {roleLabel(rebuttalBy)} Rebuttal
           </h4>
-          <p className="font-serif text-slate-700 italic">"{rebuttalText}"</p>
+          <ExpandableText
+            text={rebuttalText}
+            className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+          />
         </div>
         <div className="w-full md:w-1/3 bg-slate-50 p-4 rounded border border-slate-200 relative overflow-hidden">
           {hasRuling ? (
@@ -82,9 +89,10 @@ const MotionSection = ({
               <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
                 Judge's Ruling
               </h4>
-              <p className="text-sm text-slate-800 font-medium mt-6">
-                "{ruling.outcome_text}"
-              </p>
+              <ExpandableText
+                text={ruling.outcome_text}
+                className="text-sm text-slate-800 font-medium mt-6 before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+              />
             </>
           ) : (
             <>
@@ -112,7 +120,10 @@ const MotionSection = ({
             {roleLabel(motionBy)} Motion
           </h4>
           {motionText ? (
-            <p className="font-serif text-slate-700 italic">"{motionText}"</p>
+            <ExpandableText
+              text={motionText}
+              className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+            />
           ) : (
             <p className="text-xs text-slate-400 italic">Pending submission.</p>
           )}
@@ -122,7 +133,10 @@ const MotionSection = ({
             {roleLabel(rebuttalBy)} Rebuttal
           </h4>
           {rebuttalText ? (
-            <p className="font-serif text-slate-700 italic">"{rebuttalText}"</p>
+            <ExpandableText
+              text={rebuttalText}
+              className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+            />
           ) : (
             <p className="text-xs text-slate-400 italic">Pending submission.</p>
           )}

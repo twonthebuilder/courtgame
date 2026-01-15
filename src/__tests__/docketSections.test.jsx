@@ -52,9 +52,9 @@ describe('docket section submitted text rendering', () => {
     );
 
     expect(screen.getByText('Defense Motion')).toBeInTheDocument();
-    expect(screen.getByText('"Suppress evidence"')).toBeInTheDocument();
+    expect(screen.getByText('Suppress evidence')).toBeInTheDocument();
     expect(screen.getByText('Prosecution Rebuttal')).toBeInTheDocument();
-    expect(screen.getByText('"Opposing response"')).toBeInTheDocument();
+    expect(screen.getByText('Opposing response')).toBeInTheDocument();
   });
 
   it('shows the current player motion prompt when it is their turn', () => {
@@ -95,7 +95,7 @@ describe('docket section submitted text rendering', () => {
     );
 
     expect(screen.getByText("Judge's Ruling")).toBeInTheDocument();
-    expect(screen.getByText('"Denied"')).toBeInTheDocument();
+    expect(screen.getByText('Denied')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 
