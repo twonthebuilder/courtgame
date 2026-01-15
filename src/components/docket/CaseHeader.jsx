@@ -51,10 +51,6 @@ const CaseHeader = ({ data, counselNotes }) => {
             <p>{opposingCounsel.current_posture || 'Not provided.'}</p>
           </div>
         </div>
-        <div className="bg-white p-3 rounded border border-slate-200 text-sm text-slate-600 space-y-1">
-          <p className="text-xs font-bold text-slate-400 uppercase">Counsel Notes</p>
-          <p className="text-slate-700">{resolvedCounselNotes}</p>
-        </div>
       </div>
       <div className="space-y-4 text-sm text-slate-700">
         <div>
@@ -72,6 +68,10 @@ const CaseHeader = ({ data, counselNotes }) => {
               <li key={i}>{item}</li>
             ))}
           </ul>
+        </div>
+        <div className="bg-white p-3 rounded border border-slate-200 text-sm text-slate-600 space-y-1">
+          <p className="text-xs font-bold text-slate-400 uppercase">Counsel Notes</p>
+          <p className="text-slate-700">{resolvedCounselNotes}</p>
         </div>
       </div>
     </div>

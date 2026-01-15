@@ -154,18 +154,23 @@ const useGameState = () => {
       });
       const data = parseJuryResponse(payload);
 
-      setHistory((prev) => ({
-        ...prev,
-        jury: {
-          ...prev.jury,
-          myStrikes: strikes,
-          opponentStrikes: data.opponent_strikes,
-          seatedIds: data.seated_juror_ids,
-          comment: data.judge_comment,
-          locked: true,
-        },
-        motion: createMotionState(),
-      }));
+      setHistory((prev) => {
+        const seatedJurors =
+          prev.case?.jurors.filter((juror) => data.seated_juror_ids?.includes(juror.id)) ?? [];
+        return {
+          ...prev,
+          jury: {
+            ...prev.jury,
+            myStrikes: strikes,
+            opponentStrikes: data.opponent_strikes,
+            seatedIds: data.seated_juror_ids,
+            comment: data.judge_comment,
+            locked: true,
+          },
+          motion: createMotionState(),
+          counselNotes: deriveJuryCounselNotes(seatedJurors, config.role),
+        };
+      });
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
@@ -252,21 +257,117 @@ const useGameState = () => {
     }
   };
 
+  const MAX_COUNSEL_NOTES_LENGTH = 160;
+
   /**
-   * Derive a short internal counsel note based on the motion posture and ruling.
+   * Normalize counsel notes to 1-2 sentences within the max character budget.
+   *
+   * @param {string} text - Proposed counsel note text.
+   * @returns {string} Normalized counsel note.
+   */
+  const normalizeCounselNotes = (text) => {
+    if (!text) return '';
+    const cleaned = text.replace(/\s+/g, ' ').trim();
+    if (!cleaned) return '';
+    const sentences = cleaned.split(/(?<=[.!?])\s+/);
+    const limitedSentences = sentences.slice(0, 2).join(' ').trim();
+    if (limitedSentences.length <= MAX_COUNSEL_NOTES_LENGTH) return limitedSentences;
+    return `${limitedSentences.slice(0, MAX_COUNSEL_NOTES_LENGTH - 3).trimEnd()}...`;
+  };
+
+  /**
+   * Create a fallback counsel note when no richer context is available.
+   *
+   * @param {string} role - Player role.
+   * @param {string} [motionOutcome] - Motion outcome label.
+   * @param {string} [verdictOutcome] - Verdict outcome label.
+   * @returns {string} Minimal counsel note.
+   */
+  const getFallbackCounselNotes = (role, motionOutcome, verdictOutcome) =>
+    normalizeCounselNotes(
+      `We are the ${role}; motion ${motionOutcome || 'pending'}, verdict ${verdictOutcome || 'pending'}.`
+    );
+
+  /**
+   * Build a counsel note reacting to the seated jury composition.
+   *
+   * @param {Juror[]} seatedJurors - Jurors seated for trial.
+   * @param {string} role - Player role.
+   * @returns {string} Counsel note derived from juror traits.
+   */
+  const deriveJuryCounselNotes = (seatedJurors, role) => {
+    const hints = seatedJurors
+      .map((juror) => juror.bias_hint)
+      .filter(Boolean)
+      .map((hint) => hint.replace(/[.]+$/g, '').trim())
+      .filter(Boolean);
+    const uniqueHints = [...new Set(hints)].slice(0, 2);
+    if (uniqueHints.length) {
+      return normalizeCounselNotes(
+        `We are reading a jury: ${uniqueHints.join('; ')}.`
+      );
+    }
+    return normalizeCounselNotes(`We are the ${role} and calibrating to this panel.`);
+  };
+
+  /**
+   * Build a counsel note after the pre-trial motion ruling.
    *
    * @param {HistoryState['motion']} motionState - Motion exchange state.
    * @param {MotionResult} ruling - Judge ruling payload.
-   * @returns {string} Internal counsel notes (1-2 sentences).
+   * @param {string} role - Player role.
+   * @returns {string} Counsel note derived from ruling context.
    */
-  const deriveCounselNotes = (motionState, ruling) => {
-    if (!motionState || !ruling) return '';
-    const motionSide = motionState.motionBy === 'prosecution' ? 'Prosecution' : 'Defense';
-    const rebuttalSide = motionState.rebuttalBy === 'prosecution' ? 'Prosecution' : 'Defense';
-    const rulingText = ruling.ruling ? ruling.ruling.toLowerCase() : 'ruled on';
-    const outcomeSentence = ruling.outcome_text ? ` Outcome: ${ruling.outcome_text}` : '';
+  const deriveMotionCounselNotes = (motionState, ruling, role) => {
+    if (!motionState || !ruling?.ruling) {
+      return getFallbackCounselNotes(role, 'pending');
+    }
+    const outcome = ruling.ruling.toLowerCase();
+    const isOurMotion = motionState.motionBy === role;
+    const reactions = {
+      granted: isOurMotion
+        ? 'We got the motion; we can press the advantage.'
+        : 'We need to blunt their granted motion and keep our theme steady.',
+      denied: isOurMotion
+        ? 'We lost the motion; we need to sharpen the story.'
+        : 'We dodged their motion; momentum feels steadier now.',
+      'partially granted': isOurMotion
+        ? 'We got a split ruling; we adjust around the gaps.'
+        : 'We split the motion; we adjust around the edges.',
+    };
+    return normalizeCounselNotes(reactions[outcome] || getFallbackCounselNotes(role, outcome));
+  };
 
-    return `Judge ${rulingText} the ${motionSide.toLowerCase()} motion after a ${rebuttalSide.toLowerCase()} rebuttal.${outcomeSentence}`.trim();
+  /**
+   * Build a counsel note after the final verdict.
+   *
+   * @param {VerdictResult} verdict - Final verdict payload.
+   * @param {string} role - Player role.
+   * @returns {string} Counsel note derived from verdict context.
+   */
+  const deriveVerdictCounselNotes = (verdict, role) => {
+    if (!verdict?.final_ruling) {
+      return getFallbackCounselNotes(role, undefined, 'pending');
+    }
+    const ruling = verdict.final_ruling.toLowerCase();
+    const defenseWins =
+      ruling.includes('acquitt') || ruling.includes('not guilty') || ruling.includes('dismiss');
+    const prosecutionWins =
+      ruling.includes('guilty') || ruling.includes('liable') || ruling.includes('convict');
+
+    if (role === 'defense' && defenseWins) {
+      return normalizeCounselNotes('We can breathe after that verdict; the room heard our themes.');
+    }
+    if (role === 'prosecution' && prosecutionWins) {
+      return normalizeCounselNotes('We feel the verdict land our way; the narrative held.');
+    }
+    if (role === 'defense' && prosecutionWins) {
+      return normalizeCounselNotes('We absorb the verdict and take notes for the next fight.');
+    }
+    if (role === 'prosecution' && defenseWins) {
+      return normalizeCounselNotes('We take the verdict in stride and log the gaps to fix.');
+    }
+    return getFallbackCounselNotes(role, undefined, verdict.final_ruling);
   };
 
   /**
@@ -305,7 +406,7 @@ const useGameState = () => {
           motionPhase: 'motion_ruling_locked',
           locked: true,
         },
-        counselNotes: deriveCounselNotes(prev.motion, data),
+        counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
         trial: { ...prev.trial, locked: false },
       }));
       setLoadingMsg(null);
@@ -346,6 +447,7 @@ const useGameState = () => {
       setHistory((prev) => ({
         ...prev,
         trial: { text, verdict: data, locked: true },
+        counselNotes: deriveVerdictCounselNotes(data, config.role),
       }));
       setLoadingMsg(null);
     } catch (err) {
