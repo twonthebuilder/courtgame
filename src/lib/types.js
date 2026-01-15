@@ -16,6 +16,17 @@
  */
 
 /**
+ * Opposing counsel profile metadata.
+ *
+ * @typedef {object} OpposingCounsel
+ * @property {string} name - Counsel name.
+ * @property {string} [age_range] - Optional age range.
+ * @property {string} bio - Background and reputation.
+ * @property {string} style_tells - Courtroom habits or tells.
+ * @property {string} current_posture - Current strategic posture.
+ */
+
+/**
  * Case metadata returned by the generator model.
  *
  * @typedef {object} CaseData
@@ -28,7 +39,7 @@
  * @property {string[]} facts - Facts list for the case.
  * @property {{name: string, role: string, statement: string}[]} witnesses - Witness roster.
  * @property {string[]} evidence - Evidence list.
- * @property {string} opposing_statement - Opposing counsel opening statement.
+ * @property {OpposingCounsel} opposing_counsel - Opposing counsel profile.
  */
 
 /**
