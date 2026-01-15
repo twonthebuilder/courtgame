@@ -1,76 +1,111 @@
-# AGENTS.md for Pocket Court (`courtgame` Repo)
-This file provides Codex with a complete understanding of how to interact with the Pocket Court project. Codex should use this document as its operating manual for building features, fixing bugs, and maintaining a coherent structure.
+# AGENTS.md for Pocket Court (`courtgame` repo)
 
-## Project Overview
-Pocket Court is an LLM-adjudicated legal strategy game where players:
-1. Select a mode, jurisdiction, and a role (example; silly mode, fictional juristiction, and defense or prosecution)
-2. Strike jurors strategically
-3. File pre-trial motions
-4. Present closing arguments
-5. Receive verdicts from AI judge + jury
+This file defines how Codex should operate when working in this repository.
+It is an operational contract, not a design document.
 
-**Core Philosophy:**
-- Emergent difficulty through judge/jury variance (not scripted)
-- Educational without being preachy (learn by doing)
-- Replayable through combinatorial possibility space (judges × juries × cases)
-- Living docket architecture (entire case is one continuous document)
+Codex should treat this file as a stable source of truth for:
+- scope control
+- safety behavior
+- planning output format
+- execution discipline
 
-**What makes this different from other legal games:**
-- No predetermined solutions (every case is unique)
-- Multi-phase gameplay (jury selection → pre-trial → trial)
-- Context-aware scoring (judge philosophy + jury composition affect outcomes)
+Game mechanics, tuning, and design canon live in `README.md` and `/docs/`.
+If there is a conflict, AGENTS.md governs behavior; design docs govern content.
 
-## Game Design Constraints
+---
 
-### Judge Profiles
-- Must include: background, philosophy, known biases
-- Philosophy types: Textualist, Reformer, Pragmatist, Originalist, Legal Realist
-- Biases should affect scoring (e.g., textualists dock points for policy arguments)
+## Project Identity
 
-### Jury Archetypes
-- Each juror needs: name, age, occupation, bias description
-- Bias should be actionable (e.g., "skeptical of corporations" → affects deliberation)
-- Pool size: 8 jurors, 2 strikes per side = 4-6 seated
+Pocket Court is a legal strategy game built through iterative development.
+Codex’s role is to assist with implementation, refactoring, and bug fixing
+under the constraints defined in this document.
 
-### Scoring System
-- Pre-trial: 40% weight (motion practice)
-- Judge (trial): 30% weight (legal soundness)
-- Jury (trial): 30% weight (persuasiveness)
-- Legendary threshold: 100+ total score (rare, requires excellence in all phases)
+---
 
-### Difficulty Modes
-- **Silly** (Fictional jurisdiction): Absurdist cases, generous scoring (80-100 range)
-- **Normal** (USA/Canada): Procedural cases, moderate scoring (70-90 range)
-- **Nuance** (USA/Canada): Complex felonies, strict scoring (60-90 range, 95+ is exceptional)
+## Scope & Execution Rules
 
-### Content Generation Rules
-- Cases must be internally consistent (no blatantly contradictory facts, though some nuance is okay.)
-- Evidence should support multiple interpretations (enable strategic choice)
-- Opposing counsel should hint at prosecution/plaintiff strategy
+- Prefer **locality-first reasoning**.
+  Identify the smallest relevant subsystem before scanning or changing code.
+- Do not refactor unrelated files or systems unless explicitly requested.
+- Do not introduce new dependencies unless explicitly requested.
 
-## General Guidelines
--   **Code Style:** Adhere to the project's ESLint and Prettier configurations. If none exist, implement them.
--   **Documentation:** All public functions, classes, and components require detailed comments. If none exist, or some are poorly done, document them.
--   **Testing:** New features and bug fixes must include corresponding unit and integration tests. If none exist, or some are poorly done, fix them.
--   **Commit Messages:** Follow Conventional Commits specification.
+---
 
-## Testing Instructions
--   Ensure **all** tests pass before finalizing a PR.
--   Ensure tests **actually do something** (not just placeholders that automatically pass, I'm watching you!)
+## Ambiguity & Safety Protocol (Non-Negotiable)
 
-## Documentation and Observability
--   Codex should prioritize **clarity of system behavior,** and **rigourous documentation.**   
--   All non-trivial features must be accompanied by in-code comments or API-accessible diagnostics that explain their purpose and behavior.  
--   When creating new systems, include a brief description of their logic and thresholds, especially if tied to gameplay feedback (e.g. hallucinations, spiral triggers, sanity modifiers), **and create an accompanying doc file in `/docs/`.**
+- **No guessing.**
+  If a request is fuzzy, underspecified, or unsafe to execute as written,
+  do not proceed with implementation.
 
-## Branches
--   Most iteration will be done on the `moonshots` branch.
--   The `main` branch is the main, stable version that `moonshots` (if they work) eventually merges with.
--   The `main(backup)` (if it exists) is usually a version 1-2 updates before `main` branch to isolate and fix any lingering bugs.
--   The `OGmain` is a nuclear-level backup containing nothing. (Back to the very beginning, just in case.)
--   That's my personal naming convention (inspired by Brin & Page), if those files don't exist yet, you're just early. Any new branches will be documented as/if they come. 
+- When declining, respond with:
+  1. The specific ambiguity or risk
+  2. The minimum missing information
+  3. A revised, tightly-scoped prompt the user can reuse
 
+- Treat identifiers (filenames, paths, modules, functions, branches) as **high-risk**:
+  - If an identifier does not exist, search for close matches
+  - If a close match exists, pause and request confirmation
+  - Do not create new artifacts that appear to be typos unless explicitly confirmed
 
-## Final Principles
--   Stick to the `README.md` and `AGENTS.md` files, and ultimately its vision and end goals.
--   Always explain fixes in plain English unless explicitly told not too.
+- Plain-English prose may be auto-corrected.
+  Identifiers must always be confirmed.
+
+---
+
+## Planning Output Contract
+
+- When asked to plan, produce a **structured sequence of actionable tasks**,
+  not a prose explanation or roadmap.
+
+- When a current state (A) and desired state (B) are provided,
+  explicitly frame the plan as steps to move **A → B**.
+
+- Use the user’s contract words when present
+  (e.g. “actionable tasks”, “deliverables”, “A → B”).
+
+---
+
+## Code & Test Discipline
+
+- Adhere to existing ESLint / Prettier configurations if present.
+  If missing, recommend adding them, but do not implement unless asked.
+
+- New features and bug fixes must include tests **only for the code touched**.
+  Do not refactor unrelated tests unless explicitly requested.
+
+---
+
+## Definition of Done
+
+A task is complete when:
+- The project builds / runs successfully
+- Relevant tests pass
+- Changes are limited to the requested scope
+
+---
+
+## Branching Conventions
+
+- Most experimental work occurs on the `moonshots` branch.
+- `main` is the stable branch.
+- Backup branches may exist for recovery purposes.
+
+Respect existing branch structure unless instructed otherwise.
+
+---
+
+## Documentation Expectations
+
+- Prioritize clarity of system behavior over cleverness.
+- Non-trivial systems must include:
+  - in-code comments explaining intent
+  - or accompanying documentation in `/docs/`
+
+---
+
+## Final Principle
+
+AGENTS.md governs **how** work is done.  
+README.md and `/docs/` govern **what** is being built.
+
+If uncertain, default to safety, locality, and asking for clarification.
