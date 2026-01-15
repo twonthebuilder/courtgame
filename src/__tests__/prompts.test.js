@@ -3,7 +3,10 @@ import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
+  getMotionDraftPrompt,
   getMotionPrompt,
+  getOpposingCounselPrompt,
+  getMotionRebuttalPrompt,
 } from '../lib/prompts';
 
 describe('prompt builders', () => {
@@ -27,15 +30,43 @@ describe('prompt builders', () => {
     expect(prompt).toContain('As AI Prosecutor');
   });
 
-  it('renders motion and verdict prompts with the expected context', () => {
-    const motionPrompt = getMotionPrompt(
-      { judge: { name: 'Hon. Reed', bias: 'Textualist' } },
+  it('renders motion exchange prompts with the expected context', () => {
+    const draftPrompt = getMotionDraftPrompt(
+      {
+        title: 'State v. Example',
+        charge: 'Theft',
+        facts: [],
+        judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
+      },
+      'regular'
+    );
+
+    expect(draftPrompt).toContain('Phase: PRE-TRIAL MOTION.');
+    expect(draftPrompt).toContain('Case: State v. Example.');
+
+    const rebuttalPrompt = getMotionRebuttalPrompt(
+      { title: 'State v. Example', charge: 'Theft', judge: { name: 'Hon. Reed', philosophy: 'Textualist' } },
       'Suppress evidence',
       'regular'
     );
 
+    expect(rebuttalPrompt).toContain('Phase: PRE-TRIAL MOTION REBUTTAL.');
+    expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
+
+    const motionPrompt = getMotionPrompt(
+      { judge: { name: 'Hon. Reed', bias: 'Textualist' } },
+      'Suppress evidence',
+      'Opposing response',
+      'regular',
+      'defense',
+      'prosecution',
+      'defense'
+    );
+
     expect(motionPrompt).toContain('Judge Hon. Reed ruling on Pre-Trial Motion.');
-    expect(motionPrompt).toContain('Motion: "Suppress evidence"');
+    expect(motionPrompt).toContain('Player Role: defense');
+    expect(motionPrompt).toContain('Motion (defense): "Suppress evidence"');
+    expect(motionPrompt).toContain('Rebuttal (prosecution): "Opposing response"');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },
@@ -48,5 +79,29 @@ describe('prompt builders', () => {
     expect(verdictPrompt).toContain('Type: BENCH');
     expect(verdictPrompt).toContain('Jury: []');
     expect(verdictPrompt).toContain('Motion Result: DENIED (42)');
+  });
+
+  it('builds opposing counsel prompts for both motion and rebuttal phases', () => {
+    const baseCase = {
+      title: 'State v. Example',
+      charge: 'Theft',
+      facts: ['Fact'],
+      judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
+    };
+
+    const motionPrompt = getOpposingCounselPrompt(baseCase, 'regular', 'motion_submission', 'defense');
+    expect(motionPrompt).toContain('Role: Defense Attorney.');
+    expect(motionPrompt).toContain('Draft a concise motion');
+
+    const rebuttalPrompt = getOpposingCounselPrompt(
+      baseCase,
+      'regular',
+      'rebuttal_submission',
+      'prosecution',
+      'Suppress evidence'
+    );
+    expect(rebuttalPrompt).toContain('Role: Prosecutor.');
+    expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
+    expect(rebuttalPrompt).toContain('Draft a concise rebuttal');
   });
 });

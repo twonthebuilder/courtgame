@@ -17,7 +17,7 @@ const STEPS = [
   'Assigning Presiding Judge...',
   'Reviewing Conflict of Interest...',
   'Checking Jury Pool Availability...',
-  'Notifying Opposing Counsel...',
+  'Assigning Opposing Counsel...',
   'Finalizing Docket...',
 ];
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Gavel as GavelIcon } from 'lucide-react';
 import ActionFooter from '../layout/ActionFooter';
+import ExpandableText from '../shared/ExpandableText';
 
 /**
  * Collects the closing argument and displays it once the trial phase is locked.
@@ -19,7 +20,11 @@ const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial, submittedText = '' }
     return (
       <div className="bg-white p-6 rounded-lg border border-slate-200 animate-in fade-in">
         <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">Closing Argument</h4>
-        <p className="font-serif text-slate-800 whitespace-pre-wrap">{submittedText}</p>
+        <ExpandableText
+          text={submittedText}
+          previewLines={4}
+          className="font-serif text-slate-800 whitespace-pre-wrap"
+        />
       </div>
     );
   }

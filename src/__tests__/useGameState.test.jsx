@@ -1,7 +1,12 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import useGameState from '../hooks/useGameState';
+import { copyToClipboard } from '../lib/clipboard';
 import { requestLlmJson } from '../lib/llmClient';
+
+vi.mock('../lib/clipboard', () => ({
+  copyToClipboard: vi.fn(),
+}));
 
 vi.mock('../lib/llmClient', async () => {
   const actual = await vi.importActual('../lib/llmClient');
@@ -16,6 +21,12 @@ const benchCasePayload = {
   facts: ['Fact one'],
   is_jury_trial: false,
   judge: { name: 'Hon. River' },
+  opposing_counsel: {
+    name: 'Alex Morgan',
+    bio: 'Known for tight procedural arguments.',
+    style_tells: 'Speaks in clipped bullet points.',
+    current_posture: 'Positioning for an early settlement.',
+  },
 };
 
 describe('useGameState transitions', () => {
@@ -45,11 +56,13 @@ describe('useGameState transitions', () => {
 
     expect(result.current.gameState).toBe('playing');
     expect(result.current.history.case.title).toBe('Bench Trial');
+    expect(result.current.history.counselNotes).toBe('');
   });
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
       .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 50 })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
@@ -66,14 +79,22 @@ describe('useGameState transitions', () => {
     expect(result.current.history.jury.skipped).toBe(true);
 
     await act(async () => {
-      await result.current.submitMotion('Suppress evidence');
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
     });
 
     await act(async () => {
       await result.current.submitArgument('Closing');
     });
 
-    const verdictCall = requestLlmJson.mock.calls[2][0];
+    const verdictCall = requestLlmJson.mock.calls[3][0];
     expect(verdictCall.systemPrompt).toContain('Jury: []');
     expect(result.current.history.trial.verdict.final_ruling).toBe('Acquitted');
   });
@@ -89,5 +110,95 @@ describe('useGameState transitions', () => {
 
     expect(result.current.gameState).toBe('start');
     expect(result.current.error).toBe('Docket creation failed. Please try again.');
+  });
+
+  it('enforces defense/prosecution turn order during the motion exchange', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'AI drafted motion.' });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('prosecution', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Our motion');
+    });
+
+    expect(result.current.error).toBe('It is not your turn to file this submission.');
+    expect(result.current.history.motion.motionText).toBe('');
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    expect(result.current.history.motion.motionText).toBe('AI drafted motion.');
+    expect(result.current.history.motion.motionPhase).toBe('rebuttal_submission');
+
+    await act(async () => {
+      await result.current.submitMotionStep('Our rebuttal');
+    });
+
+    expect(result.current.history.motion.rebuttalText).toBe('Our rebuttal');
+  });
+
+  it('locks the motion phase after a ruling is issued', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'AI rebuttal.' })
+      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 45 });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress the evidence.');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.motion.motionPhase).toBe('motion_ruling_locked');
+    expect(result.current.history.motion.locked).toBe(true);
+    expect(result.current.history.motion.ruling.ruling).toBe('DENIED');
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(requestLlmJson).toHaveBeenCalledTimes(3);
+  });
+
+  it('includes counsel notes in the copied docket when present', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    act(() => {
+      result.current.history.counselNotes = 'Remember to cite precedent.';
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    expect(copyToClipboard).toHaveBeenCalledTimes(1);
+    expect(copyToClipboard.mock.calls[0][0]).toContain(
+      'COUNSEL NOTES:\nRemember to cite precedent.'
+    );
   });
 });

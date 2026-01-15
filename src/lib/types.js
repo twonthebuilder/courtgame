@@ -16,6 +16,17 @@
  */
 
 /**
+ * Opposing counsel profile metadata.
+ *
+ * @typedef {object} OpposingCounsel
+ * @property {string} name - Counsel name.
+ * @property {string} [age_range] - Optional age range.
+ * @property {string} bio - Background and reputation.
+ * @property {string} style_tells - Courtroom habits or tells.
+ * @property {string} current_posture - Current strategic posture.
+ */
+
+/**
  * Case metadata returned by the generator model.
  *
  * @typedef {object} CaseData
@@ -28,7 +39,7 @@
  * @property {string[]} facts - Facts list for the case.
  * @property {{name: string, role: string, statement: string}[]} witnesses - Witness roster.
  * @property {string[]} evidence - Evidence list.
- * @property {string} opposing_statement - Opposing counsel opening statement.
+ * @property {OpposingCounsel} opposing_counsel - Opposing counsel profile.
  */
 
 /**
@@ -54,6 +65,25 @@
  */
 
 /**
+ * Motion phase identifiers for the pre-trial exchange.
+ *
+ * @typedef {'motion_submission' | 'rebuttal_submission' | 'motion_ruling_locked'} MotionPhase
+ */
+
+/**
+ * State for the pre-trial motion exchange.
+ *
+ * @typedef {object} MotionState
+ * @property {string} motionText - Defense motion text.
+ * @property {'defense' | 'prosecution'} motionBy - Role that filed the motion.
+ * @property {string} rebuttalText - Prosecution rebuttal text.
+ * @property {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
+ * @property {MotionResult | null} ruling - Judge ruling on the motion exchange.
+ * @property {MotionPhase} motionPhase - Current phase of the motion exchange.
+ * @property {boolean} locked - Whether the motion phase is finalized.
+ */
+
+/**
  * Final verdict payload for the trial phase.
  *
  * @typedef {object} VerdictResult
@@ -74,7 +104,8 @@
  * @typedef {object} HistoryState
  * @property {CaseData} [case] - Current case metadata.
  * @property {JuryState} [jury] - Jury selection state.
- * @property {{text?: string, ruling?: MotionResult, locked?: boolean}} [motion] - Motion phase data.
+ * @property {MotionState} [motion] - Motion phase data.
+ * @property {string} [counselNotes] - Optional counsel notes captured during play.
  * @property {{text?: string, verdict?: VerdictResult, locked?: boolean}} [trial] - Trial phase data.
  */
 
