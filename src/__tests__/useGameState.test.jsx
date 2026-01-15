@@ -57,7 +57,12 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 50 })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        counsel_notes: 'Revisit your evidentiary framing before trial.',
+        score: 50,
+      })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
         final_weighted_score: 77,
@@ -142,7 +147,12 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'AI rebuttal.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 45 });
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        counsel_notes: 'Adjust your narrative for the jury panel.',
+        score: 45,
+      });
 
     const { result } = renderHook(() => useGameState());
 

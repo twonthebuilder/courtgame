@@ -67,6 +67,7 @@ describe('prompt builders', () => {
     expect(motionPrompt).toContain('Player Role: defense');
     expect(motionPrompt).toContain('Motion (defense): "Suppress evidence"');
     expect(motionPrompt).toContain('Rebuttal (prosecution): "Opposing response"');
+    expect(motionPrompt).toContain('"counsel_notes": "1-2 sentences');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },

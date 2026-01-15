@@ -359,6 +359,9 @@ const useGameState = () => {
       }
       if (history.motion.ruling) {
         log += `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
+        if (history.motion.ruling.counsel_notes) {
+          log += `COUNSEL NOTES: "${history.motion.ruling.counsel_notes}"\n\n`;
+        }
       }
     }
 

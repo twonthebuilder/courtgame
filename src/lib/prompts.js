@@ -208,6 +208,7 @@ export const getMotionPrompt = (
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
       "outcome_text": "Explanation.",
+      "counsel_notes": "1-2 sentences, non-spoiler guidance tied to the ruling or the phase transition.",
       "score": number (0-100)
     }
 `;

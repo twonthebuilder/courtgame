@@ -323,6 +323,7 @@ export const parseMotionResponse = (payload) => {
 
   assertString(payload.ruling, 'ruling', 'motion');
   assertString(payload.outcome_text, 'outcome_text', 'motion');
+  assertString(payload.counsel_notes, 'counsel_notes', 'motion');
 
   return payload;
 };

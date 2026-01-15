@@ -67,7 +67,11 @@ describe('llmClient response parsers', () => {
   });
 
   it('accepts a valid motion response', () => {
-    const payload = { ruling: 'Denied', outcome_text: 'Insufficient basis.' };
+    const payload = {
+      ruling: 'Denied',
+      outcome_text: 'Insufficient basis.',
+      counsel_notes: 'Plan a tighter factual record before the next phase.',
+    };
     expect(parseMotionResponse(payload)).toEqual(payload);
   });
 

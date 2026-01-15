@@ -61,6 +61,7 @@
  * @typedef {object} MotionResult
  * @property {string} ruling - GRANTED, DENIED, or PARTIALLY GRANTED.
  * @property {string} outcome_text - Judge's explanation.
+ * @property {string} counsel_notes - Short counsel guidance for the phase transition.
  * @property {number} score - Motion score used in final weighting.
  */
 

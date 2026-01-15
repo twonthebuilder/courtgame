@@ -19,7 +19,12 @@ describe('docket section submitted text rendering', () => {
         playerRole="defense"
         isLoading={false}
         onSubmitStep={() => {}}
-        ruling={{ ruling: 'GRANTED', outcome_text: 'Granted', score: 88 }}
+        ruling={{
+          ruling: 'GRANTED',
+          outcome_text: 'Granted',
+          counsel_notes: 'Use the ruling to streamline your trial narrative.',
+          score: 88,
+        }}
       />
     );
 
@@ -27,6 +32,10 @@ describe('docket section submitted text rendering', () => {
     expect(screen.getByText('"Suppress evidence"')).toBeInTheDocument();
     expect(screen.getByText('Prosecution Rebuttal')).toBeInTheDocument();
     expect(screen.getByText('"Opposing response"')).toBeInTheDocument();
+    expect(screen.getByText('Counsel Notes')).toBeInTheDocument();
+    expect(
+      screen.getByText('Use the ruling to streamline your trial narrative.')
+    ).toBeInTheDocument();
   });
 
   it('shows the current player motion prompt when it is their turn', () => {
@@ -62,7 +71,12 @@ describe('docket section submitted text rendering', () => {
         playerRole="defense"
         isLoading={false}
         onSubmitStep={() => {}}
-        ruling={{ ruling: 'DENIED', outcome_text: 'Denied', score: 55 }}
+        ruling={{
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          counsel_notes: 'Shift toward stronger credibility points next.',
+          score: 55,
+        }}
       />
     );
 

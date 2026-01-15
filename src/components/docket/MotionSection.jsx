@@ -85,6 +85,14 @@ const MotionSection = ({
               <p className="text-sm text-slate-800 font-medium mt-6">
                 "{ruling.outcome_text}"
               </p>
+              {isPhaseLocked && ruling.counsel_notes ? (
+                <div className="mt-4 rounded border border-slate-200 bg-white/80 px-3 py-2 text-xs text-slate-600">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                    Counsel Notes
+                  </p>
+                  <p className="mt-1 text-slate-700">{ruling.counsel_notes}</p>
+                </div>
+              ) : null}
             </>
           ) : (
             <>
