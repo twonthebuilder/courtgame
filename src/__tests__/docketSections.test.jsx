@@ -2,11 +2,39 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import ArgumentSection from '../components/docket/ArgumentSection';
+import CaseHeader from '../components/docket/CaseHeader';
 import MotionSection from '../components/docket/MotionSection';
 
 globalThis.React = React;
 
 describe('docket section submitted text rendering', () => {
+  const baseCase = {
+    defendant: 'Jordan Miles',
+    charge: 'Fraud',
+    judge: { name: 'Judge Rowe', bias: 'Strict on procedure' },
+    facts: ['A key document went missing.'],
+    evidence: ['Missing contract exhibit.'],
+    opposing_counsel: {
+      name: 'Ava Lin',
+      bio: 'Known for tight filings.',
+      style_tells: 'Precise language.',
+      current_posture: 'Pressing for summary judgment.',
+    },
+  };
+
+  it('shows a fallback when no counsel notes are provided', () => {
+    render(<CaseHeader data={baseCase} counselNotes="" />);
+
+    expect(screen.getByText('Counsel Notes')).toBeInTheDocument();
+    expect(screen.getByText('No counsel notes yet.')).toBeInTheDocument();
+  });
+
+  it('renders trimmed counsel notes when provided', () => {
+    render(<CaseHeader data={baseCase} counselNotes="  Emphasize timeline gaps.  " />);
+
+    expect(screen.getByText('Emphasize timeline gaps.')).toBeInTheDocument();
+  });
+
   it('shows the submitted motion text when locked', () => {
     render(
       <MotionSection

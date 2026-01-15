@@ -5,11 +5,13 @@
  *
  * @param {object} props - Component props.
  * @param {CaseData} props.data - Case data object containing defendant, charge, judge, and facts.
+ * @param {string} [props.counselNotes] - Counsel notes captured during play.
  * @returns {JSX.Element} The case header section.
  */
-const CaseHeader = ({ data }) => {
+const CaseHeader = ({ data, counselNotes }) => {
   const opposingCounsel = data.opposing_counsel ?? {};
   const ageRange = opposingCounsel.age_range?.trim();
+  const resolvedCounselNotes = counselNotes?.trim() || 'No counsel notes yet.';
   const evidenceItems = data.evidence ?? [];
 
   return (
@@ -48,6 +50,10 @@ const CaseHeader = ({ data }) => {
             <p className="text-xs font-bold text-slate-400 uppercase">Current Posture</p>
             <p>{opposingCounsel.current_posture || 'Not provided.'}</p>
           </div>
+        </div>
+        <div className="bg-white p-3 rounded border border-slate-200 text-sm text-slate-600 space-y-1">
+          <p className="text-xs font-bold text-slate-400 uppercase">Counsel Notes</p>
+          <p className="text-slate-700">{resolvedCounselNotes}</p>
         </div>
       </div>
       <div className="space-y-4 text-sm text-slate-700">
