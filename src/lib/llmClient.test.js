@@ -16,6 +16,13 @@ describe('llmClient response parsers', () => {
     is_jury_trial: true,
     judge: { name: 'Hon. Ada Lovelace' },
     jurors: [{ id: 1, name: 'Juror One' }],
+    opposing_counsel: {
+      name: 'Jordan Wright',
+      age_range: '30s',
+      bio: 'A meticulous litigator with a reputation for sharp cross-examination.',
+      style_tells: 'Keeps a color-coded notebook and pauses before objections.',
+      current_posture: 'Signaling a willingness to negotiate on lesser charges.',
+    },
   };
 
   it('accepts a valid case response', () => {
@@ -24,6 +31,25 @@ describe('llmClient response parsers', () => {
 
   it('rejects an invalid case response', () => {
     expect(() => parseCaseResponse({ ...baseCase, title: '' })).toThrow(LlmClientError);
+  });
+
+  it('maps opposing_statement into opposing_counsel when needed', () => {
+    const payload = {
+      ...baseCase,
+      opposing_counsel: undefined,
+      opposing_statement: 'The state intends to pursue every charge with vigor.',
+    };
+
+    expect(parseCaseResponse(payload)).toMatchObject({
+      opposing_counsel: {
+        bio: 'The state intends to pursue every charge with vigor.',
+      },
+    });
+  });
+
+  it('rejects a case response missing opposing counsel data', () => {
+    const payload = { ...baseCase, opposing_counsel: undefined, opposing_statement: '' };
+    expect(() => parseCaseResponse(payload)).toThrow(LlmClientError);
   });
 
   it('accepts a valid jury response', () => {

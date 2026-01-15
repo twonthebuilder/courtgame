@@ -16,6 +16,12 @@ const benchCasePayload = {
   facts: ['Fact one'],
   is_jury_trial: false,
   judge: { name: 'Hon. River' },
+  opposing_counsel: {
+    name: 'Alex Morgan',
+    bio: 'Known for tight procedural arguments.',
+    style_tells: 'Speaks in clipped bullet points.',
+    current_posture: 'Positioning for an early settlement.',
+  },
 };
 
 describe('useGameState transitions', () => {

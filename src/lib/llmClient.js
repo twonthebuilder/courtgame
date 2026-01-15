@@ -155,6 +155,14 @@ const assertBoolean = (value, field, responseLabel) => {
 };
 
 /**
+ * Coerce unknown values into safe string fields for profile display.
+ *
+ * @param {unknown} value - Value to sanitize.
+ * @returns {string} Trimmed string or empty string.
+ */
+const normalizeProfileField = (value) => (typeof value === 'string' ? value.trim() : '');
+
+/**
  * Ensure an array contains only numbers for response validation.
  *
  * @param {unknown} value - Value to validate.
@@ -248,7 +256,32 @@ export const parseCaseResponse = (payload) => {
     assertArray(payload.jurors, 'jurors', 'case');
   }
 
-  return payload;
+  const opposingCounselPayload = payload.opposing_counsel;
+  const opposingStatement = normalizeProfileField(payload.opposing_statement);
+  const hasOpposingCounsel =
+    opposingCounselPayload && typeof opposingCounselPayload === 'object' && !Array.isArray(opposingCounselPayload);
+  const hasOpposingStatement = opposingStatement.length > 0;
+
+  if (!hasOpposingCounsel && !hasOpposingStatement) {
+    throw createLlmError('Missing opposing counsel profile in case response.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete case. Please try again.',
+      context: { payload },
+    });
+  }
+
+  const normalizedOpposingCounsel = {
+    name: normalizeProfileField(opposingCounselPayload?.name),
+    age_range: normalizeProfileField(opposingCounselPayload?.age_range),
+    bio: normalizeProfileField(opposingCounselPayload?.bio) || opposingStatement,
+    style_tells: normalizeProfileField(opposingCounselPayload?.style_tells),
+    current_posture: normalizeProfileField(opposingCounselPayload?.current_posture),
+  };
+
+  return {
+    ...payload,
+    opposing_counsel: normalizedOpposingCounsel,
+  };
 };
 
 /**

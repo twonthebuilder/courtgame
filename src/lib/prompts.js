@@ -36,7 +36,13 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
       "facts": ["Fact 1", "Fact 2", "Fact 3"],
       "witnesses": [{"name": "Name", "role": "Role", "statement": "Statement"}],
       "evidence": ["Item 1", "Item 2"],
-      "opposing_statement": "Opening statement"
+      "opposing_counsel": {
+        "name": "Name",
+        "age_range": "Optional age range",
+        "bio": "Background and reputation",
+        "style_tells": "Notable courtroom habits or tactics",
+        "current_posture": "What they're signaling about this case"
+      }
     }
   `;
 };
