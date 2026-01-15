@@ -28,6 +28,22 @@ const benchCasePayload = {
     current_posture: 'Positioning for an early settlement.',
   },
 };
+const juryCasePayload = {
+  title: 'Jury Trial',
+  facts: ['Fact two'],
+  is_jury_trial: true,
+  judge: { name: 'Hon. Lake' },
+  jurors: [
+    { id: 1, name: 'J1', age: 35, job: 'Teacher', bias_hint: 'Skeptical of corporations.' },
+    { id: 2, name: 'J2', age: 52, job: 'Engineer', bias_hint: 'Trusts expert testimony.' },
+  ],
+  opposing_counsel: {
+    name: 'Riley Park',
+    bio: 'Direct and incisive.',
+    style_tells: 'Short, factual bursts.',
+    current_posture: 'Setting an aggressive pace.',
+  },
+};
 
 describe('useGameState transitions', () => {
   beforeEach(() => {
@@ -177,6 +193,67 @@ describe('useGameState transitions', () => {
     });
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
+  });
+
+  it('updates counsel notes when the jury is seated', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(juryCasePayload)
+      .mockResolvedValueOnce({
+        opponent_strikes: [2],
+        seated_juror_ids: [1],
+        judge_comment: 'Seated.',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([2]);
+    });
+
+    expect(result.current.history.counselNotes).toContain('We are reading a jury');
+  });
+
+  it('overwrites counsel notes after motion ruling and verdict', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({ ruling: 'GRANTED', outcome_text: 'Granted', score: 50 })
+      .mockResolvedValueOnce({
+        final_ruling: 'Acquitted',
+        final_weighted_score: 77,
+        judge_opinion: 'Bench decision',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const motionNote = result.current.history.counselNotes;
+
+    await act(async () => {
+      await result.current.submitArgument('Closing');
+    });
+
+    expect(result.current.history.counselNotes).not.toBe(motionNote);
+    expect(result.current.history.counselNotes).toContain('verdict');
   });
 
   it('includes counsel notes in the copied docket when present', async () => {
