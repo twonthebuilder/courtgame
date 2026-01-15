@@ -131,7 +131,7 @@ export default function PocketCourt() {
 
           {/* 1. Case Info */}
           <PhaseSection title="Case Information" icon={BookOpen}>
-            <CaseHeader data={history.case} />
+            <CaseHeader data={history.case} counselNotes={history.counselNotes} />
           </PhaseSection>
 
           {/* 2. Jury Section (If Applicable) */}
