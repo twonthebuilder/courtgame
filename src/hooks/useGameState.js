@@ -48,7 +48,7 @@ import {
 const useGameState = () => {
   const [gameState, setGameState] = useState('start');
   const [loadingMsg, setLoadingMsg] = useState(null);
-  const [history, setHistory] = useState(/** @type {HistoryState} */ ({}));
+  const [history, setHistory] = useState(/** @type {HistoryState} */ ({ counselNotes: '' }));
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -79,6 +79,7 @@ const useGameState = () => {
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
+    setHistory({ counselNotes: '' });
   };
 
   /**
@@ -125,6 +126,7 @@ const useGameState = () => {
           ? { pool: data.jurors, myStrikes: [], locked: false }
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
+        counselNotes: '',
         trial: { locked: false },
       });
 
@@ -360,6 +362,10 @@ const useGameState = () => {
       if (history.motion.ruling) {
         log += `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
       }
+    }
+
+    if (history.counselNotes?.trim()) {
+      log += `COUNSEL NOTES:\n${history.counselNotes.trim()}\n\n`;
     }
 
     if (history.trial && history.trial.locked) {

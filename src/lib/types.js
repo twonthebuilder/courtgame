@@ -105,6 +105,7 @@
  * @property {CaseData} [case] - Current case metadata.
  * @property {JuryState} [jury] - Jury selection state.
  * @property {MotionState} [motion] - Motion phase data.
+ * @property {string} [counselNotes] - Optional counsel notes captured during play.
  * @property {{text?: string, verdict?: VerdictResult, locked?: boolean}} [trial] - Trial phase data.
  */
 
