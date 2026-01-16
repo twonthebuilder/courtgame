@@ -28,6 +28,7 @@ The game state hook centralizes the following fields:
 - **Invariant:** Only juror IDs recorded in the docket may be referenced.
 - **Invariant:** Evidence admissibility is controlled in the docket; evidence is marked
   `suppressed` rather than removed.
+- **Invariant:** If it is not recorded in the docket, it is not true.
 
 ## Screen Flow (`gameState`)
 

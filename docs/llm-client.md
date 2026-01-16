@@ -17,6 +17,8 @@ The parsers focus on required fields only:
 
 If a required field is missing or the type is incorrect, a `LlmClientError` is thrown with the `INVALID_RESPONSE` code so the UI can display a consistent fallback message.
 
+**Admissibility gate:** verdict payloads are screened against the docket; if the model relies on off-docket facts or suppressed evidence, the verdict is rejected and the trial remains open for a retry.
+
 ## Error Codes
 | Code | Meaning |
 | --- | --- |
