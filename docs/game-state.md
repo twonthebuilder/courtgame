@@ -16,12 +16,19 @@ The game state hook centralizes the following fields:
 
 ### History Structure
 
-- `history.case`: Generated case payload (facts, judge, jurors, etc.).
+- `history.case`: Generated case payload (facts, judge, jurors, etc.). Evidence entries are
+  stored as docket items with IDs and admissibility status (`admissible` or `suppressed`).
 - `history.jury`:
   - `skipped`: `true` when the case is a bench trial.
   - `pool`, `myStrikes`, `opponentStrikes`, `seatedIds`, `comment`, `locked` when jury is active.
+  - `pool` jurors retain a stable `status` (`eligible`, `struck_by_player`, `struck_by_opponent`,
+    `seated`) with optional `status_history` to record transitions.
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
+- **Invariant:** Only juror IDs recorded in the docket may be referenced.
+- **Invariant:** Evidence admissibility is controlled in the docket; evidence is marked
+  `suppressed` rather than removed.
+- **Invariant:** If it is not recorded in the docket, it is not true.
 
 ## Screen Flow (`gameState`)
 
@@ -47,12 +54,18 @@ The game state hook centralizes the following fields:
 - **Submit strikes**
   - Trigger: `submitStrikes(strikes)`.
   - Transition: `history.jury.locked` becomes `true` and `history.motion.locked` remains `false`.
+  - Jurors are never removed from the pool; each juror status moves from `eligible` to
+    `struck_by_player`, `struck_by_opponent`, or `seated` based on the strike outcome. The
+    `status_history` array records each transition.
 
 ### Motions
 
 - **Submit motion**
   - Trigger: `submitMotion(text)`.
   - Transition: `history.motion.locked` becomes `true`, and `history.trial.locked` resets to `false`.
+- **Ruling updates evidence**
+  - Trigger: `requestMotionRuling()`.
+  - Transition: `history.case.evidence` statuses update based on the ruling payload.
 
 ### Trial / Verdict
 

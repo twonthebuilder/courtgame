@@ -16,6 +16,7 @@ describe('llmClient response parsers', () => {
     is_jury_trial: true,
     judge: { name: 'Hon. Ada Lovelace' },
     jurors: [{ id: 1, name: 'Juror One' }],
+    evidence: ['Camera still'],
     opposing_counsel: {
       name: 'Jordan Wright',
       age_range: '30s',
@@ -26,7 +27,10 @@ describe('llmClient response parsers', () => {
   };
 
   it('accepts a valid case response', () => {
-    expect(parseCaseResponse(baseCase)).toEqual(baseCase);
+    expect(parseCaseResponse(baseCase)).toEqual({
+      ...baseCase,
+      evidence: [{ id: 1, text: 'Camera still', status: 'admissible' }],
+    });
   });
 
   it('rejects an invalid case response', () => {
@@ -67,7 +71,12 @@ describe('llmClient response parsers', () => {
   });
 
   it('accepts a valid motion response', () => {
-    const payload = { ruling: 'Denied', outcome_text: 'Insufficient basis.' };
+    const payload = {
+      ruling: 'Denied',
+      outcome_text: 'Insufficient basis.',
+      score: 55,
+      evidence_status_updates: [{ id: 1, status: 'admissible' }],
+    };
     expect(parseMotionResponse(payload)).toEqual(payload);
   });
 
@@ -76,13 +85,45 @@ describe('llmClient response parsers', () => {
     expect(parseMotionTextResponse(payload)).toEqual(payload);
   });
 
-  it('accepts a valid verdict response', () => {
+  it('accepts a valid verdict response for bench trials', () => {
     const payload = {
       final_ruling: 'Not guilty',
       final_weighted_score: 82.5,
       judge_opinion: 'Compelling defense argument.',
     };
-    expect(parseVerdictResponse(payload)).toEqual(payload);
+    expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
+  });
+
+  it('accepts a valid verdict response for jury trials', () => {
+    const payload = {
+      final_ruling: 'Guilty',
+      final_weighted_score: 91,
+      judge_opinion: 'The evidence was strong.',
+      jury_verdict: 'Guilty',
+      jury_reasoning: 'The testimony aligned with the evidence.',
+      jury_score: 88,
+    };
+    expect(parseVerdictResponse(payload, { isJuryTrial: true })).toEqual(payload);
+  });
+
+  it('accepts a verdict response with overflow details when score exceeds 100', () => {
+    const payload = {
+      final_ruling: 'Not guilty',
+      final_weighted_score: 112,
+      judge_opinion: 'Exceptional advocacy.',
+      overflow_reason_code: 'LEGENDARY_ARGUMENT',
+      overflow_explanation: 'Argument outperformed the difficulty curve.',
+    };
+    expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
+  });
+
+  it('rejects overflow scores missing a reason code or explanation', () => {
+    const payload = {
+      final_ruling: 'Not guilty',
+      final_weighted_score: 105,
+      judge_opinion: 'Exceptional advocacy.',
+    };
+    expect(() => parseVerdictResponse(payload, { isJuryTrial: false })).toThrow(LlmClientError);
   });
 });
 

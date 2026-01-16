@@ -19,6 +19,7 @@ vi.mock('../lib/llmClient', async () => {
 const benchCasePayload = {
   title: 'Bench Trial',
   facts: ['Fact one'],
+  evidence: ['Camera footage', 'Hidden memo'],
   is_jury_trial: false,
   judge: { name: 'Hon. River' },
   opposing_counsel: {
@@ -31,11 +32,13 @@ const benchCasePayload = {
 const juryCasePayload = {
   title: 'Jury Trial',
   facts: ['Fact two'],
+  evidence: ['Signed waiver'],
   is_jury_trial: true,
   judge: { name: 'Hon. Lake' },
   jurors: [
     { id: 1, name: 'J1', age: 35, job: 'Teacher', bias_hint: 'Skeptical of corporations.' },
     { id: 2, name: 'J2', age: 52, job: 'Engineer', bias_hint: 'Trusts expert testimony.' },
+    { id: 3, name: 'J3', age: 44, job: 'Nurse', bias_hint: 'Favors strict safety rules.' },
   ],
   opposing_counsel: {
     name: 'Riley Park',
@@ -60,7 +63,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     act(() => {
-      result.current.generateCase('defense', 'regular', 'USA');
+      result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.gameState).toBe('initializing');
@@ -75,11 +78,31 @@ describe('useGameState transitions', () => {
     expect(result.current.history.counselNotes).toBe('');
   });
 
+  it('normalizes legacy difficulty values before storing config', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    expect(result.current.config.difficulty).toBe('normal');
+  });
+
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 50 })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
         final_weighted_score: 77,
@@ -89,7 +112,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.history.jury.skipped).toBe(true);
@@ -112,6 +135,8 @@ describe('useGameState transitions', () => {
 
     const verdictCall = requestLlmJson.mock.calls[3][0];
     expect(verdictCall.systemPrompt).toContain('Jury: []');
+    expect(verdictCall.systemPrompt).toContain('Camera footage');
+    expect(verdictCall.systemPrompt).not.toContain('Hidden memo');
     expect(result.current.history.trial.verdict.final_ruling).toBe('Acquitted');
   });
 
@@ -121,7 +146,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.gameState).toBe('start');
@@ -136,7 +161,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'regular', 'USA');
+      await result.current.generateCase('prosecution', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -164,12 +189,17 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'AI rebuttal.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 45 });
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 45,
+        evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      });
 
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -199,7 +229,7 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(juryCasePayload)
       .mockResolvedValueOnce({
-        opponent_strikes: [2],
+        opponent_strikes: [3],
         seated_juror_ids: [1],
         judge_comment: 'Seated.',
       });
@@ -207,7 +237,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -215,13 +245,52 @@ describe('useGameState transitions', () => {
     });
 
     expect(result.current.history.counselNotes).toContain('We are reading a jury');
+    const jurorStatuses = result.current.history.jury.pool.map((juror) => [juror.id, juror.status]);
+    expect(jurorStatuses).toEqual([
+      [1, 'seated'],
+      [2, 'struck_by_player'],
+      [3, 'struck_by_opponent'],
+    ]);
+    expect(result.current.history.jury.pool[0].status_history).toEqual(['eligible', 'seated']);
+  });
+
+  it('marks invalid strike submissions that reference jurors outside the docket', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(juryCasePayload)
+      .mockResolvedValueOnce({
+        opponent_strikes: [99],
+        seated_juror_ids: [1, 1],
+        judge_comment: 'Invalid juror IDs.',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([2]);
+    });
+
+    expect(result.current.history.jury.invalidStrike).toBe(true);
+    expect(result.current.history.jury.locked).toBe(false);
+    expect(result.current.history.jury.seatedIds).toBeUndefined();
+    expect(result.current.error).toBe(
+      'Strike results referenced jurors outside the docket. Please retry.'
+    );
   });
 
   it('overwrites counsel notes after motion ruling and verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({ ruling: 'GRANTED', outcome_text: 'Granted', score: 50 })
+      .mockResolvedValueOnce({
+        ruling: 'GRANTED',
+        outcome_text: 'Granted',
+        score: 50,
+        evidence_status_updates: [{ id: 1, status: 'suppressed' }],
+      })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
         final_weighted_score: 77,
@@ -231,7 +300,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -256,13 +325,61 @@ describe('useGameState transitions', () => {
     expect(result.current.history.counselNotes).toContain('verdict');
   });
 
+  it('rejects verdicts that cite suppressed evidence', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Guilty based on Evidence 2',
+        final_weighted_score: 60,
+        judge_opinion: 'Evidence 2 controls this outcome.',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing argument');
+    });
+
+    expect(result.current.history.trial.verdict).toBeUndefined();
+    expect(result.current.history.trial.rejectedVerdicts).toHaveLength(1);
+    expect(result.current.error).toBe(
+      'Verdict rejected for off-docket or inadmissible references.'
+    );
+  });
+
   it('includes counsel notes in the copied docket when present', async () => {
     requestLlmJson.mockResolvedValueOnce(benchCasePayload);
 
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     act(() => {

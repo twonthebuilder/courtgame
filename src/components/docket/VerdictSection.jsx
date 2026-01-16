@@ -11,6 +11,9 @@ import ExpandableText from '../shared/ExpandableText';
  * @returns {JSX.Element} The verdict presentation.
  */
 const VerdictSection = ({ result }) => {
+  const roundedScore = Math.round(result.final_weighted_score);
+  const baseScore = Math.min(100, Math.max(0, roundedScore));
+  const hasOverflow = result.final_weighted_score > 100;
   const isLegendary = result.final_weighted_score >= 100;
   const isGuilty =
     result.final_ruling.toLowerCase().includes('guilty') &&
@@ -32,9 +35,14 @@ const VerdictSection = ({ result }) => {
         {result.final_ruling}
       </h2>
       <div className="text-6xl font-black text-slate-800 mb-6">
-        {Math.round(result.final_weighted_score)}
+        {baseScore}
         <span className="text-lg text-slate-400 font-normal">/100</span>
       </div>
+      {hasOverflow && (
+        <div className="mb-6 text-xs uppercase tracking-wide text-amber-700 font-semibold">
+          Overflow {roundedScore}/100 · {result.overflow_reason_code}: {result.overflow_explanation}
+        </div>
+      )}
 
       {result.achievement_title && (
         <div className="inline-block bg-white px-4 py-2 rounded-full border border-amber-300 text-amber-600 font-bold text-sm mb-6 shadow-sm">

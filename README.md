@@ -23,19 +23,20 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 - File motions to suppress evidence or dismiss charges
 - Judge rules based on their judicial philosophy (textualist, reformer, etc.)
 - Successful motions set up your trial strategy
-- **Weight: 40% of final score**
+- **Weight: 20% of final score**
 
 ### **3. Trial Arguments**
 - Present closing arguments to judge + jury (or just judge in bench trials)
-- Judge scores legal soundness (30% weight)
-- Jury scores persuasiveness (30% weight)
+- Judge scores legal soundness (45% weight)
+- Jury scores persuasiveness (35% weight)
 - Both audiences must be convinced
 
 ### **4. Verdict**
 - Judge delivers ruling + detailed opinion
 - Jury explains their reasoning (in jury trials)
-- Scores 100+ unlock legendary achievements
+- Scores 100+ unlock legendary achievements (with overflow reason codes when exceeded)
 - Cases are saved as a "living docket" you can share
+- **Invariant:** If it is not recorded in the docket, it is not true.
 
 ---
 
@@ -129,7 +130,7 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 - ✅ Living docket architecture
 - ✅ Jury strike mechanics
 - ✅ Pre-trial motion practice
-- ✅ Multi-phase scoring (pre-trial 40%, judge 30%, jury 30%)
+- ✅ Multi-phase scoring (pre-trial 20%, judge 45%, jury 35%)
 - ✅ Legendary achievements (100+ scores)
 
 ### **v16 (Planned)**

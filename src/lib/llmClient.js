@@ -155,6 +155,30 @@ const assertBoolean = (value, field, responseLabel) => {
 };
 
 /**
+ * Ensure a value is either undefined/null or a non-empty string.
+ *
+ * @param {unknown} value - Value to validate.
+ * @param {string} field - Field name for error context.
+ * @param {string} responseLabel - Response label for user messaging.
+ */
+const assertOptionalString = (value, field, responseLabel) => {
+  if (value === undefined || value === null) return;
+  assertString(value, field, responseLabel);
+};
+
+/**
+ * Ensure a value is either undefined/null or a number.
+ *
+ * @param {unknown} value - Value to validate.
+ * @param {string} field - Field name for error context.
+ * @param {string} responseLabel - Response label for user messaging.
+ */
+const assertOptionalNumber = (value, field, responseLabel) => {
+  if (value === undefined || value === null) return;
+  assertNumber(value, field, responseLabel);
+};
+
+/**
  * Coerce unknown values into safe string fields for profile display.
  *
  * @param {unknown} value - Value to sanitize.
@@ -179,6 +203,30 @@ const assertNumberArray = (value, field, responseLabel) => {
       context: { field, responseLabel, invalidEntry, value },
     });
   }
+};
+
+/**
+ * Normalize evidence entries into docket-ready objects.
+ *
+ * @param {unknown} value - Evidence payload from the model.
+ * @returns {{id: number, text: string, status: 'admissible' | 'suppressed'}[]} Evidence entries.
+ */
+const normalizeEvidenceItems = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item.trim(), status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        const id = typeof item.id === 'number' ? item.id : index + 1;
+        const text = typeof item.text === 'string' ? item.text.trim() : '';
+        const status = item.status === 'suppressed' ? 'suppressed' : 'admissible';
+        return { id, text, status };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.length > 0);
 };
 
 /**
@@ -280,6 +328,7 @@ export const parseCaseResponse = (payload) => {
 
   return {
     ...payload,
+    evidence: normalizeEvidenceItems(payload.evidence),
     opposing_counsel: normalizedOpposingCounsel,
   };
 };
@@ -323,6 +372,29 @@ export const parseMotionResponse = (payload) => {
 
   assertString(payload.ruling, 'ruling', 'motion');
   assertString(payload.outcome_text, 'outcome_text', 'motion');
+  assertNumber(payload.score, 'score', 'motion');
+  assertArray(payload.evidence_status_updates, 'evidence_status_updates', 'motion');
+
+  payload.evidence_status_updates.forEach((update, index) => {
+    if (!update || typeof update !== 'object') {
+      throw createLlmError(`Evidence status update ${index + 1} is not an object.`, {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+        context: { update, index },
+      });
+    }
+    assertNumber(update.id, `evidence_status_updates[${index}].id`, 'motion');
+    if (update.status !== 'admissible' && update.status !== 'suppressed') {
+      throw createLlmError(
+        `Evidence status update ${index + 1} has invalid status.`,
+        {
+          code: 'INVALID_RESPONSE',
+          userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+          context: { update, index },
+        }
+      );
+    }
+  });
 
   return payload;
 };
@@ -351,9 +423,10 @@ export const parseMotionTextResponse = (payload) => {
  * Validate and return a final verdict response.
  *
  * @param {object} payload - Parsed JSON payload.
+ * @param {{isJuryTrial?: boolean, seatedJurorIds?: number[], docketJurorIds?: number[]}} [context] - Docket context.
  * @returns {object} Sanitized verdict response payload.
  */
-export const parseVerdictResponse = (payload) => {
+export const parseVerdictResponse = (payload, context = {}) => {
   if (!payload || typeof payload !== 'object') {
     throw createLlmError('Verdict response is not an object.', {
       code: 'INVALID_RESPONSE',
@@ -365,6 +438,57 @@ export const parseVerdictResponse = (payload) => {
   assertString(payload.final_ruling, 'final_ruling', 'verdict');
   assertNumber(payload.final_weighted_score, 'final_weighted_score', 'verdict');
   assertString(payload.judge_opinion, 'judge_opinion', 'verdict');
+  assertOptionalString(payload.overflow_reason_code, 'overflow_reason_code', 'verdict');
+  assertOptionalString(payload.overflow_explanation, 'overflow_explanation', 'verdict');
+
+  const isJuryTrial = context.isJuryTrial === true;
+  if (isJuryTrial) {
+    assertString(payload.jury_verdict, 'jury_verdict', 'verdict');
+    assertString(payload.jury_reasoning, 'jury_reasoning', 'verdict');
+    assertNumber(payload.jury_score, 'jury_score', 'verdict');
+  } else if (context.isJuryTrial === false) {
+    assertOptionalString(payload.jury_verdict, 'jury_verdict', 'verdict');
+    assertOptionalString(payload.jury_reasoning, 'jury_reasoning', 'verdict');
+    assertOptionalNumber(payload.jury_score, 'jury_score', 'verdict');
+    const juryVerdict = typeof payload.jury_verdict === 'string' ? payload.jury_verdict.trim() : '';
+    const hasNonBenchVerdict =
+      juryVerdict.length > 0 && !['n/a', 'na'].includes(juryVerdict.toLowerCase());
+    const hasNonBenchReasoning =
+      typeof payload.jury_reasoning === 'string' &&
+      payload.jury_reasoning.trim().length > 0 &&
+      !['n/a', 'na'].includes(payload.jury_reasoning.trim().toLowerCase());
+    const hasNonBenchScore =
+      typeof payload.jury_score === 'number' && payload.jury_score !== 0;
+    if (hasNonBenchVerdict || hasNonBenchReasoning || hasNonBenchScore) {
+      throw createLlmError('Bench trials must not include jury-only outputs.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an invalid verdict. Please retry.',
+        context: { payload },
+      });
+    }
+  }
+
+  if (Array.isArray(context.seatedJurorIds) && Array.isArray(context.docketJurorIds)) {
+    const docketJurors = new Set(context.docketJurorIds);
+    const invalidJuror = context.seatedJurorIds.find((id) => !docketJurors.has(id));
+    if (invalidJuror !== undefined) {
+      throw createLlmError('Seated juror IDs were not found in the docket.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an invalid verdict. Please retry.',
+        context: { invalidJuror, seatedJurorIds: context.seatedJurorIds },
+      });
+    }
+  }
+
+  if (payload.final_weighted_score > 100) {
+    if (!payload.overflow_reason_code || !payload.overflow_explanation) {
+      throw createLlmError('Overflow scoring requires a reason code and explanation.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete verdict. Please retry.',
+        context: { payload },
+      });
+    }
+  }
 
   return payload;
 };

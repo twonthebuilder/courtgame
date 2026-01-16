@@ -1,3 +1,5 @@
+import { normalizeDifficulty } from './config';
+
 /**
  * Builds the system prompt for generating a new case docket.
  *
@@ -6,11 +8,16 @@
  * @param {string} playerRole - Player role (defense/prosecution).
  * @returns {string} Prompt text for the generator model.
  */
+
 export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   let tone = '';
-  if (difficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
-  else if (difficulty === 'regular') tone = 'mundane, everyday disputes. Traffic, small contracts.';
-  else if (difficulty === 'nuance') tone = 'complex, serious, morally ambiguous crimes.';
+  if (normalizedDifficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
+  else if (normalizedDifficulty === 'normal') {
+    tone = 'mundane, everyday disputes. Traffic, small contracts.';
+  } else if (normalizedDifficulty === 'nuance') {
+    tone = 'complex, serious, morally ambiguous crimes.';
+  }
 
   return `
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
@@ -62,6 +69,8 @@ export const getJuryStrikePrompt = (caseData, playerStrikes, playerRole) => {
     Player (${playerRole}) struck IDs: ${JSON.stringify(playerStrikes)}.
     
     As AI ${opponentRole}, strike 2 jurors who hurt YOUR case.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce jurors, facts, or entities not present in the docket inputs.
     
     Return ONLY valid JSON:
     {
@@ -87,7 +96,9 @@ export const getMotionDraftPrompt = (caseData, difficulty) => `
     Charge: ${caseData.charge}.
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizeDifficulty(difficulty)}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
     
     Draft a concise motion to Dismiss or Suppress Evidence.
     
@@ -112,7 +123,9 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
     Charge: ${caseData.charge}.
     Motion: "${motionText}"
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizeDifficulty(difficulty)}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
     
     Draft a concise rebuttal responding to the motion.
     
@@ -139,6 +152,7 @@ export const getOpposingCounselPrompt = (
   opponentRole,
   motionText = ''
 ) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   const roleLabel = opponentRole === 'defense' ? 'Defense Attorney' : 'Prosecutor';
   const isMotionPhase = phase === 'motion_submission';
   const baseContext = `
@@ -148,7 +162,9 @@ export const getOpposingCounselPrompt = (
     Charge: ${caseData.charge}.
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizedDifficulty}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
   `;
 
   if (isMotionPhase) {
@@ -186,6 +202,7 @@ export const getOpposingCounselPrompt = (
  * @param {'defense' | 'prosecution'} motionBy - Role that filed the motion.
  * @param {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
  * @param {'defense' | 'prosecution'} playerRole - Player role for context.
+ * @param {object} [complianceContext] - Submission compliance metadata.
  * @returns {string} Prompt text for the motion ruling model.
  */
 export const getMotionPrompt = (
@@ -195,22 +212,42 @@ export const getMotionPrompt = (
   difficulty,
   motionBy,
   rebuttalBy,
-  playerRole
-) => `
+  playerRole,
+  complianceContext = {}
+) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
+  const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
+    id: typeof item?.id === 'number' ? item.id : index + 1,
+    text: typeof item?.text === 'string' ? item.text : item,
+    status: item?.status === 'suppressed' ? 'suppressed' : 'admissible',
+  }));
+
+  return `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
     Player Role: ${playerRole}.
     Motion (${motionBy}): "${motionText}"
     Rebuttal (${rebuttalBy}): "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizedDifficulty}.
+    Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
+    Submission Compliance: ${JSON.stringify(complianceContext)}
+    Scoring rule: The score reflects the legal quality of the motion, not the procedural outcome.
     
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
+    Do not introduce facts or entities not present in the docket inputs.
+    Include evidence_status_updates entries for every evidence item (even if admissible).
     Return JSON:
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
       "outcome_text": "Explanation.",
-      "score": number (0-100)
+      "score": number (0-100),
+      "evidence_status_updates": [
+        { "id": number, "status": "admissible" or "suppressed" }
+      ]
     }
-`;
+  `;
+};
 
 /**
  * Builds the system prompt for the final verdict phase.
@@ -220,20 +257,43 @@ export const getMotionPrompt = (
  * @param {object[]} seatedJurors - Jurors seated for trial.
  * @param {string} argument - Player's closing argument.
  * @param {string} difficulty - Difficulty mode identifier.
+ * @param {object} [complianceContext] - Submission compliance metadata.
  * @returns {string} Prompt text for the verdict model.
  */
-export const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argument, difficulty) => {
+export const getFinalVerdictPrompt = (
+  caseData,
+  motionResult,
+  seatedJurors,
+  argument,
+  difficulty,
+  complianceContext = {}
+) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   const isBench = !caseData.is_jury_trial;
+  const complianceGuidance =
+    normalizedDifficulty === 'nuance'
+      ? 'Non-compliance is a severe credibility hit; treat it as throwing or babbling.'
+      : normalizedDifficulty === 'silly'
+      ? 'Non-compliance is allowed as a silly tactic, but label it and limit what it can prove.'
+      : 'Non-compliance reduces credibility; do not treat it as truth.';
   return `
     Phase: VERDICT. Type: ${isBench ? 'BENCH' : 'JURY'}.
     Case: ${JSON.stringify(caseData)}
     Motion Result: ${motionResult.ruling} (${motionResult.score})
     Jury: ${JSON.stringify(seatedJurors)}
-    Argument: "${argument}"
+    Argument (compliant-only): "${argument}"
+    Submission Compliance: ${JSON.stringify(complianceContext)}
     
-    1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
+    1. JUDGE SCORE (0-100) based on Difficulty ${normalizedDifficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
-    3. LEGENDARY CHECK (100+ score).
+    3. WEIGHTS: Pre-Trial 20%, Judge 45%, Jury 35% (jury score is 0 for bench trials).
+    4. MERIT SCORING: Procedural outcomes (dismissed/suppressed/delayed/JNOV) must NOT change merit scores.
+    5. LEGENDARY CHECK (100+ score).
+    6. Docket rule: If it is not recorded in the docket, it is not true.
+    7. Only docket facts/evidence/witnesses/jurors/rulings count as true.
+    8. Do not introduce facts or entities not present in the docket inputs.
+    9. ${complianceGuidance}
+    10. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
     
     Return JSON:
     {
@@ -245,6 +305,8 @@ export const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argu
       "final_ruling": "Outcome",
       "is_jnov": boolean,
       "final_weighted_score": number,
+      "overflow_reason_code": "CODE or null",
+      "overflow_explanation": "Short explanation or null",
       "achievement_title": "Title or null"
     }
   `;

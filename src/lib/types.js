@@ -6,6 +6,8 @@
 /**
  * A juror in the generated jury pool.
  *
+ * @typedef {'eligible' | 'struck_by_player' | 'struck_by_opponent' | 'seated'} JurorStatus
+ *
  * @typedef {object} Juror
  * @property {number} id - Unique juror identifier.
  * @property {string} name - Juror name.
@@ -13,6 +15,8 @@
  * @property {string} job - Juror occupation.
  * @property {string} bias_hint - Public-facing bias hint shown to players.
  * @property {string} [hidden_bias] - Hidden bias revealed to the model only.
+ * @property {JurorStatus} status - Current juror status for voir dire tracking.
+ * @property {JurorStatus[]} [status_history] - Optional status transition history.
  */
 
 /**
@@ -29,6 +33,13 @@
 /**
  * Case metadata returned by the generator model.
  *
+ * @typedef {'admissible' | 'suppressed'} EvidenceStatus
+ *
+ * @typedef {object} EvidenceItem
+ * @property {number} id - Evidence identifier within the docket.
+ * @property {string} text - Evidence description.
+ * @property {EvidenceStatus} status - Current admissibility status.
+ *
  * @typedef {object} CaseData
  * @property {string} title - Case title for the docket.
  * @property {string} defendant - Defendant name.
@@ -38,7 +49,7 @@
  * @property {Juror[]} jurors - Jury pool for jury trials.
  * @property {string[]} facts - Facts list for the case.
  * @property {{name: string, role: string, statement: string}[]} witnesses - Witness roster.
- * @property {string[]} evidence - Evidence list.
+ * @property {EvidenceItem[]} evidence - Evidence list.
  * @property {OpposingCounsel} opposing_counsel - Opposing counsel profile.
  */
 
@@ -52,16 +63,22 @@
  * @property {number[]} [opponentStrikes] - Opposing counsel strike IDs.
  * @property {number[]} [seatedIds] - Juror IDs seated for trial.
  * @property {string} [comment] - Judge comment on the seated jury.
+ * @property {boolean} [invalidStrike] - Whether the last strike submission was rejected.
  * @property {boolean} [locked] - Whether jury selection is finalized.
  */
 
 /**
  * Judge ruling payload for a pre-trial motion.
  *
+ * @typedef {object} EvidenceStatusUpdate
+ * @property {number} id - Evidence identifier referenced by the ruling.
+ * @property {EvidenceStatus} status - Updated admissibility status.
+ *
  * @typedef {object} MotionResult
  * @property {string} ruling - GRANTED, DENIED, or PARTIALLY GRANTED.
  * @property {string} outcome_text - Judge's explanation.
  * @property {number} score - Motion score used in final weighting.
+ * @property {EvidenceStatusUpdate[]} evidence_status_updates - Evidence admissibility updates.
  */
 
 /**
@@ -95,7 +112,44 @@
  * @property {string} final_ruling - Final ruling text.
  * @property {boolean} is_jnov - Whether a JNOV occurred.
  * @property {number} final_weighted_score - Weighted score across phases.
+ * @property {string | null} overflow_reason_code - Reason code when score exceeds 100.
+ * @property {string | null} overflow_explanation - Short explanation when score exceeds 100.
  * @property {string | null} achievement_title - Optional achievement title.
+ */
+
+/**
+ * Submission compliance classification for docket validation.
+ *
+ * @typedef {'compliant' | 'partially_compliant' | 'non_compliant'} SubmissionCompliance
+ */
+
+/**
+ * Validation record for a docket submission.
+ *
+ * @typedef {object} SubmissionValidation
+ * @property {string} id - Unique identifier for the validation record.
+ * @property {'motion' | 'rebuttal' | 'argument' | 'verdict'} phase - Submission phase.
+ * @property {'defense' | 'prosecution' | 'judge'} submitted_by - Actor for the submission.
+ * @property {string} text - Submitted text captured for validation.
+ * @property {{
+ *   facts: {found: number[], missing: number[]},
+ *   evidence: {found: number[], missing: number[], inadmissible: number[]},
+ *   witnesses: {found: number[], missing: number[]},
+ *   jurors: {found: number[], missing: number[]},
+ *   rulings: {found: number[], missing: number[]}
+ * }} references - Reference resolution results.
+ * @property {SubmissionCompliance} classification - Overall compliance classification.
+ * @property {string} timestamp - ISO timestamp when validation was recorded.
+ */
+
+/**
+ * Rejected verdict payload stored in the docket.
+ *
+ * @typedef {object} VerdictRejection
+ * @property {object} payload - Verdict payload returned by the model.
+ * @property {string} reason - Short reason for rejection.
+ * @property {SubmissionValidation} validation - Validation metadata for the rejection.
+ * @property {string} timestamp - ISO timestamp when the rejection was recorded.
  */
 
 /**
@@ -106,7 +160,13 @@
  * @property {JuryState} [jury] - Jury selection state.
  * @property {MotionState} [motion] - Motion phase data.
  * @property {string} [counselNotes] - Optional counsel notes captured during play.
- * @property {{text?: string, verdict?: VerdictResult, locked?: boolean}} [trial] - Trial phase data.
+ * @property {{
+ *   text?: string,
+ *   verdict?: VerdictResult,
+ *   rejectedVerdicts?: VerdictRejection[],
+ *   locked?: boolean
+ * }} [trial] - Trial phase data.
+ * @property {SubmissionValidation[]} [validationHistory] - Docket validation history.
  */
 
 export {};

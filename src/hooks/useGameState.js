@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
-import { DEFAULT_GAME_CONFIG } from '../lib/config';
+import { DEFAULT_GAME_CONFIG, normalizeDifficulty } from '../lib/config';
 import {
   getLlmClientErrorMessage,
   parseCaseResponse,
@@ -21,8 +21,325 @@ import {
 /** @typedef {import('../lib/types').CaseData} CaseData */
 /** @typedef {import('../lib/types').HistoryState} HistoryState */
 /** @typedef {import('../lib/types').Juror} Juror */
+/** @typedef {import('../lib/types').JurorStatus} JurorStatus */
 /** @typedef {import('../lib/types').MotionResult} MotionResult */
+/** @typedef {import('../lib/types').SubmissionValidation} SubmissionValidation */
 /** @typedef {import('../lib/types').VerdictResult} VerdictResult */
+
+const DOCKET_REFERENCE_PATTERN =
+  /\b(fact|facts|evidence|witness|witnesses|juror|jurors|ruling|rulings)\s*#?\s*(\d+)\b/gi;
+
+const normalizeReferenceBucket = (bucket) => [...new Set(bucket)].sort((a, b) => a - b);
+
+const normalizeReferenceEntity = (entity) => {
+  if (entity.startsWith('fact')) return 'facts';
+  if (entity.startsWith('evidence')) return 'evidence';
+  if (entity.startsWith('witness')) return 'witnesses';
+  if (entity.startsWith('juror')) return 'jurors';
+  return 'rulings';
+};
+
+const buildDocketRegistry = (historyState) => {
+  const facts = new Map();
+  (historyState.case?.facts ?? []).forEach((fact, index) => {
+    if (typeof fact === 'string' && fact.trim()) facts.set(index + 1, true);
+  });
+
+  const evidence = new Map();
+  (historyState.case?.evidence ?? []).forEach((item, index) => {
+    const id = typeof item?.id === 'number' ? item.id : index + 1;
+    const status = item?.status === 'suppressed' ? 'suppressed' : 'admissible';
+    evidence.set(id, status);
+  });
+
+  const witnesses = new Map();
+  (historyState.case?.witnesses ?? []).forEach((witness, index) => {
+    if (witness && typeof witness === 'object') {
+      witnesses.set(index + 1, true);
+    }
+  });
+
+  const jurors = new Map();
+  (historyState.case?.jurors ?? []).forEach((juror) => {
+    if (typeof juror?.id === 'number') jurors.set(juror.id, true);
+  });
+
+  const rulings = new Map();
+  if (historyState.motion?.ruling) {
+    rulings.set(1, true);
+  }
+
+  return { facts, evidence, witnesses, jurors, rulings };
+};
+
+const parseDocketReferences = (text) => {
+  const references = {
+    facts: [],
+    evidence: [],
+    witnesses: [],
+    jurors: [],
+    rulings: [],
+  };
+
+  if (!text) return references;
+
+  for (const match of text.matchAll(DOCKET_REFERENCE_PATTERN)) {
+    const entity = normalizeReferenceEntity(match[1].toLowerCase());
+    const id = Number(match[2]);
+    if (Number.isNaN(id)) continue;
+    references[entity].push(id);
+  }
+
+  return {
+    facts: normalizeReferenceBucket(references.facts),
+    evidence: normalizeReferenceBucket(references.evidence),
+    witnesses: normalizeReferenceBucket(references.witnesses),
+    jurors: normalizeReferenceBucket(references.jurors),
+    rulings: normalizeReferenceBucket(references.rulings),
+  };
+};
+
+const validateSubmissionReferences = (text, registry) => {
+  const references = parseDocketReferences(text);
+  const resolved = {
+    facts: { found: [], missing: [] },
+    evidence: { found: [], missing: [], inadmissible: [] },
+    witnesses: { found: [], missing: [] },
+    jurors: { found: [], missing: [] },
+    rulings: { found: [], missing: [] },
+  };
+
+  references.facts.forEach((id) => {
+    if (registry.facts.has(id)) resolved.facts.found.push(id);
+    else resolved.facts.missing.push(id);
+  });
+  references.witnesses.forEach((id) => {
+    if (registry.witnesses.has(id)) resolved.witnesses.found.push(id);
+    else resolved.witnesses.missing.push(id);
+  });
+  references.jurors.forEach((id) => {
+    if (registry.jurors.has(id)) resolved.jurors.found.push(id);
+    else resolved.jurors.missing.push(id);
+  });
+  references.rulings.forEach((id) => {
+    if (registry.rulings.has(id)) resolved.rulings.found.push(id);
+    else resolved.rulings.missing.push(id);
+  });
+  references.evidence.forEach((id) => {
+    if (registry.evidence.has(id)) {
+      resolved.evidence.found.push(id);
+      if (registry.evidence.get(id) === 'suppressed') {
+        resolved.evidence.inadmissible.push(id);
+      }
+    } else {
+      resolved.evidence.missing.push(id);
+    }
+  });
+
+  const totalReferences =
+    references.facts.length +
+    references.evidence.length +
+    references.witnesses.length +
+    references.jurors.length +
+    references.rulings.length;
+  const missingCount =
+    resolved.facts.missing.length +
+    resolved.evidence.missing.length +
+    resolved.witnesses.missing.length +
+    resolved.jurors.missing.length +
+    resolved.rulings.missing.length;
+  const inadmissibleCount = resolved.evidence.inadmissible.length;
+  const compliantFoundCount =
+    resolved.facts.found.length +
+    resolved.witnesses.found.length +
+    resolved.jurors.found.length +
+    resolved.rulings.found.length +
+    (resolved.evidence.found.length - resolved.evidence.inadmissible.length);
+
+  let classification = 'compliant';
+  if (totalReferences === 0) {
+    classification = 'compliant';
+  } else if (missingCount === 0 && inadmissibleCount === 0) {
+    classification = 'compliant';
+  } else if (compliantFoundCount === 0) {
+    classification = 'non_compliant';
+  } else {
+    classification = 'partially_compliant';
+  }
+
+  return {
+    references: resolved,
+    classification,
+  };
+};
+
+const redactInvalidReferences = (text, validation) => {
+  if (!text) return '';
+  const invalidIds = [
+    ...validation.references.facts.missing.map((id) => ({ entity: 'fact', id })),
+    ...validation.references.evidence.missing.map((id) => ({ entity: 'evidence', id })),
+    ...validation.references.evidence.inadmissible.map((id) => ({ entity: 'evidence', id })),
+    ...validation.references.witnesses.missing.map((id) => ({ entity: 'witness', id })),
+    ...validation.references.jurors.missing.map((id) => ({ entity: 'juror', id })),
+    ...validation.references.rulings.missing.map((id) => ({ entity: 'ruling', id })),
+  ];
+
+  return invalidIds.reduce((updated, entry) => {
+    const pattern = new RegExp(
+      `\\b${entry.entity}s?\\s*#?\\s*${entry.id}\\b`,
+      'gi'
+    );
+    return updated.replace(pattern, '[redacted off-docket reference]');
+  }, text);
+};
+
+const summarizeNonCompliance = (validation) => {
+  const missingCount =
+    validation.references.facts.missing.length +
+    validation.references.evidence.missing.length +
+    validation.references.witnesses.missing.length +
+    validation.references.jurors.missing.length +
+    validation.references.rulings.missing.length;
+  const inadmissibleCount = validation.references.evidence.inadmissible.length;
+  return {
+    classification: validation.classification,
+    missing: {
+      facts: validation.references.facts.missing,
+      evidence: validation.references.evidence.missing,
+      witnesses: validation.references.witnesses.missing,
+      jurors: validation.references.jurors.missing,
+      rulings: validation.references.rulings.missing,
+    },
+    inadmissible_evidence: validation.references.evidence.inadmissible,
+    totals: {
+      missing: missingCount,
+      inadmissible: inadmissibleCount,
+    },
+  };
+};
+
+const createValidationRecord = (phase, submittedBy, text, registry) => {
+  const validation = validateSubmissionReferences(text, registry);
+  return {
+    id: `${phase}-${submittedBy}-${Date.now()}`,
+    phase,
+    submitted_by: submittedBy,
+    text,
+    references: validation.references,
+    classification: validation.classification,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+const normalizeEvidenceDocket = (evidence) =>
+  (evidence ?? [])
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item, status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        return {
+          id: typeof item.id === 'number' ? item.id : index + 1,
+          text: typeof item.text === 'string' ? item.text : '',
+          status: item.status === 'suppressed' ? 'suppressed' : 'admissible',
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.trim().length > 0);
+
+const buildDocketPromptCase = (caseData, options = {}) => {
+  if (!caseData) return {};
+  const { evidenceMode = 'full' } = options;
+  const rawEvidence = Array.isArray(caseData.evidence) ? caseData.evidence : [];
+  const normalizedEvidence = rawEvidence
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item, status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        return {
+          id: typeof item.id === 'number' ? item.id : index + 1,
+          text: typeof item.text === 'string' ? item.text : '',
+          status: item.status === 'suppressed' ? 'suppressed' : 'admissible',
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.trim().length > 0);
+  const evidence =
+    evidenceMode === 'admissible'
+      ? normalizedEvidence.filter((item) => item.status !== 'suppressed').map((item) => item.text)
+      : normalizedEvidence;
+
+  return {
+    title: caseData.title,
+    defendant: caseData.defendant,
+    charge: caseData.charge,
+    is_jury_trial: caseData.is_jury_trial,
+    judge: caseData.judge,
+    jurors: caseData.jurors,
+    facts: caseData.facts,
+    witnesses: caseData.witnesses,
+    evidence,
+    opposing_counsel: caseData.opposing_counsel,
+  };
+};
+
+const applyEvidenceStatusUpdates = (evidence, updates) => {
+  if (!Array.isArray(evidence)) return [];
+  if (!Array.isArray(updates) || updates.length === 0) return evidence;
+  const updateMap = new Map(updates.map((update) => [update.id, update.status]));
+  return evidence.map((item) => {
+    const nextStatus = updateMap.get(item.id);
+    if (!nextStatus) return item;
+    if (item.status === nextStatus) return item;
+    return { ...item, status: nextStatus };
+  });
+};
+
+const findDuplicateId = (ids) => {
+  const seen = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) return id;
+    seen.add(id);
+  }
+  return null;
+};
+
+const validateJurorIdSubset = (docketJurorIds, ids) => {
+  const duplicateId = findDuplicateId(ids);
+  if (duplicateId !== null) {
+    return { valid: false, reason: 'duplicate', id: duplicateId };
+  }
+  const invalidId = ids.find((id) => !docketJurorIds.has(id));
+  if (invalidId !== undefined) {
+    return { valid: false, reason: 'unknown', id: invalidId };
+  }
+  return { valid: true };
+};
+
+const buildInitialJurorPool = (jurors) =>
+  jurors.map((juror) => {
+    const baseStatus = juror.status ?? 'eligible';
+    return {
+      ...juror,
+      status: baseStatus,
+      status_history: juror.status_history ?? [baseStatus],
+    };
+  });
+
+const updateJurorStatus = (juror, nextStatus) => {
+  if (juror.status === nextStatus) return juror;
+  const history = juror.status_history ?? [];
+  const updatedHistory =
+    history[history.length - 1] === nextStatus ? history : [...history, nextStatus];
+  return {
+    ...juror,
+    status: nextStatus,
+    status_history: updatedHistory,
+  };
+};
 
 /**
  * Manage the Pocket Court game state and actions in one place.
@@ -109,25 +426,30 @@ const useGameState = () => {
   const generateCase = async (role, difficulty, jurisdiction) => {
     setGameState('initializing');
     setError(null);
-    setConfig({ role, difficulty, jurisdiction });
+    const normalizedDifficulty = normalizeDifficulty(difficulty);
+    setConfig({ role, difficulty: normalizedDifficulty, jurisdiction });
 
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Generate',
-        systemPrompt: getGeneratorPrompt(difficulty, jurisdiction, role),
+        systemPrompt: getGeneratorPrompt(normalizedDifficulty, jurisdiction, role),
         responseLabel: 'case',
       });
       /** @type {CaseData} */
       const data = parseCaseResponse(payload);
 
+      const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
+      const evidenceDocket = normalizeEvidenceDocket(data.evidence);
+
       setHistory({
-        case: data,
+        case: { ...data, evidence: evidenceDocket },
         jury: data.is_jury_trial
-          ? { pool: data.jurors, myStrikes: [], locked: false }
+          ? { pool: juryPool, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
-        trial: { locked: false },
+        trial: { locked: false, rejectedVerdicts: [] },
+        validationHistory: [],
       });
 
       setGameState('playing');
@@ -149,14 +471,50 @@ const useGameState = () => {
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Strike',
-        systemPrompt: getJuryStrikePrompt(history.case, strikes, config.role),
+        systemPrompt: getJuryStrikePrompt(
+          buildDocketPromptCase(history.case),
+          strikes,
+          config.role
+        ),
         responseLabel: 'jury',
       });
       const data = parseJuryResponse(payload);
+      // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
+      const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
+      const opponentValidation = validateJurorIdSubset(docketJurorIds, data.opponent_strikes);
+      const seatedValidation = validateJurorIdSubset(docketJurorIds, data.seated_juror_ids);
+
+      if (!opponentValidation.valid || !seatedValidation.valid) {
+        setHistory((prev) => ({
+          ...prev,
+          jury: {
+            ...prev.jury,
+            myStrikes: strikes,
+            invalidStrike: true,
+          },
+        }));
+        setError('Strike results referenced jurors outside the docket. Please retry.');
+        setLoadingMsg(null);
+        return;
+      }
 
       setHistory((prev) => {
-        const seatedJurors =
-          prev.case?.jurors.filter((juror) => data.seated_juror_ids?.includes(juror.id)) ?? [];
+        const playerStrikeIds = new Set(strikes);
+        const opponentStrikeIds = new Set(data.opponent_strikes);
+        const seatedIds = new Set(data.seated_juror_ids);
+        const updatedPool =
+          prev.jury?.pool?.map((juror) => {
+            let nextStatus = /** @type {JurorStatus} */ ('eligible');
+            if (seatedIds.has(juror.id)) {
+              nextStatus = 'seated';
+            } else if (playerStrikeIds.has(juror.id)) {
+              nextStatus = 'struck_by_player';
+            } else if (opponentStrikeIds.has(juror.id)) {
+              nextStatus = 'struck_by_opponent';
+            }
+            return updateJurorStatus(juror, nextStatus);
+          }) ?? [];
+        const seatedJurors = updatedPool.filter((juror) => juror.status === 'seated');
         return {
           ...prev,
           jury: {
@@ -165,6 +523,8 @@ const useGameState = () => {
             opponentStrikes: data.opponent_strikes,
             seatedIds: data.seated_juror_ids,
             comment: data.judge_comment,
+            invalidStrike: false,
+            pool: updatedPool,
             locked: true,
           },
           motion: createMotionState(),
@@ -197,15 +557,25 @@ const useGameState = () => {
       return;
     }
 
-    setHistory((prev) => ({
-      ...prev,
-      motion: {
-        ...prev.motion,
-        motionText: isMotionStep ? trimmed : prev.motion.motionText,
-        rebuttalText: isMotionStep ? prev.motion.rebuttalText : trimmed,
-        motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
-      },
-    }));
+    setHistory((prev) => {
+      const registry = buildDocketRegistry(prev);
+      const validationRecord = createValidationRecord(
+        isMotionStep ? 'motion' : 'rebuttal',
+        expectedRole,
+        trimmed,
+        registry
+      );
+      return {
+        ...prev,
+        motion: {
+          ...prev.motion,
+          motionText: isMotionStep ? trimmed : prev.motion.motionText,
+          rebuttalText: isMotionStep ? prev.motion.rebuttalText : trimmed,
+          motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
+        },
+        validationHistory: [...(prev.validationHistory ?? []), validationRecord],
+      };
+    });
   };
 
   /**
@@ -230,7 +600,7 @@ const useGameState = () => {
       const payload = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
         systemPrompt: getOpposingCounselPrompt(
-          history.case,
+          buildDocketPromptCase(history.case),
           config.difficulty,
           history.motion.motionPhase,
           expectedRole,
@@ -248,6 +618,15 @@ const useGameState = () => {
           rebuttalText: isMotionStep ? prev.motion.rebuttalText : data.text,
           motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
         },
+        validationHistory: [
+          ...(prev.validationHistory ?? []),
+          createValidationRecord(
+            isMotionStep ? 'motion' : 'rebuttal',
+            expectedRole,
+            data.text,
+            buildDocketRegistry(prev)
+          ),
+        ],
       }));
       setLoadingMsg(null);
     } catch (err) {
@@ -382,16 +761,37 @@ const useGameState = () => {
 
     setLoadingMsg('Judge is ruling on the motion...');
     try {
+      const docketRegistry = buildDocketRegistry(history);
+      const motionValidation = validateSubmissionReferences(
+        history.motion.motionText,
+        docketRegistry
+      );
+      const rebuttalValidation = validateSubmissionReferences(
+        history.motion.rebuttalText,
+        docketRegistry
+      );
+      const compliantMotionText = redactInvalidReferences(
+        history.motion.motionText,
+        motionValidation
+      );
+      const compliantRebuttalText = redactInvalidReferences(
+        history.motion.rebuttalText,
+        rebuttalValidation
+      );
       const payload = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
-          history.case,
-          history.motion.motionText,
-          history.motion.rebuttalText,
+          buildDocketPromptCase(history.case),
+          compliantMotionText,
+          compliantRebuttalText,
           config.difficulty,
           history.motion.motionBy,
           history.motion.rebuttalBy,
-          config.role
+          config.role,
+          {
+            motion: summarizeNonCompliance(motionValidation),
+            rebuttal: summarizeNonCompliance(rebuttalValidation),
+          }
         ),
         responseLabel: 'motion',
       });
@@ -405,6 +805,10 @@ const useGameState = () => {
           ruling: data,
           motionPhase: 'motion_ruling_locked',
           locked: true,
+        },
+        case: {
+          ...prev.case,
+          evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
         },
         counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
         trial: { ...prev.trial, locked: false },
@@ -426,29 +830,91 @@ const useGameState = () => {
   const submitArgument = async (text) => {
     setLoadingMsg('The Court is deliberating...');
     try {
+      const docketRegistry = buildDocketRegistry(history);
+      const argumentRecord = createValidationRecord('argument', config.role, text, docketRegistry);
+      const compliantArgument = redactInvalidReferences(text, argumentRecord);
+
+      setHistory((prev) => ({
+        ...prev,
+        trial: { ...prev.trial, text },
+        validationHistory: [...(prev.validationHistory ?? []), argumentRecord],
+      }));
       /** @type {Juror[]} */
       const seatedJurors = history.jury?.skipped
         ? []
-        : history.case?.jurors.filter((j) => history.jury?.seatedIds?.includes(j.id));
+        : history.jury?.pool?.filter((juror) => juror.status === 'seated') ?? [];
+      const caseForVerdict = buildDocketPromptCase(history.case, {
+        evidenceMode: 'admissible',
+      });
       const payload = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
-          history.case,
+          caseForVerdict,
           history.motion.ruling,
           seatedJurors,
-          text,
-          config.difficulty
+          compliantArgument,
+          config.difficulty,
+          summarizeNonCompliance(argumentRecord)
         ),
         responseLabel: 'verdict',
       });
       /** @type {VerdictResult} */
-      const data = parseVerdictResponse(payload);
+      const data = parseVerdictResponse(payload, {
+        isJuryTrial: history.case?.is_jury_trial,
+        seatedJurorIds: seatedJurors.map((juror) => juror.id),
+        docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
+      });
+      const verdictText = [
+        data.final_ruling,
+        data.judge_opinion,
+        data.jury_reasoning,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const verdictValidation = validateSubmissionReferences(verdictText, docketRegistry);
+      const verdictRecord = createValidationRecord(
+        'verdict',
+        'judge',
+        verdictText,
+        docketRegistry
+      );
+      const isVerdictCompliant = verdictValidation.classification === 'compliant';
 
-      setHistory((prev) => ({
-        ...prev,
-        trial: { text, verdict: data, locked: true },
-        counselNotes: deriveVerdictCounselNotes(data, config.role),
-      }));
+      setHistory((prev) => {
+        if (!isVerdictCompliant) {
+          return {
+            ...prev,
+            trial: {
+              ...prev.trial,
+              text,
+              verdict: prev.trial?.verdict,
+              locked: false,
+              rejectedVerdicts: [
+                ...(prev.trial?.rejectedVerdicts ?? []),
+                {
+                  payload,
+                  reason: 'Verdict referenced off-docket or inadmissible material.',
+                  validation: verdictRecord,
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+            },
+            validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+          };
+        }
+
+        return {
+          ...prev,
+          trial: { text, verdict: data, locked: true },
+          counselNotes: deriveVerdictCounselNotes(data, config.role),
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        };
+      });
+      if (!isVerdictCompliant) {
+        setError('Verdict rejected for off-docket or inadmissible references.');
+        setLoadingMsg(null);
+        return;
+      }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
@@ -465,7 +931,8 @@ const useGameState = () => {
     log += `FACTS:\n${history.case.facts.join('\n')}\n\n`;
 
     if (history.jury && !history.jury.skipped && history.jury.locked) {
-      log += `JURY SEATED (${history.jury.seatedIds.length}):\n${history.jury.comment}\n\n`;
+      const seatedJurors = history.jury.pool.filter((juror) => juror.status === 'seated');
+      log += `JURY SEATED (${seatedJurors.length}):\n${history.jury.comment}\n\n`;
     }
 
     if (history.motion) {
@@ -489,9 +956,15 @@ const useGameState = () => {
     }
 
     if (history.trial && history.trial.locked) {
-      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${history.trial.verdict.final_ruling} (Score: ${Math.round(
-        history.trial.verdict.final_weighted_score
-      )})\nOPINION: "${history.trial.verdict.judge_opinion}"`;
+      const roundedScore = Math.round(history.trial.verdict.final_weighted_score);
+      const baseScore = Math.min(100, Math.max(0, roundedScore));
+      const overflowNote =
+        history.trial.verdict.final_weighted_score > 100
+          ? `\nOVERFLOW: ${history.trial.verdict.overflow_reason_code} - ${history.trial.verdict.overflow_explanation}`
+          : '';
+      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${
+        history.trial.verdict.final_ruling
+      } (Base Score: ${baseScore})${overflowNote}\nOPINION: "${history.trial.verdict.judge_opinion}"`;
     }
 
     copyToClipboard(log);

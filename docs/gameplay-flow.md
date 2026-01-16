@@ -16,11 +16,19 @@ This document outlines the phase order, scoring weights, and where each phase is
 
 Pocket Court uses weighted scoring across phases:
 
-- **Pre-Trial Motion:** 40% weight
-- **Judge (Trial Legal Soundness):** 30% weight
-- **Jury (Trial Persuasiveness):** 30% weight
+- **Pre-Trial Motion:** 20% weight
+- **Judge (Trial Legal Soundness):** 45% weight
+- **Jury (Trial Persuasiveness):** 35% weight
 
 The LLM returns a `final_weighted_score` that applies these weights, and the verdict UI uses it to determine achievements.
+Procedural outcomes (dismissals, suppressions, delays, JNOVs) are reported separately and do not change merit scores.
+If the weighted score exceeds 100, the verdict payload includes an overflow reason code and explanation; the UI shows the normalized 0–100 base score alongside the overflow note.
+
+## Docket Compliance Rules
+
+- Scoring, verdicts, and judge rationale are only valid when they align with the living docket.
+- Off-docket facts or references are treated as non-compliant and cannot be accepted as truth.
+- Submissions that cite suppressed evidence or missing docket IDs are recorded as non-compliant and may be rejected.
 
 ## Phase-by-Phase Implementation Map
 
