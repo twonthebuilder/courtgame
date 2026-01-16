@@ -36,6 +36,7 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 - Jury explains their reasoning (in jury trials)
 - Scores 100+ unlock legendary achievements
 - Cases are saved as a "living docket" you can share
+- **Invariant:** If it is not recorded in the docket, it is not true.
 
 ---
 

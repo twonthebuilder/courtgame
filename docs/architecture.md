@@ -63,6 +63,7 @@ Tailwind CSS is compiled through the PostCSS pipeline, with `src/index.css` as t
 - `config.js` centralizes difficulty and default settings.
 - `types.js` documents the data model returned from the LLM.
 - `api.js` and `clipboard.js` provide small utility helpers.
+- **Invariant:** If it is not recorded in the docket, it is not true.
 
 ## How to Add a New Phase or Screen
 

@@ -62,6 +62,8 @@ export const getJuryStrikePrompt = (caseData, playerStrikes, playerRole) => {
     Player (${playerRole}) struck IDs: ${JSON.stringify(playerStrikes)}.
     
     As AI ${opponentRole}, strike 2 jurors who hurt YOUR case.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce jurors, facts, or entities not present in the docket inputs.
     
     Return ONLY valid JSON:
     {
@@ -88,6 +90,8 @@ export const getMotionDraftPrompt = (caseData, difficulty) => `
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
     Difficulty: ${difficulty}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
     
     Draft a concise motion to Dismiss or Suppress Evidence.
     
@@ -113,6 +117,8 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
     Motion: "${motionText}"
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
     Difficulty: ${difficulty}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
     
     Draft a concise rebuttal responding to the motion.
     
@@ -149,6 +155,8 @@ export const getOpposingCounselPrompt = (
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
     Difficulty: ${difficulty}.
+    Docket rule: If it is not recorded in the docket, it is not true.
+    Do not introduce facts, evidence, or entities not present in the docket inputs.
   `;
 
   if (isMotionPhase) {
@@ -215,7 +223,9 @@ export const getMotionPrompt = (
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     Submission Compliance: ${JSON.stringify(complianceContext)}
     
+    Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
+    Do not introduce facts or entities not present in the docket inputs.
     Include evidence_status_updates entries for every evidence item (even if admissible).
     Return JSON:
     {
@@ -266,8 +276,10 @@ export const getFinalVerdictPrompt = (
     1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
     3. LEGENDARY CHECK (100+ score).
-    4. Docket rule: Only docket facts/evidence/witnesses/jurors/rulings count as true.
-    5. ${complianceGuidance}
+    4. Docket rule: If it is not recorded in the docket, it is not true.
+    5. Only docket facts/evidence/witnesses/jurors/rulings count as true.
+    6. Do not introduce facts or entities not present in the docket inputs.
+    7. ${complianceGuidance}
     
     Return JSON:
     {

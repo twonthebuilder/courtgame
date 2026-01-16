@@ -248,6 +248,44 @@ const normalizeEvidenceDocket = (evidence) =>
     })
     .filter((item) => item && item.text.trim().length > 0);
 
+const buildDocketPromptCase = (caseData, options = {}) => {
+  if (!caseData) return {};
+  const { evidenceMode = 'full' } = options;
+  const rawEvidence = Array.isArray(caseData.evidence) ? caseData.evidence : [];
+  const normalizedEvidence = rawEvidence
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item, status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        return {
+          id: typeof item.id === 'number' ? item.id : index + 1,
+          text: typeof item.text === 'string' ? item.text : '',
+          status: item.status === 'suppressed' ? 'suppressed' : 'admissible',
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.trim().length > 0);
+  const evidence =
+    evidenceMode === 'admissible'
+      ? normalizedEvidence.filter((item) => item.status !== 'suppressed').map((item) => item.text)
+      : normalizedEvidence;
+
+  return {
+    title: caseData.title,
+    defendant: caseData.defendant,
+    charge: caseData.charge,
+    is_jury_trial: caseData.is_jury_trial,
+    judge: caseData.judge,
+    jurors: caseData.jurors,
+    facts: caseData.facts,
+    witnesses: caseData.witnesses,
+    evidence,
+    opposing_counsel: caseData.opposing_counsel,
+  };
+};
+
 const applyEvidenceStatusUpdates = (evidence, updates) => {
   if (!Array.isArray(evidence)) return [];
   if (!Array.isArray(updates) || updates.length === 0) return evidence;
@@ -259,11 +297,6 @@ const applyEvidenceStatusUpdates = (evidence, updates) => {
     return { ...item, status: nextStatus };
   });
 };
-
-const getAdmissibleEvidence = (evidence) =>
-  (evidence ?? [])
-    .filter((item) => item.status !== 'suppressed')
-    .map((item) => item.text);
 
 const findDuplicateId = (ids) => {
   const seen = new Set();
@@ -437,7 +470,11 @@ const useGameState = () => {
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Strike',
-        systemPrompt: getJuryStrikePrompt(history.case, strikes, config.role),
+        systemPrompt: getJuryStrikePrompt(
+          buildDocketPromptCase(history.case),
+          strikes,
+          config.role
+        ),
         responseLabel: 'jury',
       });
       const data = parseJuryResponse(payload);
@@ -562,7 +599,7 @@ const useGameState = () => {
       const payload = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
         systemPrompt: getOpposingCounselPrompt(
-          history.case,
+          buildDocketPromptCase(history.case),
           config.difficulty,
           history.motion.motionPhase,
           expectedRole,
@@ -743,7 +780,7 @@ const useGameState = () => {
       const payload = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
-          history.case,
+          buildDocketPromptCase(history.case),
           compliantMotionText,
           compliantRebuttalText,
           config.difficulty,
@@ -805,8 +842,9 @@ const useGameState = () => {
       const seatedJurors = history.jury?.skipped
         ? []
         : history.jury?.pool?.filter((juror) => juror.status === 'seated') ?? [];
-      const admissibleEvidence = getAdmissibleEvidence(history.case?.evidence);
-      const caseForVerdict = { ...history.case, evidence: admissibleEvidence };
+      const caseForVerdict = buildDocketPromptCase(history.case, {
+        evidenceMode: 'admissible',
+      });
       const payload = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
