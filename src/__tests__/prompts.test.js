@@ -18,6 +18,20 @@ describe('prompt builders', () => {
     expect(prompt).toContain('"title": "Case Name"');
   });
 
+  it('adds public defender constraints when sanctioned', () => {
+    const prompt = getGeneratorPrompt('normal', 'Municipal Night Court', 'defense', {
+      state: 'public_defender',
+      caseType: 'public_defender',
+    });
+
+    expect(prompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
+    expect(prompt).toContain('gritty, petty, difficult cases');
+    expect(prompt).toContain('hostile, uncooperative');
+    expect(prompt).toContain('stacked against the defense');
+    expect(prompt).toContain('Courtroom prestige is low');
+    expect(prompt).toContain('Achievements and "wins" should be rarer');
+  });
+
   it('formats the jury strike prompt with role and strike metadata', () => {
     const prompt = getJuryStrikePrompt(
       { title: 'State v. Example' },

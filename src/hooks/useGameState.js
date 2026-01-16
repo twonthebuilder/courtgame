@@ -664,11 +664,11 @@ const updateJurorStatus = (juror, nextStatus) => {
  * @returns {{
  *   gameState: string,
  *   history: HistoryState,
- *   config: {difficulty: string, jurisdiction: string, role: string},
+ *   config: {difficulty: string, jurisdiction: string, role: string, caseType: string},
  *   loadingMsg: string | null,
  *   error: string | null,
  *   copied: boolean,
- *   generateCase: (role: string, difficulty: string, jurisdiction: string) => Promise<void>,
+ *   generateCase: (role: string, difficulty: string, jurisdiction: string, caseType: string) => Promise<void>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
  *   submitMotionStep: (text: string) => Promise<void>,
  *   triggerAiMotionSubmission: () => Promise<void>,
@@ -753,18 +753,32 @@ const useGameState = () => {
    * @param {string} role - Player role (defense or prosecution).
    * @param {string} difficulty - Difficulty setting.
    * @param {string} jurisdiction - Selected jurisdiction.
+   * @param {string} caseType - Selected case type.
    * @returns {Promise<void>} Resolves once the case is generated.
    */
-  const generateCase = async (role, difficulty, jurisdiction) => {
+  const generateCase = async (role, difficulty, jurisdiction, caseType) => {
     setGameState('initializing');
     setError(null);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
-    setConfig({ role, difficulty: normalizedDifficulty, jurisdiction });
+    const resolvedCaseType = caseType ?? DEFAULT_GAME_CONFIG.caseType;
+    const isPublicDefenderMode = sanctionsState.state === SANCTIONS_STATE.PUBLIC_DEFENDER;
+    const lockedJurisdiction = isPublicDefenderMode ? 'Municipal Night Court' : jurisdiction;
+    const lockedCaseType = isPublicDefenderMode ? 'public_defender' : resolvedCaseType;
+    const lockedRole = isPublicDefenderMode ? 'defense' : role;
+    setConfig({
+      role: lockedRole,
+      difficulty: normalizedDifficulty,
+      jurisdiction: lockedJurisdiction,
+      caseType: lockedCaseType,
+    });
 
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Generate',
-        systemPrompt: getGeneratorPrompt(normalizedDifficulty, jurisdiction, role),
+        systemPrompt: getGeneratorPrompt(normalizedDifficulty, lockedJurisdiction, lockedRole, {
+          state: sanctionsState.state,
+          caseType: lockedCaseType,
+        }),
         responseLabel: 'case',
       });
       /** @type {CaseData} */

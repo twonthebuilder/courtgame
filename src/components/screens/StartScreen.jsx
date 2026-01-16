@@ -1,24 +1,34 @@
 import { useEffect, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
-import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../lib/config';
+import {
+  CASE_TYPES,
+  DEFAULT_GAME_CONFIG,
+  DIFFICULTY_OPTIONS,
+  JURISDICTIONS,
+} from '../../lib/config';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 
 /**
  * Entry screen for selecting a game mode, jurisdiction, and side.
  *
  * @param {object} props - Component props.
- * @param {(role: string, difficulty: string, jurisdiction: string) => void} props.onStart - Callback to start the game.
+ * @param {(role: string, difficulty: string, jurisdiction: string, caseType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
+ * @param {object | null} props.sanctionsState - Current sanctions state.
  * @returns {JSX.Element} The start screen layout.
  */
-const StartScreen = ({ onStart, error }) => {
+const StartScreen = ({ onStart, error, sanctionsState }) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
+  const [caseType, setCaseType] = useState(DEFAULT_GAME_CONFIG.caseType);
   const [provider, setProvider] = useState(AI_PROVIDERS[0]?.value ?? 'gemini');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(false);
   const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
+  const isPublicDefenderMode = sanctionsState?.state === 'public_defender';
+  const effectiveJurisdiction = isPublicDefenderMode ? 'Municipal Night Court' : jurisdiction;
+  const effectiveCaseType = isPublicDefenderMode ? 'public_defender' : caseType;
 
   useEffect(() => {
     const storedKey = loadStoredApiKey();
@@ -33,6 +43,17 @@ const StartScreen = ({ onStart, error }) => {
     if (!hasLoadedStoredKey) return;
     persistApiKey(apiKey, rememberKey);
   }, [apiKey, rememberKey, hasLoadedStoredKey]);
+
+  useEffect(() => {
+    if (!isPublicDefenderMode) return;
+    setJurisdiction('Municipal Night Court');
+    setCaseType('public_defender');
+  }, [isPublicDefenderMode]);
+
+  const handleStart = (role) => {
+    const effectiveRole = isPublicDefenderMode ? 'defense' : role;
+    onStart(effectiveRole, difficulty, effectiveJurisdiction, effectiveCaseType);
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
@@ -141,11 +162,33 @@ const StartScreen = ({ onStart, error }) => {
                 <button
                   key={option.value}
                   onClick={() => setJurisdiction(option.value)}
+                  disabled={isPublicDefenderMode}
                   className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
-                    jurisdiction === option.value
+                    effectiveJurisdiction === option.value
                       ? 'bg-slate-800 text-white border-slate-800'
                       : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
-                  }`}
+                  } ${isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+              Case Type
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {CASE_TYPES.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setCaseType(option.value)}
+                  disabled={isPublicDefenderMode}
+                  className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                    effectiveCaseType === option.value
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
+                  } ${isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''}`}
                 >
                   {option.label}
                 </button>
@@ -156,16 +199,19 @@ const StartScreen = ({ onStart, error }) => {
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
         <button
-          onClick={() => onStart('prosecution', difficulty, jurisdiction)}
-          className="p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95"
+          onClick={() => handleStart('prosecution')}
+          disabled={isPublicDefenderMode}
+          className={`p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95 ${
+            isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''
+          }`}
         >
           <Gavel className="w-5 h-5" /> PROSECUTION
         </button>
         <button
-          onClick={() => onStart('defense', difficulty, jurisdiction)}
+          onClick={() => handleStart('defense')}
           className="p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95"
         >
-          <Shield className="w-5 h-5" /> DEFENSE
+          <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
       </div>
     </div>
