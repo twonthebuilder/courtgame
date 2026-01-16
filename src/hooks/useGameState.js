@@ -2,6 +2,26 @@ import { useEffect, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
 import { DEFAULT_GAME_CONFIG, normalizeDifficulty } from '../lib/config';
 import {
+  CASE_TYPES,
+  GAME_STATES,
+  JURISDICTIONS,
+  SANCTION_ENTRY_STATES,
+  SANCTION_LEVELS,
+  SANCTION_REASON_CODES,
+  SANCTION_STATES,
+  SANCTIONS_TIMERS_MS,
+  normalizeCaseType,
+  normalizeJurisdiction,
+  normalizeSanctionState,
+} from '../lib/constants';
+import {
+  deriveDispositionFromMotion,
+  deriveDispositionFromVerdict,
+  guardDisposition,
+  isMeritReleaseDisposition,
+  isTerminalDisposition,
+} from '../lib/disposition';
+import {
   getLlmClientErrorMessage,
   parseCaseResponse,
   parseJuryResponse,
@@ -39,30 +59,14 @@ const normalizeReferenceEntity = (entity) => {
   return 'rulings';
 };
 
-const SANCTIONS_STATE = {
-  CLEAN: 'clean',
-  WARNED: 'warned',
-  SANCTIONED: 'sanctioned',
-  PUBLIC_DEFENDER: 'public_defender',
-  RECENTLY_REINSTATED: 'recently_reinstated',
-};
-
-const SANCTION_LEVELS = {
-  [SANCTIONS_STATE.CLEAN]: 0,
-  [SANCTIONS_STATE.WARNED]: 1,
-  [SANCTIONS_STATE.SANCTIONED]: 2,
-  [SANCTIONS_STATE.PUBLIC_DEFENDER]: 3,
-  [SANCTIONS_STATE.RECENTLY_REINSTATED]: 1,
-};
-
 const SANCTIONS_STORAGE_KEY = 'courtgame.sanctions.state';
 // Real-time windows to allow recidivism escalation and cooldown resets across sessions.
-const RECIDIVISM_WINDOW_MS = 30 * 60 * 1000;
-const COOLDOWN_RESET_MS = 2 * 60 * 60 * 1000;
-const WARNING_DURATION_MS = 20 * 60 * 1000;
-const SANCTION_DURATION_MS = 45 * 60 * 1000;
-const PUBLIC_DEFENDER_DURATION_MS = 60 * 60 * 1000;
-const REINSTATEMENT_GRACE_MS = 20 * 60 * 1000;
+const RECIDIVISM_WINDOW_MS = SANCTIONS_TIMERS_MS.RECIDIVISM_WINDOW;
+const COOLDOWN_RESET_MS = SANCTIONS_TIMERS_MS.COOLDOWN_RESET;
+const WARNING_DURATION_MS = SANCTIONS_TIMERS_MS.WARNING_DURATION;
+const SANCTION_DURATION_MS = SANCTIONS_TIMERS_MS.SANCTION_DURATION;
+const PUBLIC_DEFENDER_DURATION_MS = SANCTIONS_TIMERS_MS.PUBLIC_DEFENDER_DURATION;
+const REINSTATEMENT_GRACE_MS = SANCTIONS_TIMERS_MS.REINSTATEMENT_GRACE;
 
 const NON_TRIGGER_PATTERNS = [
   /losing on the merits/i,
@@ -85,8 +89,8 @@ const toTimestampMs = (isoString) => {
 };
 
 const buildDefaultSanctionsState = (nowMs = Date.now()) => ({
-  state: SANCTIONS_STATE.CLEAN,
-  level: SANCTION_LEVELS[SANCTIONS_STATE.CLEAN],
+  state: SANCTION_STATES.CLEAN,
+  level: SANCTION_LEVELS[SANCTION_STATES.CLEAN],
   startedAt: new Date(nowMs).toISOString(),
   expiresAt: null,
   lastMisconductAt: null,
@@ -129,9 +133,9 @@ const parseSanctionLevelFromText = (text) => {
 const isProceduralViolation = (entry) => {
   if (!entry) return false;
   const proceduralTriggers = new Set([
-    'deadline_violation',
-    'discovery_violation',
-    'evidence_violation',
+    SANCTION_REASON_CODES.DEADLINE_VIOLATION,
+    SANCTION_REASON_CODES.DISCOVERY_VIOLATION,
+    SANCTION_REASON_CODES.EVIDENCE_VIOLATION,
   ]);
   if (proceduralTriggers.has(entry.trigger)) return true;
   return MISCONDUCT_PATTERNS.procedural.test(entry.docket_text ?? '');
@@ -173,7 +177,9 @@ const evaluateConductTrigger = (entry, entries, recidivismWindowMs) => {
     hasJudgeSanctionLevel ||
     hasRepeatedProceduralViolations;
   const triggered =
-    entry.state === 'warned' || entry.state === 'sanctioned' || entry.state === 'noticed';
+    entry.state === SANCTION_ENTRY_STATES.WARNED ||
+    entry.state === SANCTION_ENTRY_STATES.SANCTIONED ||
+    entry.state === SANCTION_ENTRY_STATES.NOTICED;
 
   return {
     triggered,
@@ -196,25 +202,30 @@ const isSanctionsStateEqual = (left, right) => {
 };
 
 const getStateExpiryMs = (state, nowMs) => {
-  if (state === SANCTIONS_STATE.WARNED) return nowMs + WARNING_DURATION_MS;
-  if (state === SANCTIONS_STATE.SANCTIONED) return nowMs + SANCTION_DURATION_MS;
-  if (state === SANCTIONS_STATE.PUBLIC_DEFENDER) return nowMs + PUBLIC_DEFENDER_DURATION_MS;
-  if (state === SANCTIONS_STATE.RECENTLY_REINSTATED) return nowMs + REINSTATEMENT_GRACE_MS;
+  if (state === SANCTION_STATES.WARNED) return nowMs + WARNING_DURATION_MS;
+  if (state === SANCTION_STATES.SANCTIONED) return nowMs + SANCTION_DURATION_MS;
+  if (state === SANCTION_STATES.PUBLIC_DEFENDER) return nowMs + PUBLIC_DEFENDER_DURATION_MS;
+  if (state === SANCTION_STATES.RECENTLY_REINSTATED) return nowMs + REINSTATEMENT_GRACE_MS;
   return null;
 };
 
-const buildSanctionsState = (state, nowMs, overrides = {}) => ({
-  ...overrides,
-  state,
-  level: SANCTION_LEVELS[state] ?? 0,
-  startedAt: new Date(nowMs).toISOString(),
-  expiresAt:
-    state === SANCTIONS_STATE.CLEAN ? null : new Date(getStateExpiryMs(state, nowMs)).toISOString(),
-  recentlyReinstatedUntil:
-    state === SANCTIONS_STATE.RECENTLY_REINSTATED
-      ? new Date(nowMs + REINSTATEMENT_GRACE_MS).toISOString()
-      : null,
-});
+const buildSanctionsState = (state, nowMs, overrides = {}) => {
+  const normalizedState = normalizeSanctionState(state);
+  return {
+    ...overrides,
+    state: normalizedState,
+    level: SANCTION_LEVELS[normalizedState] ?? 0,
+    startedAt: new Date(nowMs).toISOString(),
+    expiresAt:
+      normalizedState === SANCTION_STATES.CLEAN
+        ? null
+        : new Date(getStateExpiryMs(normalizedState, nowMs)).toISOString(),
+    recentlyReinstatedUntil:
+      normalizedState === SANCTION_STATES.RECENTLY_REINSTATED
+        ? new Date(nowMs + REINSTATEMENT_GRACE_MS).toISOString()
+        : null,
+  };
+};
 
 const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
   const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
@@ -229,6 +240,7 @@ const normalizeSanctionsState = (state, nowMs) => {
     ...buildDefaultSanctionsState(nowMs),
     ...state,
   };
+  hydratedState.state = normalizeSanctionState(hydratedState.state);
 
   const expiresAtMs = toTimestampMs(hydratedState.expiresAt);
   const reinstatedUntilMs = toTimestampMs(hydratedState.recentlyReinstatedUntil);
@@ -237,34 +249,34 @@ const normalizeSanctionsState = (state, nowMs) => {
     lastMisconductMs !== null && nowMs - lastMisconductMs > COOLDOWN_RESET_MS;
 
   if (
-    hydratedState.state === SANCTIONS_STATE.PUBLIC_DEFENDER &&
+    hydratedState.state === SANCTION_STATES.PUBLIC_DEFENDER &&
     expiresAtMs &&
     nowMs >= expiresAtMs
   ) {
-    return buildSanctionsState(SANCTIONS_STATE.RECENTLY_REINSTATED, nowMs, {
+    return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
       lastMisconductAt: hydratedState.lastMisconductAt,
       recidivismCount: hydratedState.recidivismCount,
     });
   }
 
   if (
-    hydratedState.state === SANCTIONS_STATE.RECENTLY_REINSTATED &&
+    hydratedState.state === SANCTION_STATES.RECENTLY_REINSTATED &&
     reinstatedUntilMs &&
     nowMs >= reinstatedUntilMs
   ) {
-    return buildSanctionsState(SANCTIONS_STATE.CLEAN, nowMs, {
+    return buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
       lastMisconductAt: hydratedState.lastMisconductAt,
       recidivismCount: 0,
     });
   }
 
   if (
-    (hydratedState.state === SANCTIONS_STATE.WARNED ||
-      hydratedState.state === SANCTIONS_STATE.SANCTIONED) &&
+    (hydratedState.state === SANCTION_STATES.WARNED ||
+      hydratedState.state === SANCTION_STATES.SANCTIONED) &&
     expiresAtMs &&
     nowMs >= expiresAtMs
   ) {
-    return buildSanctionsState(SANCTIONS_STATE.CLEAN, nowMs, {
+    return buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
       lastMisconductAt: hydratedState.lastMisconductAt,
       recidivismCount: 0,
     });
@@ -288,31 +300,28 @@ const buildSanctionPromptContext = (sanctionsState, overrides = {}) => ({
   recentlyReinstatedUntil: sanctionsState?.recentlyReinstatedUntil,
 });
 
-const isMeritReleaseVerdict = (verdict) => {
-  const ruling = verdict?.final_ruling?.toLowerCase() ?? '';
-  return ruling.includes('not guilty') || ruling.includes('dismiss');
-};
-
 const getNextSanctionsState = ({ currentState, entryState, recidivismCount, severe }) => {
-  if (currentState === SANCTIONS_STATE.RECENTLY_REINSTATED) {
-    return SANCTIONS_STATE.PUBLIC_DEFENDER;
+  if (currentState === SANCTION_STATES.RECENTLY_REINSTATED) {
+    return SANCTION_STATES.PUBLIC_DEFENDER;
   }
-  if (currentState === SANCTIONS_STATE.CLEAN) {
-    return entryState === 'sanctioned' ? SANCTIONS_STATE.SANCTIONED : SANCTIONS_STATE.WARNED;
+  if (currentState === SANCTION_STATES.CLEAN) {
+    return entryState === SANCTION_ENTRY_STATES.SANCTIONED
+      ? SANCTION_STATES.SANCTIONED
+      : SANCTION_STATES.WARNED;
   }
-  if (currentState === SANCTIONS_STATE.WARNED) {
-    if (entryState === 'sanctioned' || severe || recidivismCount > 1) {
-      return SANCTIONS_STATE.SANCTIONED;
+  if (currentState === SANCTION_STATES.WARNED) {
+    if (entryState === SANCTION_ENTRY_STATES.SANCTIONED || severe || recidivismCount > 1) {
+      return SANCTION_STATES.SANCTIONED;
     }
-    return SANCTIONS_STATE.WARNED;
+    return SANCTION_STATES.WARNED;
   }
-  if (currentState === SANCTIONS_STATE.SANCTIONED) {
+  if (currentState === SANCTION_STATES.SANCTIONED) {
     if (severe || recidivismCount > 1) {
-      return SANCTIONS_STATE.PUBLIC_DEFENDER;
+      return SANCTION_STATES.PUBLIC_DEFENDER;
     }
-    return SANCTIONS_STATE.SANCTIONED;
+    return SANCTION_STATES.SANCTIONED;
   }
-  return SANCTIONS_STATE.PUBLIC_DEFENDER;
+  return SANCTION_STATES.PUBLIC_DEFENDER;
 };
 
 const deriveSanctionsState = (prevState, sanctionsLog = [], nowMs = Date.now()) => {
@@ -362,7 +371,7 @@ const deriveSanctionsState = (prevState, sanctionsLog = [], nowMs = Date.now()) 
         lastMisconductAt: new Date(entryTimeMs).toISOString(),
         recidivismCount,
         expiresAt:
-          currentState.state === SANCTIONS_STATE.CLEAN
+          currentState.state === SANCTION_STATES.CLEAN
             ? null
             : new Date(getStateExpiryMs(currentState.state, entryTimeMs)).toISOString(),
       };
@@ -699,9 +708,11 @@ const updateJurorStatus = (juror, nextStatus) => {
  * }} Game state values and action handlers.
  */
 const useGameState = () => {
-  const [gameState, setGameState] = useState('start');
+  const [gameState, setGameState] = useState(GAME_STATES.START);
   const [loadingMsg, setLoadingMsg] = useState(null);
-  const [history, setHistory] = useState(/** @type {HistoryState} */ ({ counselNotes: '' }));
+  const [history, setHistory] = useState(
+    /** @type {HistoryState} */ ({ counselNotes: '', disposition: null })
+  );
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -756,11 +767,11 @@ const useGameState = () => {
    * Return to the start screen and clear transient UI state.
    */
   const resetGame = () => {
-    setGameState('start');
+    setGameState(GAME_STATES.START);
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
-    setHistory({ counselNotes: '' });
+    setHistory({ counselNotes: '', disposition: null });
   };
 
   /**
@@ -789,13 +800,20 @@ const useGameState = () => {
    * @returns {Promise<void>} Resolves once the case is generated.
    */
   const generateCase = async (role, difficulty, jurisdiction, caseType) => {
-    setGameState('initializing');
+    setGameState(GAME_STATES.INITIALIZING);
     setError(null);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
-    const resolvedCaseType = caseType ?? DEFAULT_GAME_CONFIG.caseType;
-    const isPublicDefenderMode = sanctionsState.state === SANCTIONS_STATE.PUBLIC_DEFENDER;
-    const lockedJurisdiction = isPublicDefenderMode ? 'Municipal Night Court' : jurisdiction;
-    const lockedCaseType = isPublicDefenderMode ? 'public_defender' : resolvedCaseType;
+    const resolvedCaseType = normalizeCaseType(caseType ?? DEFAULT_GAME_CONFIG.caseType);
+    const resolvedJurisdiction = normalizeJurisdiction(
+      jurisdiction ?? DEFAULT_GAME_CONFIG.jurisdiction
+    );
+    const isPublicDefenderMode = sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+    const lockedJurisdiction = isPublicDefenderMode
+      ? JURISDICTIONS.MUNICIPAL_NIGHT_COURT
+      : resolvedJurisdiction;
+    const lockedCaseType = isPublicDefenderMode
+      ? CASE_TYPES.PUBLIC_DEFENDER
+      : resolvedCaseType;
     const lockedRole = isPublicDefenderMode ? 'defense' : role;
     setConfig({
       role: lockedRole,
@@ -828,16 +846,17 @@ const useGameState = () => {
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
+        disposition: null,
         trial: { locked: false, rejectedVerdicts: [] },
         sanctions: [],
         validationHistory: [],
       });
 
-      setGameState('playing');
+      setGameState(GAME_STATES.PLAYING);
     } catch (err) {
       console.error(err);
       setError(getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.'));
-      setGameState('start');
+      setGameState(GAME_STATES.START);
     }
   };
 
@@ -1191,21 +1210,26 @@ const useGameState = () => {
       /** @type {MotionResult} */
       const data = parseMotionResponse(payload);
 
-      setHistory((prev) => ({
-        ...prev,
-        motion: {
+      setHistory((prev) => {
+        const updatedMotion = {
           ...prev.motion,
           ruling: data,
           motionPhase: 'motion_ruling_locked',
           locked: true,
-        },
-        case: {
-          ...prev.case,
-          evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
-        },
-        counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
-        trial: { ...prev.trial, locked: false },
-      }));
+        };
+        const nextDisposition = deriveDispositionFromMotion(updatedMotion);
+        return {
+          ...prev,
+          motion: updatedMotion,
+          disposition: guardDisposition(prev.disposition, nextDisposition),
+          case: {
+            ...prev.case,
+            evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
+          },
+          counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
+          trial: { ...prev.trial, locked: false },
+        };
+      });
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
@@ -1221,6 +1245,10 @@ const useGameState = () => {
    * @returns {Promise<void>} Resolves once the verdict is stored.
    */
   const submitArgument = async (text) => {
+    if (isTerminalDisposition(history.disposition)) {
+      setError('This case has already reached a terminal disposition.');
+      return;
+    }
     setLoadingMsg('The Court is deliberating...');
     try {
       const docketRegistry = buildDocketRegistry(history);
@@ -1261,6 +1289,7 @@ const useGameState = () => {
         seatedJurorIds: seatedJurors.map((juror) => juror.id),
         docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
       });
+      const nextDisposition = deriveDispositionFromVerdict(data);
       const verdictText = [
         data.final_ruling,
         data.judge_opinion,
@@ -1303,6 +1332,7 @@ const useGameState = () => {
         return {
           ...prev,
           trial: { text, verdict: data, locked: true },
+          disposition: guardDisposition(prev.disposition, nextDisposition),
           counselNotes: deriveVerdictCounselNotes(data, config.role),
           validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
         };
@@ -1312,10 +1342,10 @@ const useGameState = () => {
         setLoadingMsg(null);
         return;
       }
-      if (isMeritReleaseVerdict(data)) {
+      if (isMeritReleaseDisposition(nextDisposition)) {
         setSanctionsState((prev) => {
-          if (prev.state !== SANCTIONS_STATE.PUBLIC_DEFENDER) return prev;
-          return buildSanctionsState(SANCTIONS_STATE.RECENTLY_REINSTATED, Date.now(), {
+          if (prev.state !== SANCTION_STATES.PUBLIC_DEFENDER) return prev;
+          return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, Date.now(), {
             lastMisconductAt: prev.lastMisconductAt,
             recidivismCount: prev.recidivismCount,
           });
@@ -1337,31 +1367,6 @@ const useGameState = () => {
 
   const formatJurorList = (ids = [], pool = []) =>
     ids.map((id) => formatJurorLabel(id, pool)).join(', ');
-
-  const getMotionDisposition = (motion) => {
-    const outcomeText = motion?.ruling?.outcome_text?.trim();
-    if (!outcomeText) return null;
-    if (!MISCONDUCT_PATTERNS.dismissal.test(outcomeText)) return null;
-    return {
-      outcome: 'Dismissed (Pre-Trial Motion Granted)',
-      details: `RULING: ${motion.ruling.ruling} - "${outcomeText}"`,
-    };
-  };
-
-  const getVerdictDisposition = (verdict) => {
-    if (!verdict?.final_ruling) return null;
-    const lines = [`OUTCOME: ${verdict.final_ruling}`];
-    if (verdict.jury_verdict && verdict.jury_verdict !== 'N/A') {
-      lines.push(`JURY VERDICT: ${verdict.jury_verdict}`);
-      if (verdict.jury_reasoning) {
-        lines.push(`JURY REASONING: "${verdict.jury_reasoning}"`);
-      }
-    }
-    if (verdict.judge_opinion) {
-      lines.push(`JUDGE OPINION: "${verdict.judge_opinion}"`);
-    }
-    return lines.join('\n');
-  };
 
   const buildSanctionsSection = (sanctions = []) => {
     if (!sanctions.length) return null;
@@ -1444,21 +1449,22 @@ const useGameState = () => {
     }
 
     // Terminal motion outcomes (ex: dismissal) override later-phase export content.
-    const motionDisposition = getMotionDisposition(history.motion);
-    const verdictDisposition = getVerdictDisposition(history.trial?.verdict);
+    const disposition = history.disposition;
     const reachedTrial = Boolean(history.trial?.text?.trim());
-    const shouldStopAtDisposition = Boolean(motionDisposition);
+    const shouldStopAtDisposition =
+      disposition?.source === 'motion' && isTerminalDisposition(disposition);
 
     if (reachedTrial && !shouldStopAtDisposition) {
       sections.push(`TRIAL ARGUMENT:\n"${history.trial.text}"`);
     }
 
-    if (motionDisposition || verdictDisposition) {
+    if (disposition) {
       const dispositionLines = [];
-      if (motionDisposition) {
-        dispositionLines.push(`OUTCOME: ${motionDisposition.outcome}`, motionDisposition.details);
-      } else if (verdictDisposition) {
-        dispositionLines.push(verdictDisposition);
+      if (disposition.summary) {
+        dispositionLines.push(`OUTCOME: ${disposition.summary}`);
+      }
+      if (disposition.details) {
+        dispositionLines.push(disposition.details);
       }
       sections.push(`FINAL DISPOSITION:\n${dispositionLines.join('\n')}`);
     }
@@ -1512,7 +1518,7 @@ const useGameState = () => {
 
 export default useGameState;
 export const __testables = {
-  SANCTIONS_STATE,
+  SANCTION_STATES,
   buildDefaultSanctionsState,
   deriveSanctionsState,
   evaluateConductTrigger,

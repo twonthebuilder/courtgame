@@ -1,11 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
 import {
-  CASE_TYPES,
+  CASE_TYPE_OPTIONS,
   DEFAULT_GAME_CONFIG,
   DIFFICULTY_OPTIONS,
-  JURISDICTIONS,
+  JURISDICTION_OPTIONS,
 } from '../../lib/config';
+import {
+  CASE_TYPES,
+  JURISDICTIONS,
+  SANCTION_STATES,
+} from '../../lib/constants';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 
 /**
@@ -26,9 +31,11 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(false);
   const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
-  const isPublicDefenderMode = sanctionsState?.state === 'public_defender';
-  const effectiveJurisdiction = isPublicDefenderMode ? 'Municipal Night Court' : jurisdiction;
-  const effectiveCaseType = isPublicDefenderMode ? 'public_defender' : caseType;
+  const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const effectiveJurisdiction = isPublicDefenderMode
+    ? JURISDICTIONS.MUNICIPAL_NIGHT_COURT
+    : jurisdiction;
+  const effectiveCaseType = isPublicDefenderMode ? CASE_TYPES.PUBLIC_DEFENDER : caseType;
 
   useEffect(() => {
     const storedKey = loadStoredApiKey();
@@ -46,8 +53,8 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
 
   useEffect(() => {
     if (!isPublicDefenderMode) return;
-    setJurisdiction('Municipal Night Court');
-    setCaseType('public_defender');
+    setJurisdiction(JURISDICTIONS.MUNICIPAL_NIGHT_COURT);
+    setCaseType(CASE_TYPES.PUBLIC_DEFENDER);
   }, [isPublicDefenderMode]);
 
   const handleStart = (role) => {
@@ -158,7 +165,7 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
               Jurisdiction
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {JURISDICTIONS.map((option) => (
+              {JURISDICTION_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setJurisdiction(option.value)}
@@ -179,7 +186,7 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
               Case Type
             </label>
             <div className="grid grid-cols-2 gap-2">
-              {CASE_TYPES.map((option) => (
+              {CASE_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setCaseType(option.value)}
