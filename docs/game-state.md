@@ -22,6 +22,7 @@ The game state hook centralizes the following fields:
   - `pool`, `myStrikes`, `opponentStrikes`, `seatedIds`, `comment`, `locked` when jury is active.
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
+- **Invariant:** Only juror IDs recorded in the docket may be referenced.
 
 ## Screen Flow (`gameState`)
 

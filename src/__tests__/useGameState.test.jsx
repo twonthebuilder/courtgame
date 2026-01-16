@@ -217,6 +217,33 @@ describe('useGameState transitions', () => {
     expect(result.current.history.counselNotes).toContain('We are reading a jury');
   });
 
+  it('marks invalid strike submissions that reference jurors outside the docket', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(juryCasePayload)
+      .mockResolvedValueOnce({
+        opponent_strikes: [99],
+        seated_juror_ids: [1, 1],
+        judge_comment: 'Invalid juror IDs.',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([2]);
+    });
+
+    expect(result.current.history.jury.invalidStrike).toBe(true);
+    expect(result.current.history.jury.locked).toBe(false);
+    expect(result.current.history.jury.seatedIds).toBeUndefined();
+    expect(result.current.error).toBe(
+      'Strike results referenced jurors outside the docket. Please retry.'
+    );
+  });
+
   it('overwrites counsel notes after motion ruling and verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)

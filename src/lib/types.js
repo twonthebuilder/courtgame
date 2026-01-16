@@ -52,6 +52,7 @@
  * @property {number[]} [opponentStrikes] - Opposing counsel strike IDs.
  * @property {number[]} [seatedIds] - Juror IDs seated for trial.
  * @property {string} [comment] - Judge comment on the seated jury.
+ * @property {boolean} [invalidStrike] - Whether the last strike submission was rejected.
  * @property {boolean} [locked] - Whether jury selection is finalized.
  */
 
