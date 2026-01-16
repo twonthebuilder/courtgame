@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CASE_TYPES, JURISDICTIONS, SANCTION_STATES } from '../lib/constants';
 import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
@@ -11,7 +12,7 @@ import {
 
 describe('prompt builders', () => {
   it('includes the player role and tone in generator prompts', () => {
-    const prompt = getGeneratorPrompt('silly', 'Fictional', 'defense');
+    const prompt = getGeneratorPrompt('silly', JURISDICTIONS.FICTIONAL, 'defense');
 
     expect(prompt).toContain('**DEFENSE**');
     expect(prompt).toContain('wacky, humorous, and absurd');
@@ -19,11 +20,11 @@ describe('prompt builders', () => {
   });
 
   it('adds public defender constraints when sanctioned', () => {
-    const prompt = getGeneratorPrompt('normal', 'Municipal Night Court', 'defense', {
-      state: 'public_defender',
-      caseType: 'public_defender',
+    const prompt = getGeneratorPrompt('normal', JURISDICTIONS.MUNICIPAL_NIGHT_COURT, 'defense', {
+      state: SANCTION_STATES.PUBLIC_DEFENDER,
+      caseType: CASE_TYPES.PUBLIC_DEFENDER,
       expiresAt: '2024-01-01T00:00:00.000Z',
-      lockedJurisdiction: 'Municipal Night Court',
+      lockedJurisdiction: JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
     });
 
     expect(prompt).toContain('Public Defender Mode is in effect');
@@ -130,7 +131,7 @@ describe('prompt builders', () => {
 
   it('includes sanction context for judges/counsel but not jury prompts', () => {
     const sanctionContext = {
-      state: 'sanctioned',
+      state: SANCTION_STATES.SANCTIONED,
       expiresAt: '2024-01-01T00:00:00.000Z',
     };
     const caseData = {

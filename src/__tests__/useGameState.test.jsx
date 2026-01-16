@@ -2,6 +2,16 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import useGameState, { __testables } from '../hooks/useGameState';
 import { copyToClipboard } from '../lib/clipboard';
+import {
+  CASE_TYPES,
+  FINAL_DISPOSITIONS,
+  GAME_STATES,
+  JURISDICTIONS,
+  SANCTION_ENTRY_STATES,
+  SANCTION_REASON_CODES,
+  SANCTION_STATES,
+  SANCTION_VISIBILITY,
+} from '../lib/constants';
 import { requestLlmJson } from '../lib/llmClient';
 
 vi.mock('../lib/clipboard', () => ({
@@ -49,8 +59,8 @@ const juryCasePayload = {
 };
 const buildSanctionsEntry = ({
   id,
-  state = 'warned',
-  trigger = 'decorum_violation',
+  state = SANCTION_ENTRY_STATES.WARNED,
+  trigger = SANCTION_REASON_CODES.DECORUM_VIOLATION,
   docketText = 'The court notes misconduct on the record.',
   timestamp,
 } = {}) => ({
@@ -58,7 +68,7 @@ const buildSanctionsEntry = ({
   state,
   trigger,
   docket_text: docketText,
-  visibility: 'public',
+  visibility: SANCTION_VISIBILITY.PUBLIC,
   timestamp: timestamp ?? new Date().toISOString(),
 });
 const buildVerdict = (overrides = {}) => ({
@@ -93,17 +103,22 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     act(() => {
-      result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      result.current.generateCase(
+        'defense',
+        'normal',
+        JURISDICTIONS.USA,
+        CASE_TYPES.STANDARD
+      );
     });
 
-    expect(result.current.gameState).toBe('initializing');
+    expect(result.current.gameState).toBe(GAME_STATES.INITIALIZING);
 
     await act(async () => {
       resolveRequest(benchCasePayload);
       await deferred;
     });
 
-    expect(result.current.gameState).toBe('playing');
+    expect(result.current.gameState).toBe(GAME_STATES.PLAYING);
     expect(result.current.history.case.title).toBe('Bench Trial');
     expect(result.current.history.counselNotes).toBe('');
   });
@@ -114,7 +129,12 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA', 'standard');
+      await result.current.generateCase(
+        'defense',
+        'regular',
+        JURISDICTIONS.USA,
+        CASE_TYPES.STANDARD
+      );
     });
 
     expect(result.current.config.difficulty).toBe('normal');
@@ -124,7 +144,7 @@ describe('useGameState transitions', () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+      state: SANCTION_STATES.PUBLIC_DEFENDER,
     };
     window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
 
@@ -133,21 +153,21 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     const generatorCall = requestLlmJson.mock.calls[0][0];
     expect(generatorCall.systemPrompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
     expect(result.current.config.role).toBe('defense');
-    expect(result.current.config.jurisdiction).toBe('Municipal Night Court');
-    expect(result.current.config.caseType).toBe('public_defender');
+    expect(result.current.config.jurisdiction).toBe(JURISDICTIONS.MUNICIPAL_NIGHT_COURT);
+    expect(result.current.config.caseType).toBe(CASE_TYPES.PUBLIC_DEFENDER);
   });
 
   it('reinstates from public defender mode after a not guilty verdict', async () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+      state: SANCTION_STATES.PUBLIC_DEFENDER,
       level: 3,
       startedAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
@@ -176,7 +196,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -196,7 +216,7 @@ describe('useGameState transitions', () => {
     });
 
     expect(result.current.sanctionsState.state).toBe(
-      __testables.SANCTIONS_STATE.RECENTLY_REINSTATED
+      SANCTION_STATES.RECENTLY_REINSTATED
     );
     expect(result.current.sanctionsState.recentlyReinstatedUntil).toBeTruthy();
   });
@@ -205,7 +225,7 @@ describe('useGameState transitions', () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+      state: SANCTION_STATES.PUBLIC_DEFENDER,
       level: 3,
       startedAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
@@ -234,7 +254,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -254,7 +274,7 @@ describe('useGameState transitions', () => {
     });
 
     expect(result.current.sanctionsState.state).toBe(
-      __testables.SANCTIONS_STATE.PUBLIC_DEFENDER
+      SANCTION_STATES.PUBLIC_DEFENDER
     );
   });
 
@@ -280,7 +300,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     expect(result.current.history.jury.skipped).toBe(true);
@@ -312,7 +332,7 @@ describe('useGameState transitions', () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: __testables.SANCTIONS_STATE.RECENTLY_REINSTATED,
+      state: SANCTION_STATES.RECENTLY_REINSTATED,
       level: 1,
       startedAt: new Date(nowMs).toISOString(),
       expiresAt: new Date(nowMs + 20 * 60 * 1000).toISOString(),
@@ -333,7 +353,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -360,10 +380,10 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
-    expect(result.current.gameState).toBe('start');
+    expect(result.current.gameState).toBe(GAME_STATES.START);
     expect(result.current.error).toBe('Docket creation failed. Please try again.');
   });
 
@@ -375,7 +395,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -413,7 +433,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -451,7 +471,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -480,7 +500,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -514,7 +534,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -561,7 +581,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -593,7 +613,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     act(() => {
@@ -616,7 +636,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     act(() => {
@@ -646,7 +666,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     act(() => {
@@ -663,6 +683,12 @@ describe('useGameState transitions', () => {
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,
+      };
+      result.current.history.disposition = {
+        type: FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE,
+        source: 'motion',
+        summary: 'Dismissed (Pre-Trial Motion Granted)',
+        details: 'RULING: GRANTED - "Motion to dismiss granted. Case dismissed with prejudice."',
       };
       result.current.history.trial = {
         locked: true,
@@ -682,13 +708,77 @@ describe('useGameState transitions', () => {
     expect(copiedText).not.toContain('SCORE + ACHIEVEMENT:');
   });
 
+  it('records canonical dismissal dispositions from motion rulings', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({
+        ruling: 'GRANTED',
+        outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+        score: 90,
+        evidence_status_updates: [],
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Move to dismiss.',
+        motionBy: 'defense',
+        rebuttalText: 'Opposes dismissal.',
+        rebuttalBy: 'prosecution',
+        ruling: null,
+        motionPhase: 'rebuttal_submission',
+        locked: false,
+      };
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.disposition.type).toBe(
+      FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
+    );
+    expect(result.current.history.disposition.source).toBe('motion');
+  });
+
+  it('blocks verdict submissions once a terminal disposition is set', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.disposition = {
+        type: FINAL_DISPOSITIONS.DISMISSED,
+        source: 'motion',
+        summary: 'Dismissed (Pre-Trial Motion Granted)',
+        details: 'RULING: GRANTED - "Dismissed."',
+      };
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing argument.');
+    });
+
+    expect(requestLlmJson).toHaveBeenCalledTimes(1);
+    expect(result.current.error).toBe('This case has already reached a terminal disposition.');
+  });
+
   it('copies full text without ellipses', async () => {
     requestLlmJson.mockResolvedValueOnce(benchCasePayload);
 
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     const longArgument = Array.from({ length: 40 }, (_, index) => `Sentence ${index + 1}.`).join(' ');
@@ -734,7 +824,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
     act(() => {
@@ -771,6 +861,12 @@ describe('useGameState transitions', () => {
           overflow_explanation: 'An exceptional showing.',
           achievement_title: 'Order of Operations',
         }),
+      };
+      result.current.history.disposition = {
+        type: FINAL_DISPOSITIONS.NOT_GUILTY,
+        source: 'verdict',
+        summary: 'Not Guilty',
+        details: 'JUDGE OPINION: "Bench decision."',
       };
       result.current.history.sanctions = [
         buildSanctionsEntry({ docketText: 'The court issues a warning.' }),
@@ -814,14 +910,14 @@ describe('useGameState transitions', () => {
 
     const nextState = __testables.deriveSanctionsState(baseState, sanctionsLog, nowMs);
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.state).toBe(SANCTION_STATES.WARNED);
     expect(nextState.lastMisconductAt).toBeDefined();
   });
 
   it('ignores non-trigger docket text when evaluating conduct', () => {
     const entry = buildSanctionsEntry({
       id: 's-2',
-      trigger: 'other',
+      trigger: SANCTION_REASON_CODES.OTHER,
       docketText: 'Losing on the merits is not misconduct.',
     });
 
@@ -840,7 +936,7 @@ describe('useGameState transitions', () => {
     const secondEntryTime = nowMs;
     const sanctionedState = {
       ...__testables.buildDefaultSanctionsState(firstEntryTime),
-      state: __testables.SANCTIONS_STATE.SANCTIONED,
+      state: SANCTION_STATES.SANCTIONED,
       level: 2,
       startedAt: new Date(firstEntryTime).toISOString(),
       expiresAt: new Date(firstEntryTime + __testables.SANCTION_DURATION_MS).toISOString(),
@@ -851,13 +947,13 @@ describe('useGameState transitions', () => {
     const sanctionsLog = [
       buildSanctionsEntry({
         id: 's-3',
-        trigger: 'deadline_violation',
+        trigger: SANCTION_REASON_CODES.DEADLINE_VIOLATION,
         docketText: 'Procedural violation: missed deadline.',
         timestamp: new Date(firstEntryTime).toISOString(),
       }),
       buildSanctionsEntry({
         id: 's-4',
-        trigger: 'deadline_violation',
+        trigger: SANCTION_REASON_CODES.DEADLINE_VIOLATION,
         docketText: 'Repeated procedural violation on the docket.',
         timestamp: new Date(secondEntryTime).toISOString(),
       }),
@@ -869,7 +965,7 @@ describe('useGameState transitions', () => {
       secondEntryTime
     );
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.PUBLIC_DEFENDER);
+    expect(nextState.state).toBe(SANCTION_STATES.PUBLIC_DEFENDER);
   });
 
   it('transitions from clean to warned on first misconduct entry', () => {
@@ -885,7 +981,7 @@ describe('useGameState transitions', () => {
 
     const nextState = __testables.deriveSanctionsState(baseState, sanctionsLog, nowMs);
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.state).toBe(SANCTION_STATES.WARNED);
     expect(nextState.expiresAt).toBeTruthy();
   });
 
@@ -894,7 +990,7 @@ describe('useGameState transitions', () => {
     const firstEntryTime = nowMs - 10 * 60 * 1000;
     const warnedState = {
       ...__testables.buildDefaultSanctionsState(firstEntryTime),
-      state: __testables.SANCTIONS_STATE.WARNED,
+      state: SANCTION_STATES.WARNED,
       level: 1,
       startedAt: new Date(firstEntryTime).toISOString(),
       expiresAt: new Date(nowMs + 10 * 60 * 1000).toISOString(),
@@ -912,7 +1008,7 @@ describe('useGameState transitions', () => {
 
     const nextState = __testables.deriveSanctionsState(warnedState, sanctionsLog, nowMs);
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.SANCTIONED);
+    expect(nextState.state).toBe(SANCTION_STATES.SANCTIONED);
   });
 
   it('decays recidivism counts after the cooldown window passes', () => {
@@ -920,7 +1016,7 @@ describe('useGameState transitions', () => {
     const lastMisconductAt = nowMs - 3 * 60 * 60 * 1000;
     const warnedState = {
       ...__testables.buildDefaultSanctionsState(lastMisconductAt),
-      state: __testables.SANCTIONS_STATE.WARNED,
+      state: SANCTION_STATES.WARNED,
       level: 1,
       startedAt: new Date(lastMisconductAt).toISOString(),
       expiresAt: new Date(nowMs + 10 * 60 * 1000).toISOString(),
@@ -931,7 +1027,7 @@ describe('useGameState transitions', () => {
 
     const nextState = __testables.deriveSanctionsState(warnedState, [], nowMs);
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.state).toBe(SANCTION_STATES.WARNED);
     expect(nextState.recidivismCount).toBe(0);
   });
 
@@ -940,7 +1036,7 @@ describe('useGameState transitions', () => {
     const expiredAt = nowMs - 5 * 60 * 1000;
     const sanctionedState = {
       ...__testables.buildDefaultSanctionsState(expiredAt),
-      state: __testables.SANCTIONS_STATE.SANCTIONED,
+      state: SANCTION_STATES.SANCTIONED,
       level: 2,
       startedAt: new Date(expiredAt).toISOString(),
       expiresAt: new Date(expiredAt).toISOString(),
@@ -951,7 +1047,7 @@ describe('useGameState transitions', () => {
 
     const nextState = __testables.deriveSanctionsState(sanctionedState, [], nowMs);
 
-    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.CLEAN);
+    expect(nextState.state).toBe(SANCTION_STATES.CLEAN);
     expect(nextState.expiresAt).toBeNull();
     expect(nextState.recidivismCount).toBe(0);
   });

@@ -4,6 +4,16 @@
  */
 
 /**
+ * Canonical identifiers for game phases, case types, jurisdictions, and dispositions.
+ *
+ * @typedef {typeof import('./constants').GAME_PHASES[keyof typeof import('./constants').GAME_PHASES]} GamePhase
+ * @typedef {typeof import('./constants').CASE_TYPES[keyof typeof import('./constants').CASE_TYPES]} CaseType
+ * @typedef {typeof import('./constants').JURISDICTIONS[keyof typeof import('./constants').JURISDICTIONS]} Jurisdiction
+ * @typedef {typeof import('./constants').FINAL_DISPOSITIONS[keyof typeof import('./constants').FINAL_DISPOSITIONS]} FinalDisposition
+ * @typedef {typeof import('./constants').SANCTION_STATES[keyof typeof import('./constants').SANCTION_STATES]} SanctionsState
+ */
+
+/**
  * A juror in the generated jury pool.
  *
  * @typedef {'eligible' | 'struck_by_player' | 'struck_by_opponent' | 'seated'} JurorStatus
@@ -155,19 +165,19 @@
 /**
  * Sanction visibility for how acknowledgments should render in-world.
  *
- * @typedef {'public' | 'sealed' | 'internal'} SanctionVisibility
+ * @typedef {typeof import('./constants').SANCTION_VISIBILITY[keyof typeof import('./constants').SANCTION_VISIBILITY]} SanctionVisibility
  */
 
 /**
  * Sanction trigger categories used for docketed acknowledgments.
  *
- * @typedef {'contempt' | 'decorum_violation' | 'evidence_violation' | 'misrepresentation' | 'discovery_violation' | 'deadline_violation' | 'other'} SanctionTrigger
+ * @typedef {typeof import('./constants').SANCTION_REASON_CODES[keyof typeof import('./constants').SANCTION_REASON_CODES]} SanctionTrigger
  */
 
 /**
  * Sanction state lifecycle for explicit docket entries.
  *
- * @typedef {'noticed' | 'warned' | 'sanctioned'} SanctionState
+ * @typedef {typeof import('./constants').SANCTION_ENTRY_STATES[keyof typeof import('./constants').SANCTION_ENTRY_STATES]} SanctionState
  */
 
 /**
@@ -185,11 +195,18 @@
 /**
  * Full living docket history state.
  *
+ * @typedef {object} DispositionRecord
+ * @property {FinalDisposition} type - Canonical disposition identifier.
+ * @property {'motion' | 'verdict'} source - Lifecycle source of the disposition.
+ * @property {string} summary - Display-friendly summary of the disposition.
+ * @property {string} details - Display-friendly details for the disposition.
+ *
  * @typedef {object} HistoryState
  * @property {CaseData} [case] - Current case metadata.
  * @property {JuryState} [jury] - Jury selection state.
  * @property {MotionState} [motion] - Motion phase data.
  * @property {string} [counselNotes] - Optional counsel notes captured during play.
+ * @property {DispositionRecord | null} [disposition] - Canonical final disposition record.
  * @property {{
  *   text?: string,
  *   verdict?: VerdictResult,

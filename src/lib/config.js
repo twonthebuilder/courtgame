@@ -3,6 +3,8 @@
  * Keep these values in sync with UI selectors and environment expectations.
  */
 
+import { CASE_TYPES, JURISDICTIONS } from './constants';
+
 export const DEFAULT_DIFFICULTY = 'normal';
 
 const DIFFICULTY_ALIASES = {
@@ -41,11 +43,11 @@ export const DIFFICULTY_OPTIONS = [
  *
  * @type {{value: string, label: string}[]}
  */
-export const JURISDICTIONS = [
-  { value: 'USA', label: 'USA' },
-  { value: 'Canada', label: 'Canada' },
-  { value: 'Fictional', label: 'Fictional' },
-  { value: 'Municipal Night Court', label: 'Municipal Night Court' },
+export const JURISDICTION_OPTIONS = [
+  { value: JURISDICTIONS.USA, label: 'USA' },
+  { value: JURISDICTIONS.CANADA, label: 'Canada' },
+  { value: JURISDICTIONS.FICTIONAL, label: 'Fictional' },
+  { value: JURISDICTIONS.MUNICIPAL_NIGHT_COURT, label: 'Municipal Night Court' },
 ];
 
 /**
@@ -53,9 +55,9 @@ export const JURISDICTIONS = [
  *
  * @type {{value: string, label: string}[]}
  */
-export const CASE_TYPES = [
-  { value: 'standard', label: 'Standard' },
-  { value: 'public_defender', label: 'Public Defender' },
+export const CASE_TYPE_OPTIONS = [
+  { value: CASE_TYPES.STANDARD, label: 'Standard' },
+  { value: CASE_TYPES.PUBLIC_DEFENDER, label: 'Public Defender' },
 ];
 
 /**
@@ -65,7 +67,7 @@ export const CASE_TYPES = [
  */
 export const DEFAULT_GAME_CONFIG = {
   difficulty: DEFAULT_DIFFICULTY,
-  jurisdiction: 'USA',
+  jurisdiction: JURISDICTIONS.USA,
   role: 'defense',
-  caseType: 'standard',
+  caseType: CASE_TYPES.STANDARD,
 };

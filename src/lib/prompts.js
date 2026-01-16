@@ -1,4 +1,5 @@
 import { normalizeDifficulty } from './config';
+import { CASE_TYPES, SANCTION_STATES } from './constants';
 
 /**
  * Builds the system prompt for generating a new case docket.
@@ -24,25 +25,26 @@ const buildSanctionContextBlock = (sanctionContext = {}) => {
     recentlyReinstatedUntil,
     lockedJurisdiction,
   } = sanctionContext;
-  if (!state || state === 'clean') return '';
+  if (!state || state === SANCTION_STATES.CLEAN) return '';
 
-  const isPublicDefenderMode = state === 'public_defender' || caseType === 'public_defender';
+  const isPublicDefenderMode =
+    state === SANCTION_STATES.PUBLIC_DEFENDER || caseType === CASE_TYPES.PUBLIC_DEFENDER;
   const lines = [];
 
-  if (state === 'warned') {
+  if (state === SANCTION_STATES.WARNED) {
     lines.push('The court has issued a formal warning for counsel conduct.');
   }
-  if (state === 'sanctioned') {
+  if (state === SANCTION_STATES.SANCTIONED) {
     lines.push(`Counsel\'s license is suspended until ${expiresAt || 'further order'}.`);
   }
-  if (state === 'public_defender') {
+  if (state === SANCTION_STATES.PUBLIC_DEFENDER) {
     lines.push(
       `Counsel\'s license is restricted; assignment to the public defender docket lasts until ${
         expiresAt || 'further order'
       }.`
     );
   }
-  if (state === 'recently_reinstated') {
+  if (state === SANCTION_STATES.RECENTLY_REINSTATED) {
     lines.push(
       `Counsel is reinstated but remains on probation until ${
         recentlyReinstatedUntil || 'further order'
@@ -71,9 +73,10 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctio
   } else if (normalizedDifficulty === 'nuance') {
     tone = 'complex, serious, morally ambiguous crimes.';
   }
-  const caseType = sanctionContext.caseType ?? 'standard';
+  const caseType = sanctionContext.caseType ?? CASE_TYPES.STANDARD;
   const isPublicDefenderMode =
-    sanctionContext.state === 'public_defender' || caseType === 'public_defender';
+    sanctionContext.state === SANCTION_STATES.PUBLIC_DEFENDER ||
+    caseType === CASE_TYPES.PUBLIC_DEFENDER;
   const sanctionStatusBlock = buildSanctionContextBlock({
     ...sanctionContext,
     lockedJurisdiction: sanctionContext.lockedJurisdiction ?? jurisdiction,
@@ -240,7 +243,9 @@ export const getOpposingCounselPrompt = (
   const isMotionPhase = phase === 'motion_submission';
   const visibilityLine = buildVisibilityContextLine(visibilityContext);
   const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
-  const isSanctionedMode = ['sanctioned', 'public_defender'].includes(sanctionContext.state);
+  const isSanctionedMode = [SANCTION_STATES.SANCTIONED, SANCTION_STATES.PUBLIC_DEFENDER].includes(
+    sanctionContext.state
+  );
   const prosecutionGuidance =
     roleLabel === 'Prosecutor' && isSanctionedMode
       ? `
@@ -321,9 +326,12 @@ export const getMotionPrompt = (
   }));
   const visibilityLine = buildVisibilityContextLine(visibilityContext);
   const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
-  const judgeToneGuidance = ['sanctioned', 'public_defender'].includes(sanctionContext.state)
+  const judgeToneGuidance = [SANCTION_STATES.SANCTIONED, SANCTION_STATES.PUBLIC_DEFENDER].includes(
+    sanctionContext.state
+  )
     ? 'Judge Tone: clipped, exacting, and impatient with procedural errors.'
-    : sanctionContext.state === 'warned' || sanctionContext.state === 'recently_reinstated'
+    : sanctionContext.state === SANCTION_STATES.WARNED ||
+      sanctionContext.state === SANCTION_STATES.RECENTLY_REINSTATED
     ? 'Judge Tone: watchful and quick to correct any lapse in decorum or procedure.'
     : '';
 
@@ -387,9 +395,11 @@ export const getFinalVerdictPrompt = (
       ? 'Non-compliance is allowed as a silly tactic, but label it and limit what it can prove.'
       : 'Non-compliance reduces credibility; do not treat it as truth.';
   const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
-  const narrativeGuidance = ['sanctioned', 'public_defender'].includes(sanctionContext.state)
+  const narrativeGuidance = [SANCTION_STATES.SANCTIONED, SANCTION_STATES.PUBLIC_DEFENDER].includes(
+    sanctionContext.state
+  )
     ? 'Narrative Framing: Emphasize accountability, punishment, and the court reasserting order.'
-    : sanctionContext.state === 'recently_reinstated'
+    : sanctionContext.state === SANCTION_STATES.RECENTLY_REINSTATED
     ? 'Narrative Framing: Balance accountability with cautious redemption for reinstated counsel.'
     : '';
   return `
