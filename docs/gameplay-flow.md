@@ -30,6 +30,19 @@ If the weighted score exceeds 100, the verdict payload includes an overflow reas
 - Off-docket facts or references are treated as non-compliant and cannot be accepted as truth.
 - Submissions that cite suppressed evidence or missing docket IDs are recorded as non-compliant and may be rejected.
 
+## Sanction Acknowledgments (Explicit + Docketed)
+
+Sanction-related acknowledgments only exist when the judge explicitly records them in the docket. The game uses `history.sanctions` entries to render in-world acknowledgments (public, sealed, or internal).
+
+**Triggers (create a docketed acknowledgment):**
+- The judge explicitly states a warning, reprimand, or sanction and records it in the docket text.
+- The judge references a specific misconduct category (e.g., evidence misuse, contempt) as part of that docket entry.
+
+**Non-triggers (do not create a sanction entry):**
+- Player misplays, low scores, or adverse verdicts without explicit judicial acknowledgment.
+- Model-inferred misconduct that is not recorded in the docket.
+- UI warnings or validation rejections that are not accompanied by a judge's docketed statement.
+
 ## Phase-by-Phase Implementation Map
 
 | Phase | UI Entry Point | State/Logic | LLM Prompt |
