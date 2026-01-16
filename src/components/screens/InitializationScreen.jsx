@@ -6,7 +6,7 @@ const TIPS = [
   "In 'Silly' mode, humor is a valid legal strategy.",
   'If you strike the same juror as the opposition, they are gone for sure.',
   "A 'Bench Trial' means no jury—you only have to please the Judge.",
-  "Pre-Trial motions carry 40% of the weight. Don't slack off.",
+  "Pre-Trial motions carry 20% of the weight. Don't slack off.",
   'Nuance mode judges are strict textualists. Be precise.',
   'Evidence suppression is a great way to cripple the prosecution.',
 ];

@@ -956,9 +956,15 @@ const useGameState = () => {
     }
 
     if (history.trial && history.trial.locked) {
-      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${history.trial.verdict.final_ruling} (Score: ${Math.round(
-        history.trial.verdict.final_weighted_score
-      )})\nOPINION: "${history.trial.verdict.judge_opinion}"`;
+      const roundedScore = Math.round(history.trial.verdict.final_weighted_score);
+      const baseScore = Math.min(100, Math.max(0, roundedScore));
+      const overflowNote =
+        history.trial.verdict.final_weighted_score > 100
+          ? `\nOVERFLOW: ${history.trial.verdict.overflow_reason_code} - ${history.trial.verdict.overflow_explanation}`
+          : '';
+      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${
+        history.trial.verdict.final_ruling
+      } (Base Score: ${baseScore})${overflowNote}\nOPINION: "${history.trial.verdict.judge_opinion}"`;
     }
 
     copyToClipboard(log);
