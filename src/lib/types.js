@@ -153,6 +153,36 @@
  */
 
 /**
+ * Sanction visibility for how acknowledgments should render in-world.
+ *
+ * @typedef {'public' | 'sealed' | 'internal'} SanctionVisibility
+ */
+
+/**
+ * Sanction trigger categories used for docketed acknowledgments.
+ *
+ * @typedef {'contempt' | 'decorum_violation' | 'evidence_violation' | 'misrepresentation' | 'discovery_violation' | 'deadline_violation' | 'other'} SanctionTrigger
+ */
+
+/**
+ * Sanction state lifecycle for explicit docket entries.
+ *
+ * @typedef {'noticed' | 'warned' | 'sanctioned'} SanctionState
+ */
+
+/**
+ * Sanction or conduct acknowledgment recorded in the living docket.
+ *
+ * @typedef {object} SanctionRecord
+ * @property {string} id - Unique identifier for the docket entry.
+ * @property {SanctionState} state - Current sanction state recorded by the court.
+ * @property {SanctionTrigger} trigger - Category of conduct that prompted the entry.
+ * @property {string} docket_text - Explicit judge acknowledgment recorded on the docket.
+ * @property {SanctionVisibility} visibility - How the acknowledgment is surfaced in-world.
+ * @property {string} timestamp - ISO timestamp for the entry.
+ */
+
+/**
  * Full living docket history state.
  *
  * @typedef {object} HistoryState
@@ -166,6 +196,7 @@
  *   rejectedVerdicts?: VerdictRejection[],
  *   locked?: boolean
  * }} [trial] - Trial phase data.
+ * @property {SanctionRecord[]} [sanctions] - Explicit docketed sanction acknowledgments.
  * @property {SubmissionValidation[]} [validationHistory] - Docket validation history.
  */
 

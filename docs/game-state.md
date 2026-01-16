@@ -25,6 +25,7 @@ The game state hook centralizes the following fields:
     `seated`) with optional `status_history` to record transitions.
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
+- `history.sanctions`: list of explicit, docketed judicial acknowledgments with a visibility flag for in-world rendering.
 - **Invariant:** Only juror IDs recorded in the docket may be referenced.
 - **Invariant:** Evidence admissibility is controlled in the docket; evidence is marked
   `suppressed` rather than removed.
@@ -78,6 +79,12 @@ The game state hook centralizes the following fields:
 - **Copy full docket**
   - Trigger: `handleCopyFull()`.
   - Side effects: writes the full docket summary to the clipboard, toggles `copied` for 2 seconds.
+
+## Sanction Acknowledgment Rules
+
+- Sanctions and conduct acknowledgments only exist when the judge explicitly records them in `history.sanctions`.
+- UI warnings, validation rejections, or inferred misconduct do not create docket entries unless the judge acknowledges them on the record.
+- The `visibility` field controls whether the acknowledgment is shown in-world, sealed, or kept internal.
 
 ## Loading & Error Handling
 
