@@ -33,6 +33,13 @@
 /**
  * Case metadata returned by the generator model.
  *
+ * @typedef {'admissible' | 'suppressed'} EvidenceStatus
+ *
+ * @typedef {object} EvidenceItem
+ * @property {number} id - Evidence identifier within the docket.
+ * @property {string} text - Evidence description.
+ * @property {EvidenceStatus} status - Current admissibility status.
+ *
  * @typedef {object} CaseData
  * @property {string} title - Case title for the docket.
  * @property {string} defendant - Defendant name.
@@ -42,7 +49,7 @@
  * @property {Juror[]} jurors - Jury pool for jury trials.
  * @property {string[]} facts - Facts list for the case.
  * @property {{name: string, role: string, statement: string}[]} witnesses - Witness roster.
- * @property {string[]} evidence - Evidence list.
+ * @property {EvidenceItem[]} evidence - Evidence list.
  * @property {OpposingCounsel} opposing_counsel - Opposing counsel profile.
  */
 
@@ -63,10 +70,15 @@
 /**
  * Judge ruling payload for a pre-trial motion.
  *
+ * @typedef {object} EvidenceStatusUpdate
+ * @property {number} id - Evidence identifier referenced by the ruling.
+ * @property {EvidenceStatus} status - Updated admissibility status.
+ *
  * @typedef {object} MotionResult
  * @property {string} ruling - GRANTED, DENIED, or PARTIALLY GRANTED.
  * @property {string} outcome_text - Judge's explanation.
  * @property {number} score - Motion score used in final weighting.
+ * @property {EvidenceStatusUpdate[]} evidence_status_updates - Evidence admissibility updates.
  */
 
 /**

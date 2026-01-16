@@ -196,21 +196,34 @@ export const getMotionPrompt = (
   motionBy,
   rebuttalBy,
   playerRole
-) => `
+) => {
+  const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
+    id: typeof item?.id === 'number' ? item.id : index + 1,
+    text: typeof item?.text === 'string' ? item.text : item,
+    status: item?.status === 'suppressed' ? 'suppressed' : 'admissible',
+  }));
+
+  return `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
     Player Role: ${playerRole}.
     Motion (${motionBy}): "${motionText}"
     Rebuttal (${rebuttalBy}): "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
     Difficulty: ${difficulty}.
+    Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     
+    Include evidence_status_updates entries for every evidence item (even if admissible).
     Return JSON:
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
       "outcome_text": "Explanation.",
-      "score": number (0-100)
+      "score": number (0-100),
+      "evidence_status_updates": [
+        { "id": number, "status": "admissible" or "suppressed" }
+      ]
     }
-`;
+  `;
+};
 
 /**
  * Builds the system prompt for the final verdict phase.

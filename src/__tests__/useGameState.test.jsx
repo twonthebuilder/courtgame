@@ -19,6 +19,7 @@ vi.mock('../lib/llmClient', async () => {
 const benchCasePayload = {
   title: 'Bench Trial',
   facts: ['Fact one'],
+  evidence: ['Camera footage', 'Hidden memo'],
   is_jury_trial: false,
   judge: { name: 'Hon. River' },
   opposing_counsel: {
@@ -31,6 +32,7 @@ const benchCasePayload = {
 const juryCasePayload = {
   title: 'Jury Trial',
   facts: ['Fact two'],
+  evidence: ['Signed waiver'],
   is_jury_trial: true,
   judge: { name: 'Hon. Lake' },
   jurors: [
@@ -80,7 +82,15 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 50 })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
         final_weighted_score: 77,
@@ -113,6 +123,8 @@ describe('useGameState transitions', () => {
 
     const verdictCall = requestLlmJson.mock.calls[3][0];
     expect(verdictCall.systemPrompt).toContain('Jury: []');
+    expect(verdictCall.systemPrompt).toContain('Camera footage');
+    expect(verdictCall.systemPrompt).not.toContain('Hidden memo');
     expect(result.current.history.trial.verdict.final_ruling).toBe('Acquitted');
   });
 
@@ -165,7 +177,12 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'AI rebuttal.' })
-      .mockResolvedValueOnce({ ruling: 'DENIED', outcome_text: 'Denied', score: 45 });
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 45,
+        evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      });
 
     const { result } = renderHook(() => useGameState());
 
@@ -256,7 +273,12 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
       .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({ ruling: 'GRANTED', outcome_text: 'Granted', score: 50 })
+      .mockResolvedValueOnce({
+        ruling: 'GRANTED',
+        outcome_text: 'Granted',
+        score: 50,
+        evidence_status_updates: [{ id: 1, status: 'suppressed' }],
+      })
       .mockResolvedValueOnce({
         final_ruling: 'Acquitted',
         final_weighted_score: 77,

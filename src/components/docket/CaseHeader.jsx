@@ -64,9 +64,20 @@ const CaseHeader = ({ data, counselNotes }) => {
         <div>
           <h3 className="text-xs font-bold text-slate-400 uppercase mb-1">Evidence</h3>
           <ul className="list-disc list-inside space-y-1">
-            {evidenceItems.map((item, i) => (
-              <li key={i}>{item}</li>
-            ))}
+            {evidenceItems.map((item, i) => {
+              const text = typeof item === 'string' ? item : item.text;
+              const status = typeof item === 'string' ? null : item.status;
+              return (
+                <li key={i}>
+                  {text}
+                  {status === 'suppressed' ? (
+                    <span className="ml-2 text-xs font-semibold uppercase text-red-600">
+                      Suppressed
+                    </span>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </div>
         <div className="bg-white p-3 rounded border border-slate-200 text-sm text-slate-600 space-y-1">
