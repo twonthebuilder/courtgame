@@ -231,6 +231,7 @@ export const getMotionPrompt = (
     Difficulty: ${normalizedDifficulty}.
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     Submission Compliance: ${JSON.stringify(complianceContext)}
+    Scoring rule: The score reflects the legal quality of the motion, not the procedural outcome.
     
     Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
@@ -285,11 +286,14 @@ export const getFinalVerdictPrompt = (
     
     1. JUDGE SCORE (0-100) based on Difficulty ${normalizedDifficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
-    3. LEGENDARY CHECK (100+ score).
-    4. Docket rule: If it is not recorded in the docket, it is not true.
-    5. Only docket facts/evidence/witnesses/jurors/rulings count as true.
-    6. Do not introduce facts or entities not present in the docket inputs.
-    7. ${complianceGuidance}
+    3. WEIGHTS: Pre-Trial 20%, Judge 45%, Jury 35% (jury score is 0 for bench trials).
+    4. MERIT SCORING: Procedural outcomes (dismissed/suppressed/delayed/JNOV) must NOT change merit scores.
+    5. LEGENDARY CHECK (100+ score).
+    6. Docket rule: If it is not recorded in the docket, it is not true.
+    7. Only docket facts/evidence/witnesses/jurors/rulings count as true.
+    8. Do not introduce facts or entities not present in the docket inputs.
+    9. ${complianceGuidance}
+    10. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
     
     Return JSON:
     {
@@ -301,6 +305,8 @@ export const getFinalVerdictPrompt = (
       "final_ruling": "Outcome",
       "is_jnov": boolean,
       "final_weighted_score": number,
+      "overflow_reason_code": "CODE or null",
+      "overflow_explanation": "Short explanation or null",
       "achievement_title": "Title or null"
     }
   `;

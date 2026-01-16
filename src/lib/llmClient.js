@@ -438,6 +438,8 @@ export const parseVerdictResponse = (payload, context = {}) => {
   assertString(payload.final_ruling, 'final_ruling', 'verdict');
   assertNumber(payload.final_weighted_score, 'final_weighted_score', 'verdict');
   assertString(payload.judge_opinion, 'judge_opinion', 'verdict');
+  assertOptionalString(payload.overflow_reason_code, 'overflow_reason_code', 'verdict');
+  assertOptionalString(payload.overflow_explanation, 'overflow_explanation', 'verdict');
 
   const isJuryTrial = context.isJuryTrial === true;
   if (isJuryTrial) {
@@ -474,6 +476,16 @@ export const parseVerdictResponse = (payload, context = {}) => {
         code: 'INVALID_RESPONSE',
         userMessage: 'The AI returned an invalid verdict. Please retry.',
         context: { invalidJuror, seatedJurorIds: context.seatedJurorIds },
+      });
+    }
+  }
+
+  if (payload.final_weighted_score > 100) {
+    if (!payload.overflow_reason_code || !payload.overflow_explanation) {
+      throw createLlmError('Overflow scoring requires a reason code and explanation.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete verdict. Please retry.',
+        context: { payload },
       });
     }
   }

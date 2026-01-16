@@ -112,6 +112,8 @@
  * @property {string} final_ruling - Final ruling text.
  * @property {boolean} is_jnov - Whether a JNOV occurred.
  * @property {number} final_weighted_score - Weighted score across phases.
+ * @property {string | null} overflow_reason_code - Reason code when score exceeds 100.
+ * @property {string | null} overflow_explanation - Short explanation when score exceeds 100.
  * @property {string | null} achievement_title - Optional achievement title.
  */
 

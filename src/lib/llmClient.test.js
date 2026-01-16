@@ -105,6 +105,26 @@ describe('llmClient response parsers', () => {
     };
     expect(parseVerdictResponse(payload, { isJuryTrial: true })).toEqual(payload);
   });
+
+  it('accepts a verdict response with overflow details when score exceeds 100', () => {
+    const payload = {
+      final_ruling: 'Not guilty',
+      final_weighted_score: 112,
+      judge_opinion: 'Exceptional advocacy.',
+      overflow_reason_code: 'LEGENDARY_ARGUMENT',
+      overflow_explanation: 'Argument outperformed the difficulty curve.',
+    };
+    expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
+  });
+
+  it('rejects overflow scores missing a reason code or explanation', () => {
+    const payload = {
+      final_ruling: 'Not guilty',
+      final_weighted_score: 105,
+      judge_opinion: 'Exceptional advocacy.',
+    };
+    expect(() => parseVerdictResponse(payload, { isJuryTrial: false })).toThrow(LlmClientError);
+  });
 });
 
 describe('llmClient error messaging', () => {
