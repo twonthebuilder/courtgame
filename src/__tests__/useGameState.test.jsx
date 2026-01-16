@@ -63,7 +63,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     act(() => {
-      result.current.generateCase('defense', 'regular', 'USA');
+      result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.gameState).toBe('initializing');
@@ -76,6 +76,18 @@ describe('useGameState transitions', () => {
     expect(result.current.gameState).toBe('playing');
     expect(result.current.history.case.title).toBe('Bench Trial');
     expect(result.current.history.counselNotes).toBe('');
+  });
+
+  it('normalizes legacy difficulty values before storing config', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    expect(result.current.config.difficulty).toBe('normal');
   });
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
@@ -100,7 +112,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.history.jury.skipped).toBe(true);
@@ -134,7 +146,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     expect(result.current.gameState).toBe('start');
@@ -149,7 +161,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'regular', 'USA');
+      await result.current.generateCase('prosecution', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -187,7 +199,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -225,7 +237,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -254,7 +266,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -288,7 +300,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -335,7 +347,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     await act(async () => {
@@ -367,7 +379,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA');
     });
 
     act(() => {

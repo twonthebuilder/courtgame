@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
-import { DEFAULT_GAME_CONFIG } from '../lib/config';
+import { DEFAULT_GAME_CONFIG, normalizeDifficulty } from '../lib/config';
 import {
   getLlmClientErrorMessage,
   parseCaseResponse,
@@ -426,12 +426,13 @@ const useGameState = () => {
   const generateCase = async (role, difficulty, jurisdiction) => {
     setGameState('initializing');
     setError(null);
-    setConfig({ role, difficulty, jurisdiction });
+    const normalizedDifficulty = normalizeDifficulty(difficulty);
+    setConfig({ role, difficulty: normalizedDifficulty, jurisdiction });
 
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Generate',
-        systemPrompt: getGeneratorPrompt(difficulty, jurisdiction, role),
+        systemPrompt: getGeneratorPrompt(normalizedDifficulty, jurisdiction, role),
         responseLabel: 'case',
       });
       /** @type {CaseData} */

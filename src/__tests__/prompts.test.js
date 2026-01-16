@@ -38,7 +38,7 @@ describe('prompt builders', () => {
         facts: [],
         judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
       },
-      'regular'
+      'normal'
     );
 
     expect(draftPrompt).toContain('Phase: PRE-TRIAL MOTION.');
@@ -47,7 +47,7 @@ describe('prompt builders', () => {
     const rebuttalPrompt = getMotionRebuttalPrompt(
       { title: 'State v. Example', charge: 'Theft', judge: { name: 'Hon. Reed', philosophy: 'Textualist' } },
       'Suppress evidence',
-      'regular'
+      'normal'
     );
 
     expect(rebuttalPrompt).toContain('Phase: PRE-TRIAL MOTION REBUTTAL.');
@@ -60,7 +60,7 @@ describe('prompt builders', () => {
       },
       'Suppress evidence',
       'Opposing response',
-      'regular',
+      'normal',
       'defense',
       'prosecution',
       'defense'
@@ -77,7 +77,7 @@ describe('prompt builders', () => {
       { ruling: 'DENIED', score: 42 },
       [],
       'Closing argument',
-      'regular'
+      'normal'
     );
 
     expect(verdictPrompt).toContain('Type: BENCH');
@@ -93,13 +93,13 @@ describe('prompt builders', () => {
       judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
     };
 
-    const motionPrompt = getOpposingCounselPrompt(baseCase, 'regular', 'motion_submission', 'defense');
+    const motionPrompt = getOpposingCounselPrompt(baseCase, 'normal', 'motion_submission', 'defense');
     expect(motionPrompt).toContain('Role: Defense Attorney.');
     expect(motionPrompt).toContain('Draft a concise motion');
 
     const rebuttalPrompt = getOpposingCounselPrompt(
       baseCase,
-      'regular',
+      'normal',
       'rebuttal_submission',
       'prosecution',
       'Suppress evidence'
@@ -107,5 +107,19 @@ describe('prompt builders', () => {
     expect(rebuttalPrompt).toContain('Role: Prosecutor.');
     expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
     expect(rebuttalPrompt).toContain('Draft a concise rebuttal');
+  });
+
+  it('normalizes legacy difficulty identifiers before rendering prompts', () => {
+    const prompt = getMotionDraftPrompt(
+      {
+        title: 'State v. Legacy',
+        charge: 'Theft',
+        facts: [],
+        judge: { name: 'Hon. Reed', philosophy: 'Textualist' },
+      },
+      'regular'
+    );
+
+    expect(prompt).toContain('Difficulty: normal.');
   });
 });

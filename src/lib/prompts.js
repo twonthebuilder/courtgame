@@ -1,3 +1,5 @@
+import { normalizeDifficulty } from './config';
+
 /**
  * Builds the system prompt for generating a new case docket.
  *
@@ -6,11 +8,16 @@
  * @param {string} playerRole - Player role (defense/prosecution).
  * @returns {string} Prompt text for the generator model.
  */
+
 export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   let tone = '';
-  if (difficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
-  else if (difficulty === 'regular') tone = 'mundane, everyday disputes. Traffic, small contracts.';
-  else if (difficulty === 'nuance') tone = 'complex, serious, morally ambiguous crimes.';
+  if (normalizedDifficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
+  else if (normalizedDifficulty === 'normal') {
+    tone = 'mundane, everyday disputes. Traffic, small contracts.';
+  } else if (normalizedDifficulty === 'nuance') {
+    tone = 'complex, serious, morally ambiguous crimes.';
+  }
 
   return `
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
@@ -89,7 +96,7 @@ export const getMotionDraftPrompt = (caseData, difficulty) => `
     Charge: ${caseData.charge}.
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizeDifficulty(difficulty)}.
     Docket rule: If it is not recorded in the docket, it is not true.
     Do not introduce facts, evidence, or entities not present in the docket inputs.
     
@@ -116,7 +123,7 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
     Charge: ${caseData.charge}.
     Motion: "${motionText}"
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizeDifficulty(difficulty)}.
     Docket rule: If it is not recorded in the docket, it is not true.
     Do not introduce facts, evidence, or entities not present in the docket inputs.
     
@@ -145,6 +152,7 @@ export const getOpposingCounselPrompt = (
   opponentRole,
   motionText = ''
 ) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   const roleLabel = opponentRole === 'defense' ? 'Defense Attorney' : 'Prosecutor';
   const isMotionPhase = phase === 'motion_submission';
   const baseContext = `
@@ -154,7 +162,7 @@ export const getOpposingCounselPrompt = (
     Charge: ${caseData.charge}.
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizedDifficulty}.
     Docket rule: If it is not recorded in the docket, it is not true.
     Do not introduce facts, evidence, or entities not present in the docket inputs.
   `;
@@ -207,6 +215,7 @@ export const getMotionPrompt = (
   playerRole,
   complianceContext = {}
 ) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
     id: typeof item?.id === 'number' ? item.id : index + 1,
     text: typeof item?.text === 'string' ? item.text : item,
@@ -219,7 +228,7 @@ export const getMotionPrompt = (
     Motion (${motionBy}): "${motionText}"
     Rebuttal (${rebuttalBy}): "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
-    Difficulty: ${difficulty}.
+    Difficulty: ${normalizedDifficulty}.
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     Submission Compliance: ${JSON.stringify(complianceContext)}
     
@@ -258,11 +267,12 @@ export const getFinalVerdictPrompt = (
   difficulty,
   complianceContext = {}
 ) => {
+  const normalizedDifficulty = normalizeDifficulty(difficulty);
   const isBench = !caseData.is_jury_trial;
   const complianceGuidance =
-    difficulty === 'nuance'
+    normalizedDifficulty === 'nuance'
       ? 'Non-compliance is a severe credibility hit; treat it as throwing or babbling.'
-      : difficulty === 'silly'
+      : normalizedDifficulty === 'silly'
       ? 'Non-compliance is allowed as a silly tactic, but label it and limit what it can prove.'
       : 'Non-compliance reduces credibility; do not treat it as truth.';
   return `
@@ -273,7 +283,7 @@ export const getFinalVerdictPrompt = (
     Argument (compliant-only): "${argument}"
     Submission Compliance: ${JSON.stringify(complianceContext)}
     
-    1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
+    1. JUDGE SCORE (0-100) based on Difficulty ${normalizedDifficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
     3. LEGENDARY CHECK (100+ score).
     4. Docket rule: If it is not recorded in the docket, it is not true.
