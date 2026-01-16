@@ -22,6 +22,12 @@ Pocket Court uses weighted scoring across phases:
 
 The LLM returns a `final_weighted_score` that applies these weights, and the verdict UI uses it to determine achievements.
 
+## Docket Compliance Rules
+
+- Scoring, verdicts, and judge rationale are only valid when they align with the living docket.
+- Off-docket facts or references are treated as non-compliant and cannot be accepted as truth.
+- Submissions that cite suppressed evidence or missing docket IDs are recorded as non-compliant and may be rejected.
+
 ## Phase-by-Phase Implementation Map
 
 | Phase | UI Entry Point | State/Logic | LLM Prompt |

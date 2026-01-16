@@ -313,6 +313,54 @@ describe('useGameState transitions', () => {
     expect(result.current.history.counselNotes).toContain('verdict');
   });
 
+  it('rejects verdicts that cite suppressed evidence', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Guilty based on Evidence 2',
+        final_weighted_score: 60,
+        judge_opinion: 'Evidence 2 controls this outcome.',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'regular', 'USA');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing argument');
+    });
+
+    expect(result.current.history.trial.verdict).toBeUndefined();
+    expect(result.current.history.trial.rejectedVerdicts).toHaveLength(1);
+    expect(result.current.error).toBe(
+      'Verdict rejected for off-docket or inadmissible references.'
+    );
+  });
+
   it('includes counsel notes in the copied docket when present', async () => {
     requestLlmJson.mockResolvedValueOnce(benchCasePayload);
 

@@ -85,13 +85,25 @@ describe('llmClient response parsers', () => {
     expect(parseMotionTextResponse(payload)).toEqual(payload);
   });
 
-  it('accepts a valid verdict response', () => {
+  it('accepts a valid verdict response for bench trials', () => {
     const payload = {
       final_ruling: 'Not guilty',
       final_weighted_score: 82.5,
       judge_opinion: 'Compelling defense argument.',
     };
-    expect(parseVerdictResponse(payload)).toEqual(payload);
+    expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
+  });
+
+  it('accepts a valid verdict response for jury trials', () => {
+    const payload = {
+      final_ruling: 'Guilty',
+      final_weighted_score: 91,
+      judge_opinion: 'The evidence was strong.',
+      jury_verdict: 'Guilty',
+      jury_reasoning: 'The testimony aligned with the evidence.',
+      jury_score: 88,
+    };
+    expect(parseVerdictResponse(payload, { isJuryTrial: true })).toEqual(payload);
   });
 });
 
