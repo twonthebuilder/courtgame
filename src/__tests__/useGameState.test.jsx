@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import useGameState from '../hooks/useGameState';
+import useGameState, { __testables } from '../hooks/useGameState';
 import { copyToClipboard } from '../lib/clipboard';
 import { requestLlmJson } from '../lib/llmClient';
 
@@ -51,6 +51,7 @@ const juryCasePayload = {
 describe('useGameState transitions', () => {
   beforeEach(() => {
     requestLlmJson.mockReset();
+    window.localStorage.clear();
   });
 
   it('moves from start to initializing to playing when a case is generated', async () => {
@@ -394,5 +395,86 @@ describe('useGameState transitions', () => {
     expect(copyToClipboard.mock.calls[0][0]).toContain(
       'COUNSEL NOTES:\nRemember to cite precedent.'
     );
+  });
+
+  it('escalates sanctions to warned when a docketed warning is logged', () => {
+    const nowMs = Date.now();
+    const baseState = __testables.buildDefaultSanctionsState(nowMs);
+    const sanctionsLog = [
+      {
+        id: 's-1',
+        state: 'warned',
+        trigger: 'decorum_violation',
+        docket_text: 'The court issues a warning for decorum.',
+        visibility: 'public',
+        timestamp: new Date(nowMs).toISOString(),
+      },
+    ];
+
+    const nextState = __testables.deriveSanctionsState(baseState, sanctionsLog, nowMs);
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.lastMisconductAt).toBeDefined();
+  });
+
+  it('ignores non-trigger docket text when evaluating conduct', () => {
+    const entry = {
+      id: 's-2',
+      state: 'warned',
+      trigger: 'other',
+      docket_text: 'Losing on the merits is not misconduct.',
+      visibility: 'public',
+      timestamp: new Date().toISOString(),
+    };
+
+    const evaluation = __testables.evaluateConductTrigger(
+      entry,
+      [entry],
+      __testables.RECIDIVISM_WINDOW_MS
+    );
+
+    expect(evaluation.triggered).toBe(false);
+  });
+
+  it('escalates to public defender mode after repeated procedural violations', () => {
+    const nowMs = Date.now();
+    const firstEntryTime = nowMs - 5 * 60 * 1000;
+    const secondEntryTime = nowMs;
+    const sanctionedState = {
+      ...__testables.buildDefaultSanctionsState(firstEntryTime),
+      state: __testables.SANCTIONS_STATE.SANCTIONED,
+      level: 2,
+      startedAt: new Date(firstEntryTime).toISOString(),
+      expiresAt: new Date(firstEntryTime + __testables.SANCTION_DURATION_MS).toISOString(),
+      lastMisconductAt: new Date(firstEntryTime).toISOString(),
+      recidivismCount: 1,
+      recentlyReinstatedUntil: null,
+    };
+    const sanctionsLog = [
+      {
+        id: 's-3',
+        state: 'warned',
+        trigger: 'deadline_violation',
+        docket_text: 'Procedural violation: missed deadline.',
+        visibility: 'public',
+        timestamp: new Date(firstEntryTime).toISOString(),
+      },
+      {
+        id: 's-4',
+        state: 'warned',
+        trigger: 'deadline_violation',
+        docket_text: 'Repeated procedural violation on the docket.',
+        visibility: 'public',
+        timestamp: new Date(secondEntryTime).toISOString(),
+      },
+    ];
+
+    const nextState = __testables.deriveSanctionsState(
+      sanctionedState,
+      sanctionsLog,
+      secondEntryTime
+    );
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.PUBLIC_DEFENDER);
   });
 });
