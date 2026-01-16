@@ -6,13 +6,63 @@ import { normalizeDifficulty } from './config';
  * @param {string} difficulty - Difficulty mode identifier.
  * @param {string} jurisdiction - Jurisdiction name.
  * @param {string} playerRole - Player role (defense/prosecution).
- * @param {object} [sanctionsContext] - Optional sanctions metadata.
- * @param {string} [sanctionsContext.state] - Sanctions state identifier.
- * @param {string} [sanctionsContext.caseType] - Case type identifier.
+ * @param {object} [sanctionContext] - Optional sanctions metadata.
+ * @param {string} [sanctionContext.state] - Sanctions state identifier.
+ * @param {string} [sanctionContext.caseType] - Case type identifier.
+ * @param {string} [sanctionContext.expiresAt] - ISO timestamp for sanction expiration.
+ * @param {string} [sanctionContext.recentlyReinstatedUntil] - ISO timestamp for reinstatement grace.
+ * @param {string} [sanctionContext.lockedJurisdiction] - Locked jurisdiction name.
  * @returns {string} Prompt text for the generator model.
  */
 
-export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctionsContext = {}) => {
+const buildSanctionContextBlock = (sanctionContext = {}) => {
+  if (!sanctionContext || Object.keys(sanctionContext).length === 0) return '';
+  const {
+    state,
+    caseType,
+    expiresAt,
+    recentlyReinstatedUntil,
+    lockedJurisdiction,
+  } = sanctionContext;
+  if (!state || state === 'clean') return '';
+
+  const isPublicDefenderMode = state === 'public_defender' || caseType === 'public_defender';
+  const lines = [];
+
+  if (state === 'warned') {
+    lines.push('The court has issued a formal warning for counsel conduct.');
+  }
+  if (state === 'sanctioned') {
+    lines.push(`Counsel\'s license is suspended until ${expiresAt || 'further order'}.`);
+  }
+  if (state === 'public_defender') {
+    lines.push(
+      `Counsel\'s license is restricted; assignment to the public defender docket lasts until ${
+        expiresAt || 'further order'
+      }.`
+    );
+  }
+  if (state === 'recently_reinstated') {
+    lines.push(
+      `Counsel is reinstated but remains on probation until ${
+        recentlyReinstatedUntil || 'further order'
+      }.`
+    );
+  }
+  if (isPublicDefenderMode) {
+    lines.push('Public Defender Mode is in effect for this docket.');
+  }
+  if (lockedJurisdiction) {
+    lines.push(`Jurisdiction is locked to ${lockedJurisdiction}.`);
+  }
+
+  return `
+    Court Status:
+    - ${lines.join('\n    - ')}
+  `;
+};
+
+export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctionContext = {}) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   let tone = '';
   if (normalizedDifficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
@@ -21,14 +71,19 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctio
   } else if (normalizedDifficulty === 'nuance') {
     tone = 'complex, serious, morally ambiguous crimes.';
   }
-  const caseType = sanctionsContext.caseType ?? 'standard';
+  const caseType = sanctionContext.caseType ?? 'standard';
   const isPublicDefenderMode =
-    sanctionsContext.state === 'public_defender' || caseType === 'public_defender';
+    sanctionContext.state === 'public_defender' || caseType === 'public_defender';
+  const sanctionStatusBlock = buildSanctionContextBlock({
+    ...sanctionContext,
+    lockedJurisdiction: sanctionContext.lockedJurisdiction ?? jurisdiction,
+  });
   const sanctionsGuidance = isPublicDefenderMode
     ? `
     PUBLIC DEFENDER MODE CONSTRAINTS:
     - Generate gritty, petty, difficult cases suited for a municipal night court docket.
     - The client should be hostile, uncooperative, or distrustful of counsel.
+    - Client reliability is compromised: evasive answers, missed meetings, or shifting recollections.
     - Evidence should be stacked against the defense (more inculpatory than exculpatory).
     - Courtroom prestige is low; procedural hurdles are higher and paperwork is unforgiving.
     - Achievements and "wins" should be rarer and harder-earned.
@@ -39,6 +94,7 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctio
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
     Jurisdiction: ${jurisdiction}.
     Case Type: ${caseType}.
+    ${sanctionStatusBlock}
     Narrative tone should be ${tone}
     ${sanctionsGuidance}
     
@@ -162,6 +218,7 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
  * @param {'motion_submission' | 'rebuttal_submission'} phase - Motion exchange phase.
  * @param {'defense' | 'prosecution'} opponentRole - Opposing counsel role.
  * @param {string} [motionText] - Motion text to rebut when in rebuttal phase.
+ * @param {object} [sanctionContext] - Optional sanctions metadata.
  * @returns {string} Prompt text for the opposing counsel model.
  */
 const buildVisibilityContextLine = (visibilityContext = {}) => {
@@ -175,12 +232,21 @@ export const getOpposingCounselPrompt = (
   phase,
   opponentRole,
   motionText = '',
-  visibilityContext = {}
+  visibilityContext = {},
+  sanctionContext = {}
 ) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   const roleLabel = opponentRole === 'defense' ? 'Defense Attorney' : 'Prosecutor';
   const isMotionPhase = phase === 'motion_submission';
   const visibilityLine = buildVisibilityContextLine(visibilityContext);
+  const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
+  const isSanctionedMode = ['sanctioned', 'public_defender'].includes(sanctionContext.state);
+  const prosecutionGuidance =
+    roleLabel === 'Prosecutor' && isSanctionedMode
+      ? `
+    Prosecution Expectation: The defense is on a short leash; press procedural rigor and deterrence.
+    `
+      : '';
   const baseContext = `
     Phase: PRE-TRIAL MOTION.
     Role: ${roleLabel}.
@@ -189,9 +255,11 @@ export const getOpposingCounselPrompt = (
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
     Difficulty: ${normalizedDifficulty}.
+    ${sanctionStatusBlock}
     ${visibilityLine}
     Docket rule: If it is not recorded in the docket, it is not true.
     Do not introduce facts, evidence, or entities not present in the docket inputs.
+    ${prosecutionGuidance}
   `;
 
   if (isMotionPhase) {
@@ -230,6 +298,7 @@ export const getOpposingCounselPrompt = (
  * @param {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
  * @param {'defense' | 'prosecution'} playerRole - Player role for context.
  * @param {object} [complianceContext] - Submission compliance metadata.
+ * @param {object} [sanctionContext] - Optional sanctions metadata.
  * @returns {string} Prompt text for the motion ruling model.
  */
 export const getMotionPrompt = (
@@ -241,7 +310,8 @@ export const getMotionPrompt = (
   rebuttalBy,
   playerRole,
   complianceContext = {},
-  visibilityContext = {}
+  visibilityContext = {},
+  sanctionContext = {}
 ) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
@@ -250,6 +320,12 @@ export const getMotionPrompt = (
     status: item?.status === 'suppressed' ? 'suppressed' : 'admissible',
   }));
   const visibilityLine = buildVisibilityContextLine(visibilityContext);
+  const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
+  const judgeToneGuidance = ['sanctioned', 'public_defender'].includes(sanctionContext.state)
+    ? 'Judge Tone: clipped, exacting, and impatient with procedural errors.'
+    : sanctionContext.state === 'warned' || sanctionContext.state === 'recently_reinstated'
+    ? 'Judge Tone: watchful and quick to correct any lapse in decorum or procedure.'
+    : '';
 
   return `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
@@ -258,6 +334,8 @@ export const getMotionPrompt = (
     Rebuttal (${rebuttalBy}): "${rebuttalText}"
     Bias: ${caseData.judge.bias}.
     Difficulty: ${normalizedDifficulty}.
+    ${sanctionStatusBlock}
+    ${judgeToneGuidance}
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     Submission Compliance: ${JSON.stringify(complianceContext)}
     ${visibilityLine}
@@ -288,6 +366,7 @@ export const getMotionPrompt = (
  * @param {string} argument - Player's closing argument.
  * @param {string} difficulty - Difficulty mode identifier.
  * @param {object} [complianceContext] - Submission compliance metadata.
+ * @param {object} [sanctionContext] - Optional sanctions metadata.
  * @returns {string} Prompt text for the verdict model.
  */
 export const getFinalVerdictPrompt = (
@@ -296,7 +375,8 @@ export const getFinalVerdictPrompt = (
   seatedJurors,
   argument,
   difficulty,
-  complianceContext = {}
+  complianceContext = {},
+  sanctionContext = {}
 ) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   const isBench = !caseData.is_jury_trial;
@@ -306,6 +386,12 @@ export const getFinalVerdictPrompt = (
       : normalizedDifficulty === 'silly'
       ? 'Non-compliance is allowed as a silly tactic, but label it and limit what it can prove.'
       : 'Non-compliance reduces credibility; do not treat it as truth.';
+  const sanctionStatusBlock = buildSanctionContextBlock(sanctionContext);
+  const narrativeGuidance = ['sanctioned', 'public_defender'].includes(sanctionContext.state)
+    ? 'Narrative Framing: Emphasize accountability, punishment, and the court reasserting order.'
+    : sanctionContext.state === 'recently_reinstated'
+    ? 'Narrative Framing: Balance accountability with cautious redemption for reinstated counsel.'
+    : '';
   return `
     Phase: VERDICT. Type: ${isBench ? 'BENCH' : 'JURY'}.
     Case: ${JSON.stringify(caseData)}
@@ -313,6 +399,8 @@ export const getFinalVerdictPrompt = (
     Jury: ${JSON.stringify(seatedJurors)}
     Argument (compliant-only): "${argument}"
     Submission Compliance: ${JSON.stringify(complianceContext)}
+    ${sanctionStatusBlock}
+    ${narrativeGuidance}
     
     1. JUDGE SCORE (0-100) based on Difficulty ${normalizedDifficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}

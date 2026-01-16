@@ -280,6 +280,14 @@ const normalizeSanctionsState = (state, nowMs) => {
   return hydratedState;
 };
 
+const buildSanctionPromptContext = (sanctionsState, overrides = {}) => ({
+  state: sanctionsState?.state,
+  caseType: overrides.caseType,
+  lockedJurisdiction: overrides.lockedJurisdiction,
+  expiresAt: sanctionsState?.expiresAt,
+  recentlyReinstatedUntil: sanctionsState?.recentlyReinstatedUntil,
+});
+
 const isMeritReleaseVerdict = (verdict) => {
   const ruling = verdict?.final_ruling?.toLowerCase() ?? '';
   return ruling.includes('not guilty') || ruling.includes('dismiss');
@@ -800,8 +808,10 @@ const useGameState = () => {
       const payload = await requestLlmJson({
         userPrompt: 'Generate',
         systemPrompt: getGeneratorPrompt(normalizedDifficulty, lockedJurisdiction, lockedRole, {
-          state: sanctionsState.state,
-          caseType: lockedCaseType,
+          ...buildSanctionPromptContext(sanctionsState, {
+            caseType: lockedCaseType,
+            lockedJurisdiction,
+          }),
         }),
         responseLabel: 'case',
       });
@@ -977,7 +987,11 @@ const useGameState = () => {
           history.motion.motionPhase,
           expectedRole,
           history.motion.motionText,
-          visibilityContext
+          visibilityContext,
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'motion_text',
       });
@@ -1166,7 +1180,11 @@ const useGameState = () => {
             motion: summarizeNonCompliance(motionValidation),
             rebuttal: summarizeNonCompliance(rebuttalValidation),
           },
-          visibilityContext
+          visibilityContext,
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'motion',
       });
@@ -1229,7 +1247,11 @@ const useGameState = () => {
           seatedJurors,
           compliantArgument,
           config.difficulty,
-          summarizeNonCompliance(argumentRecord)
+          summarizeNonCompliance(argumentRecord),
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'verdict',
       });

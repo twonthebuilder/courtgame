@@ -22,8 +22,13 @@ describe('prompt builders', () => {
     const prompt = getGeneratorPrompt('normal', 'Municipal Night Court', 'defense', {
       state: 'public_defender',
       caseType: 'public_defender',
+      expiresAt: '2024-01-01T00:00:00.000Z',
+      lockedJurisdiction: 'Municipal Night Court',
     });
 
+    expect(prompt).toContain('Public Defender Mode is in effect');
+    expect(prompt).toContain('Jurisdiction is locked to Municipal Night Court');
+    expect(prompt).toContain('license is restricted');
     expect(prompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
     expect(prompt).toContain('gritty, petty, difficult cases');
     expect(prompt).toContain('hostile, uncooperative');
