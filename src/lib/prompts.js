@@ -6,10 +6,13 @@ import { normalizeDifficulty } from './config';
  * @param {string} difficulty - Difficulty mode identifier.
  * @param {string} jurisdiction - Jurisdiction name.
  * @param {string} playerRole - Player role (defense/prosecution).
+ * @param {object} [sanctionsContext] - Optional sanctions metadata.
+ * @param {string} [sanctionsContext.state] - Sanctions state identifier.
+ * @param {string} [sanctionsContext.caseType] - Case type identifier.
  * @returns {string} Prompt text for the generator model.
  */
 
-export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
+export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctionsContext = {}) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   let tone = '';
   if (normalizedDifficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
@@ -18,10 +21,26 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole) => {
   } else if (normalizedDifficulty === 'nuance') {
     tone = 'complex, serious, morally ambiguous crimes.';
   }
+  const caseType = sanctionsContext.caseType ?? 'standard';
+  const isPublicDefenderMode =
+    sanctionsContext.state === 'public_defender' || caseType === 'public_defender';
+  const sanctionsGuidance = isPublicDefenderMode
+    ? `
+    PUBLIC DEFENDER MODE CONSTRAINTS:
+    - Generate gritty, petty, difficult cases suited for a municipal night court docket.
+    - The client should be hostile, uncooperative, or distrustful of counsel.
+    - Evidence should be stacked against the defense (more inculpatory than exculpatory).
+    - Courtroom prestige is low; procedural hurdles are higher and paperwork is unforgiving.
+    - Achievements and "wins" should be rarer and harder-earned.
+    `
+    : '';
 
   return `
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
+    Jurisdiction: ${jurisdiction}.
+    Case Type: ${caseType}.
     Narrative tone should be ${tone}
+    ${sanctionsGuidance}
     
     1. DETERMINE TRIAL TYPE:
     - If case is minor/mundane -> is_jury_trial = false (Bench Trial).

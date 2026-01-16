@@ -64,7 +64,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     act(() => {
-      result.current.generateCase('defense', 'normal', 'USA');
+      result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     expect(result.current.gameState).toBe('initializing');
@@ -85,10 +85,33 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'regular', 'USA');
+      await result.current.generateCase('defense', 'regular', 'USA', 'standard');
     });
 
     expect(result.current.config.difficulty).toBe('normal');
+  });
+
+  it('locks the config when public defender mode is active', async () => {
+    const nowMs = Date.now();
+    const storedState = {
+      ...__testables.buildDefaultSanctionsState(nowMs),
+      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+    };
+    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
+    });
+
+    const generatorCall = requestLlmJson.mock.calls[0][0];
+    expect(generatorCall.systemPrompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
+    expect(result.current.config.role).toBe('defense');
+    expect(result.current.config.jurisdiction).toBe('Municipal Night Court');
+    expect(result.current.config.caseType).toBe('public_defender');
   });
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
@@ -113,7 +136,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     expect(result.current.history.jury.skipped).toBe(true);
@@ -147,7 +170,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     expect(result.current.gameState).toBe('start');
@@ -162,7 +185,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', 'USA');
+      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -200,7 +223,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -238,7 +261,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -267,7 +290,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -301,7 +324,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -348,7 +371,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     await act(async () => {
@@ -380,7 +403,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', 'USA');
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
     });
 
     act(() => {

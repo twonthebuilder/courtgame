@@ -45,15 +45,27 @@ export const JURISDICTIONS = [
   { value: 'USA', label: 'USA' },
   { value: 'Canada', label: 'Canada' },
   { value: 'Fictional', label: 'Fictional' },
+  { value: 'Municipal Night Court', label: 'Municipal Night Court' },
+];
+
+/**
+ * Supported case types for game setup.
+ *
+ * @type {{value: string, label: string}[]}
+ */
+export const CASE_TYPES = [
+  { value: 'standard', label: 'Standard' },
+  { value: 'public_defender', label: 'Public Defender' },
 ];
 
 /**
  * Default configuration values for a new game session.
  *
- * @type {{difficulty: string, jurisdiction: string, role: string}}
+ * @type {{difficulty: string, jurisdiction: string, role: string, caseType: string}}
  */
 export const DEFAULT_GAME_CONFIG = {
   difficulty: DEFAULT_DIFFICULTY,
   jurisdiction: 'USA',
   role: 'defense',
+  caseType: 'standard',
 };
