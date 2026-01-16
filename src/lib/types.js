@@ -6,6 +6,8 @@
 /**
  * A juror in the generated jury pool.
  *
+ * @typedef {'eligible' | 'struck_by_player' | 'struck_by_opponent' | 'seated'} JurorStatus
+ *
  * @typedef {object} Juror
  * @property {number} id - Unique juror identifier.
  * @property {string} name - Juror name.
@@ -13,6 +15,8 @@
  * @property {string} job - Juror occupation.
  * @property {string} bias_hint - Public-facing bias hint shown to players.
  * @property {string} [hidden_bias] - Hidden bias revealed to the model only.
+ * @property {JurorStatus} status - Current juror status for voir dire tracking.
+ * @property {JurorStatus[]} [status_history] - Optional status transition history.
  */
 
 /**

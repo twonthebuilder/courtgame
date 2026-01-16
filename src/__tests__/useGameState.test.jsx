@@ -36,6 +36,7 @@ const juryCasePayload = {
   jurors: [
     { id: 1, name: 'J1', age: 35, job: 'Teacher', bias_hint: 'Skeptical of corporations.' },
     { id: 2, name: 'J2', age: 52, job: 'Engineer', bias_hint: 'Trusts expert testimony.' },
+    { id: 3, name: 'J3', age: 44, job: 'Nurse', bias_hint: 'Favors strict safety rules.' },
   ],
   opposing_counsel: {
     name: 'Riley Park',
@@ -199,7 +200,7 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(juryCasePayload)
       .mockResolvedValueOnce({
-        opponent_strikes: [2],
+        opponent_strikes: [3],
         seated_juror_ids: [1],
         judge_comment: 'Seated.',
       });
@@ -215,6 +216,13 @@ describe('useGameState transitions', () => {
     });
 
     expect(result.current.history.counselNotes).toContain('We are reading a jury');
+    const jurorStatuses = result.current.history.jury.pool.map((juror) => [juror.id, juror.status]);
+    expect(jurorStatuses).toEqual([
+      [1, 'seated'],
+      [2, 'struck_by_player'],
+      [3, 'struck_by_opponent'],
+    ]);
+    expect(result.current.history.jury.pool[0].status_history).toEqual(['eligible', 'seated']);
   });
 
   it('marks invalid strike submissions that reference jurors outside the docket', async () => {

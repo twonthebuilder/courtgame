@@ -21,6 +21,7 @@ import {
 /** @typedef {import('../lib/types').CaseData} CaseData */
 /** @typedef {import('../lib/types').HistoryState} HistoryState */
 /** @typedef {import('../lib/types').Juror} Juror */
+/** @typedef {import('../lib/types').JurorStatus} JurorStatus */
 /** @typedef {import('../lib/types').MotionResult} MotionResult */
 /** @typedef {import('../lib/types').VerdictResult} VerdictResult */
 
@@ -43,6 +44,28 @@ const validateJurorIdSubset = (docketJurorIds, ids) => {
     return { valid: false, reason: 'unknown', id: invalidId };
   }
   return { valid: true };
+};
+
+const buildInitialJurorPool = (jurors) =>
+  jurors.map((juror) => {
+    const baseStatus = juror.status ?? 'eligible';
+    return {
+      ...juror,
+      status: baseStatus,
+      status_history: juror.status_history ?? [baseStatus],
+    };
+  });
+
+const updateJurorStatus = (juror, nextStatus) => {
+  if (juror.status === nextStatus) return juror;
+  const history = juror.status_history ?? [];
+  const updatedHistory =
+    history[history.length - 1] === nextStatus ? history : [...history, nextStatus];
+  return {
+    ...juror,
+    status: nextStatus,
+    status_history: updatedHistory,
+  };
 };
 
 /**
@@ -141,10 +164,12 @@ const useGameState = () => {
       /** @type {CaseData} */
       const data = parseCaseResponse(payload);
 
+      const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
+
       setHistory({
         case: data,
         jury: data.is_jury_trial
-          ? { pool: data.jurors, myStrikes: [], locked: false, invalidStrike: false }
+          ? { pool: juryPool, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
@@ -194,8 +219,22 @@ const useGameState = () => {
       }
 
       setHistory((prev) => {
-        const seatedJurors =
-          prev.case?.jurors.filter((juror) => data.seated_juror_ids?.includes(juror.id)) ?? [];
+        const playerStrikeIds = new Set(strikes);
+        const opponentStrikeIds = new Set(data.opponent_strikes);
+        const seatedIds = new Set(data.seated_juror_ids);
+        const updatedPool =
+          prev.jury?.pool?.map((juror) => {
+            let nextStatus = /** @type {JurorStatus} */ ('eligible');
+            if (seatedIds.has(juror.id)) {
+              nextStatus = 'seated';
+            } else if (playerStrikeIds.has(juror.id)) {
+              nextStatus = 'struck_by_player';
+            } else if (opponentStrikeIds.has(juror.id)) {
+              nextStatus = 'struck_by_opponent';
+            }
+            return updateJurorStatus(juror, nextStatus);
+          }) ?? [];
+        const seatedJurors = updatedPool.filter((juror) => juror.status === 'seated');
         return {
           ...prev,
           jury: {
@@ -205,6 +244,7 @@ const useGameState = () => {
             seatedIds: data.seated_juror_ids,
             comment: data.judge_comment,
             invalidStrike: false,
+            pool: updatedPool,
             locked: true,
           },
           motion: createMotionState(),
@@ -469,7 +509,7 @@ const useGameState = () => {
       /** @type {Juror[]} */
       const seatedJurors = history.jury?.skipped
         ? []
-        : history.case?.jurors.filter((j) => history.jury?.seatedIds?.includes(j.id));
+        : history.jury?.pool?.filter((juror) => juror.status === 'seated') ?? [];
       const payload = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
@@ -505,7 +545,8 @@ const useGameState = () => {
     log += `FACTS:\n${history.case.facts.join('\n')}\n\n`;
 
     if (history.jury && !history.jury.skipped && history.jury.locked) {
-      log += `JURY SEATED (${history.jury.seatedIds.length}):\n${history.jury.comment}\n\n`;
+      const seatedJurors = history.jury.pool.filter((juror) => juror.status === 'seated');
+      log += `JURY SEATED (${seatedJurors.length}):\n${history.jury.comment}\n\n`;
     }
 
     if (history.motion) {
