@@ -112,7 +112,7 @@ export default function PocketCourt() {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={handleCopyFull}
+              onClick={() => handleCopyFull(docketNumber)}
               className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
             >
               {copied ? (

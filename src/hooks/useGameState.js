@@ -693,7 +693,7 @@ const updateJurorStatus = (juror, nextStatus) => {
  *   triggerAiMotionSubmission: () => Promise<void>,
  *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
- *   handleCopyFull: () => void,
+ *   handleCopyFull: (docketNumber?: number) => void,
  *   resetGame: () => void,
  *   toggleStrikeSelection: (id: number) => void,
  * }} Game state values and action handlers.
@@ -1329,50 +1329,162 @@ const useGameState = () => {
     }
   };
 
+  const formatJurorLabel = (id, pool = []) => {
+    const juror = pool.find((entry) => entry.id === id);
+    if (juror?.name) return `${juror.name} (#${juror.id})`;
+    return `Juror #${id}`;
+  };
+
+  const formatJurorList = (ids = [], pool = []) =>
+    ids.map((id) => formatJurorLabel(id, pool)).join(', ');
+
+  const getMotionDisposition = (motion) => {
+    const outcomeText = motion?.ruling?.outcome_text?.trim();
+    if (!outcomeText) return null;
+    if (!MISCONDUCT_PATTERNS.dismissal.test(outcomeText)) return null;
+    return {
+      outcome: 'Dismissed (Pre-Trial Motion Granted)',
+      details: `RULING: ${motion.ruling.ruling} - "${outcomeText}"`,
+    };
+  };
+
+  const getVerdictDisposition = (verdict) => {
+    if (!verdict?.final_ruling) return null;
+    const lines = [`OUTCOME: ${verdict.final_ruling}`];
+    if (verdict.jury_verdict && verdict.jury_verdict !== 'N/A') {
+      lines.push(`JURY VERDICT: ${verdict.jury_verdict}`);
+      if (verdict.jury_reasoning) {
+        lines.push(`JURY REASONING: "${verdict.jury_reasoning}"`);
+      }
+    }
+    if (verdict.judge_opinion) {
+      lines.push(`JUDGE OPINION: "${verdict.judge_opinion}"`);
+    }
+    return lines.join('\n');
+  };
+
+  const buildSanctionsSection = (sanctions = []) => {
+    if (!sanctions.length) return null;
+    const lines = sanctions.map((entry) => {
+      const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
+      return `- ${state}: ${entry.docket_text}`;
+    });
+    return `SANCTIONS/STATUS FLAGS:\n${lines.join('\n')}`;
+  };
+
   /**
    * Copy the full docket history to the clipboard.
+   *
+   * @param {number} [docketNumber] - Optional docket number to include in the header.
    */
-  const handleCopyFull = () => {
-    let log = `DOCKET: ${history.case.title}\nJUDGE: ${history.case.judge.name}\n\n`;
-    log += `FACTS:\n${history.case.facts.join('\n')}\n\n`;
+  const handleCopyFull = (docketNumber) => {
+    const sections = [];
+    const headerLines = [`DOCKET: ${history.case.title}`, `JUDGE: ${history.case.judge.name}`];
+    if (typeof docketNumber === 'number') {
+      headerLines.push(`DOCKET #: ${docketNumber}`);
+    }
+    sections.push(headerLines.join('\n'));
+
+    if (history.case.facts?.length) {
+      sections.push(`FACTS:\n${history.case.facts.join('\n')}`);
+    }
 
     if (history.jury && !history.jury.skipped && history.jury.locked) {
       const seatedJurors = history.jury.pool.filter((juror) => juror.status === 'seated');
-      log += `JURY SEATED (${seatedJurors.length}):\n${history.jury.comment}\n\n`;
+      const juryLines = [];
+      if (seatedJurors.length) {
+        juryLines.push(`Seated Jurors: ${formatJurorList(history.jury.seatedIds, history.jury.pool)}`);
+      }
+      if (history.jury.comment) {
+        juryLines.push(history.jury.comment);
+      }
+      const strikeLines = [];
+      if (history.jury.myStrikes?.length) {
+        strikeLines.push(`Player Strikes: ${formatJurorList(history.jury.myStrikes, history.jury.pool)}`);
+      }
+      if (history.jury.opponentStrikes?.length) {
+        strikeLines.push(
+          `Opponent Strikes: ${formatJurorList(history.jury.opponentStrikes, history.jury.pool)}`
+        );
+      }
+      if (strikeLines.length) {
+        juryLines.push(strikeLines.join('\n'));
+      }
+      if (juryLines.length) {
+        sections.push(`JURY SEATED (${seatedJurors.length}):\n${juryLines.join('\n')}`);
+      }
     }
 
     if (history.motion) {
+      const motionLines = [];
       const motionLabel =
         history.motion.motionBy === 'prosecution' ? 'Prosecution Motion' : 'Defense Motion';
       const rebuttalLabel =
         history.motion.rebuttalBy === 'prosecution' ? 'Prosecution Rebuttal' : 'Defense Rebuttal';
       if (history.motion.motionText) {
-        log += `${motionLabel}:\n"${history.motion.motionText}"\n\n`;
+        motionLines.push(`${motionLabel}:\n"${history.motion.motionText}"`);
       }
       if (history.motion.rebuttalText) {
-        log += `${rebuttalLabel}:\n"${history.motion.rebuttalText}"\n\n`;
+        motionLines.push(`${rebuttalLabel}:\n"${history.motion.rebuttalText}"`);
       }
       if (history.motion.ruling) {
-        log += `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
+        motionLines.push(
+          `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"`
+        );
+      }
+      if (motionLines.length) {
+        sections.push(`PRE-TRIAL MOTIONS:\n${motionLines.join('\n\n')}`);
       }
     }
 
     if (history.counselNotes?.trim()) {
-      log += `COUNSEL NOTES:\n${history.counselNotes.trim()}\n\n`;
+      sections.push(
+        `COUNSEL NOTES (NON-RECORD FLAVOR):\n${history.counselNotes.trim()}`
+      );
     }
 
-    if (history.trial && history.trial.locked) {
-      const roundedScore = Math.round(history.trial.verdict.final_weighted_score);
+    // Terminal motion outcomes (ex: dismissal) override later-phase export content.
+    const motionDisposition = getMotionDisposition(history.motion);
+    const verdictDisposition = getVerdictDisposition(history.trial?.verdict);
+    const reachedTrial = Boolean(history.trial?.text?.trim());
+    const shouldStopAtDisposition = Boolean(motionDisposition);
+
+    if (reachedTrial && !shouldStopAtDisposition) {
+      sections.push(`TRIAL ARGUMENT:\n"${history.trial.text}"`);
+    }
+
+    if (motionDisposition || verdictDisposition) {
+      const dispositionLines = [];
+      if (motionDisposition) {
+        dispositionLines.push(`OUTCOME: ${motionDisposition.outcome}`, motionDisposition.details);
+      } else if (verdictDisposition) {
+        dispositionLines.push(verdictDisposition);
+      }
+      sections.push(`FINAL DISPOSITION:\n${dispositionLines.join('\n')}`);
+    }
+
+    if (!shouldStopAtDisposition && history.trial?.verdict) {
+      const verdict = history.trial.verdict;
+      const roundedScore = Math.round(verdict.final_weighted_score);
       const baseScore = Math.min(100, Math.max(0, roundedScore));
-      const overflowNote =
-        history.trial.verdict.final_weighted_score > 100
-          ? `\nOVERFLOW: ${history.trial.verdict.overflow_reason_code} - ${history.trial.verdict.overflow_explanation}`
-          : '';
-      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${
-        history.trial.verdict.final_ruling
-      } (Base Score: ${baseScore})${overflowNote}\nOPINION: "${history.trial.verdict.judge_opinion}"`;
+      const scoreLines = [`BASE SCORE: ${baseScore}/100`];
+      if (verdict.final_weighted_score > 100) {
+        scoreLines.push(
+          `OVERFLOW: ${verdict.overflow_reason_code} - ${verdict.overflow_explanation} (${roundedScore}/100)`
+        );
+      }
+      if (verdict.achievement_title) {
+        scoreLines.push(`ACHIEVEMENT: ${verdict.achievement_title}`);
+      }
+      sections.push(`SCORE + ACHIEVEMENT:\n${scoreLines.join('\n')}`);
     }
 
+    const sanctionsSection = buildSanctionsSection(history.sanctions);
+    if (sanctionsSection) {
+      sections.push(sanctionsSection);
+    }
+
+    const log = sections.join('\n\n');
     copyToClipboard(log);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

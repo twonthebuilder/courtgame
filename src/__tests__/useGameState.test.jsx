@@ -61,10 +61,25 @@ const buildSanctionsEntry = ({
   visibility: 'public',
   timestamp: timestamp ?? new Date().toISOString(),
 });
+const buildVerdict = (overrides = {}) => ({
+  jury_verdict: 'N/A',
+  jury_reasoning: '',
+  jury_score: 0,
+  judge_score: 0,
+  judge_opinion: 'Bench decision.',
+  final_ruling: 'Not Guilty',
+  is_jnov: false,
+  final_weighted_score: 80,
+  overflow_reason_code: null,
+  overflow_explanation: null,
+  achievement_title: null,
+  ...overrides,
+});
 
 describe('useGameState transitions', () => {
   beforeEach(() => {
     requestLlmJson.mockReset();
+    copyToClipboard.mockClear();
     window.localStorage.clear();
   });
 
@@ -591,8 +606,199 @@ describe('useGameState transitions', () => {
 
     expect(copyToClipboard).toHaveBeenCalledTimes(1);
     expect(copyToClipboard.mock.calls[0][0]).toContain(
-      'COUNSEL NOTES:\nRemember to cite precedent.'
+      'COUNSEL NOTES (NON-RECORD FLAVOR):\nRemember to cite precedent.'
     );
+  });
+
+  it('includes achievement titles in the copied docket when present', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    act(() => {
+      result.current.history.trial = {
+        locked: true,
+        text: 'Closing argument.',
+        verdict: buildVerdict({
+          final_ruling: 'Guilty',
+          final_weighted_score: 95,
+          achievement_title: 'The Blender and the Pigeon Conspiracy',
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    expect(copyToClipboard.mock.calls[0][0]).toContain(
+      'ACHIEVEMENT: The Blender and the Pigeon Conspiracy'
+    );
+  });
+
+  it('omits trial and verdict details when a dismissal ends the case', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Move to dismiss.',
+        motionBy: 'defense',
+        rebuttalText: 'Opposes dismissal.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'GRANTED',
+          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          score: 90,
+          evidence_status_updates: [],
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+      result.current.history.trial = {
+        locked: true,
+        text: 'Argument that should not appear.',
+        verdict: buildVerdict({ final_ruling: 'Mistrial' }),
+      };
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    const copiedText = copyToClipboard.mock.calls[0][0];
+    expect(copiedText).toContain('FINAL DISPOSITION:');
+    expect(copiedText).toContain('Dismissed (Pre-Trial Motion Granted)');
+    expect(copiedText).not.toContain('TRIAL ARGUMENT:');
+    expect(copiedText).not.toContain('SCORE + ACHIEVEMENT:');
+  });
+
+  it('copies full text without ellipses', async () => {
+    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    const longArgument = Array.from({ length: 40 }, (_, index) => `Sentence ${index + 1}.`).join(' ');
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Motion denied.',
+          score: 50,
+          evidence_status_updates: [],
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+      result.current.history.trial = {
+        locked: false,
+        text: longArgument,
+      };
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    const copiedText = copyToClipboard.mock.calls[0][0];
+    expect(copiedText).toContain(longArgument);
+    expect(copiedText).not.toContain('...');
+  });
+
+  it('keeps the section order stable', async () => {
+    requestLlmJson.mockResolvedValueOnce({
+      ...juryCasePayload,
+      title: 'Order Case',
+      facts: ['First fact', 'Second fact'],
+      judge: { name: 'Hon. Order' },
+    });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    act(() => {
+      result.current.history.jury = {
+        pool: juryCasePayload.jurors.map((juror) => ({ ...juror, status: 'seated' })),
+        myStrikes: [1],
+        opponentStrikes: [2],
+        seatedIds: [1, 2, 3],
+        comment: 'Jury seated without issue.',
+        locked: true,
+      };
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Motion denied.',
+          score: 50,
+          evidence_status_updates: [],
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+      result.current.history.counselNotes = 'Keep the story tight.';
+      result.current.history.trial = {
+        locked: true,
+        text: 'Trial argument.',
+        verdict: buildVerdict({
+          final_ruling: 'Not Guilty',
+          final_weighted_score: 101,
+          overflow_reason_code: 'legendary',
+          overflow_explanation: 'An exceptional showing.',
+          achievement_title: 'Order of Operations',
+        }),
+      };
+      result.current.history.sanctions = [
+        buildSanctionsEntry({ docketText: 'The court issues a warning.' }),
+      ];
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    const copiedText = copyToClipboard.mock.calls[0][0];
+    const headers = [
+      'DOCKET:',
+      'FACTS:',
+      'JURY SEATED',
+      'PRE-TRIAL MOTIONS:',
+      'COUNSEL NOTES',
+      'TRIAL ARGUMENT:',
+      'FINAL DISPOSITION:',
+      'SCORE + ACHIEVEMENT:',
+      'SANCTIONS/STATUS FLAGS:',
+    ];
+    const positions = headers.map((header) => copiedText.indexOf(header));
+    positions.forEach((position) => expect(position).toBeGreaterThan(-1));
+    positions.reduce((prev, current) => {
+      expect(current).toBeGreaterThan(prev);
+      return current;
+    }, -1);
   });
 
   it('escalates sanctions to warned when a docketed warning is logged', () => {
