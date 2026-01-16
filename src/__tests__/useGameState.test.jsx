@@ -114,6 +114,64 @@ describe('useGameState transitions', () => {
     expect(result.current.config.caseType).toBe('public_defender');
   });
 
+  it('reinstates from public defender mode after a not guilty verdict', async () => {
+    const nowMs = Date.now();
+    const storedState = {
+      ...__testables.buildDefaultSanctionsState(nowMs),
+      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+      level: 3,
+      startedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
+      recentlyReinstatedUntil: null,
+    };
+    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Not Guilty',
+        final_weighted_score: 77,
+        judge_opinion: 'Bench decision',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing');
+    });
+
+    expect(result.current.sanctionsState.state).toBe(
+      __testables.SANCTIONS_STATE.RECENTLY_REINSTATED
+    );
+    expect(result.current.sanctionsState.recentlyReinstatedUntil).toBeTruthy();
+  });
+
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
@@ -162,6 +220,52 @@ describe('useGameState transitions', () => {
     expect(verdictCall.systemPrompt).toContain('Camera footage');
     expect(verdictCall.systemPrompt).not.toContain('Hidden memo');
     expect(result.current.history.trial.verdict.final_ruling).toBe('Acquitted');
+  });
+
+  it('includes recently reinstated context for judges and opposing counsel', async () => {
+    const nowMs = Date.now();
+    const storedState = {
+      ...__testables.buildDefaultSanctionsState(nowMs),
+      state: __testables.SANCTIONS_STATE.RECENTLY_REINSTATED,
+      level: 1,
+      startedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 20 * 60 * 1000).toISOString(),
+      recentlyReinstatedUntil: new Date(nowMs + 20 * 60 * 1000).toISOString(),
+    };
+    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'AI drafted motion.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 45,
+        evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('prosecution', 'normal', 'USA', 'standard');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Our rebuttal');
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const opposingCounselCall = requestLlmJson.mock.calls[1][0];
+    const motionRulingCall = requestLlmJson.mock.calls[2][0];
+    expect(opposingCounselCall.systemPrompt).toContain('recentlyReinstatedUntil');
+    expect(motionRulingCall.systemPrompt).toContain('recentlyReinstatedUntil');
   });
 
   it('surfaces errors and resets to start on generation failure', async () => {
