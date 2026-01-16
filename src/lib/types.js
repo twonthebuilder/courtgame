@@ -116,6 +116,41 @@
  */
 
 /**
+ * Submission compliance classification for docket validation.
+ *
+ * @typedef {'compliant' | 'partially_compliant' | 'non_compliant'} SubmissionCompliance
+ */
+
+/**
+ * Validation record for a docket submission.
+ *
+ * @typedef {object} SubmissionValidation
+ * @property {string} id - Unique identifier for the validation record.
+ * @property {'motion' | 'rebuttal' | 'argument' | 'verdict'} phase - Submission phase.
+ * @property {'defense' | 'prosecution' | 'judge'} submitted_by - Actor for the submission.
+ * @property {string} text - Submitted text captured for validation.
+ * @property {{
+ *   facts: {found: number[], missing: number[]},
+ *   evidence: {found: number[], missing: number[], inadmissible: number[]},
+ *   witnesses: {found: number[], missing: number[]},
+ *   jurors: {found: number[], missing: number[]},
+ *   rulings: {found: number[], missing: number[]}
+ * }} references - Reference resolution results.
+ * @property {SubmissionCompliance} classification - Overall compliance classification.
+ * @property {string} timestamp - ISO timestamp when validation was recorded.
+ */
+
+/**
+ * Rejected verdict payload stored in the docket.
+ *
+ * @typedef {object} VerdictRejection
+ * @property {object} payload - Verdict payload returned by the model.
+ * @property {string} reason - Short reason for rejection.
+ * @property {SubmissionValidation} validation - Validation metadata for the rejection.
+ * @property {string} timestamp - ISO timestamp when the rejection was recorded.
+ */
+
+/**
  * Full living docket history state.
  *
  * @typedef {object} HistoryState
@@ -123,7 +158,13 @@
  * @property {JuryState} [jury] - Jury selection state.
  * @property {MotionState} [motion] - Motion phase data.
  * @property {string} [counselNotes] - Optional counsel notes captured during play.
- * @property {{text?: string, verdict?: VerdictResult, locked?: boolean}} [trial] - Trial phase data.
+ * @property {{
+ *   text?: string,
+ *   verdict?: VerdictResult,
+ *   rejectedVerdicts?: VerdictRejection[],
+ *   locked?: boolean
+ * }} [trial] - Trial phase data.
+ * @property {SubmissionValidation[]} [validationHistory] - Docket validation history.
  */
 
 export {};

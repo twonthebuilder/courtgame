@@ -186,6 +186,7 @@ export const getOpposingCounselPrompt = (
  * @param {'defense' | 'prosecution'} motionBy - Role that filed the motion.
  * @param {'defense' | 'prosecution'} rebuttalBy - Role that filed the rebuttal.
  * @param {'defense' | 'prosecution'} playerRole - Player role for context.
+ * @param {object} [complianceContext] - Submission compliance metadata.
  * @returns {string} Prompt text for the motion ruling model.
  */
 export const getMotionPrompt = (
@@ -195,7 +196,8 @@ export const getMotionPrompt = (
   difficulty,
   motionBy,
   rebuttalBy,
-  playerRole
+  playerRole,
+  complianceContext = {}
 ) => {
   const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
     id: typeof item?.id === 'number' ? item.id : index + 1,
@@ -211,7 +213,9 @@ export const getMotionPrompt = (
     Bias: ${caseData.judge.bias}.
     Difficulty: ${difficulty}.
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
+    Submission Compliance: ${JSON.stringify(complianceContext)}
     
+    Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Include evidence_status_updates entries for every evidence item (even if admissible).
     Return JSON:
     {
@@ -233,20 +237,37 @@ export const getMotionPrompt = (
  * @param {object[]} seatedJurors - Jurors seated for trial.
  * @param {string} argument - Player's closing argument.
  * @param {string} difficulty - Difficulty mode identifier.
+ * @param {object} [complianceContext] - Submission compliance metadata.
  * @returns {string} Prompt text for the verdict model.
  */
-export const getFinalVerdictPrompt = (caseData, motionResult, seatedJurors, argument, difficulty) => {
+export const getFinalVerdictPrompt = (
+  caseData,
+  motionResult,
+  seatedJurors,
+  argument,
+  difficulty,
+  complianceContext = {}
+) => {
   const isBench = !caseData.is_jury_trial;
+  const complianceGuidance =
+    difficulty === 'nuance'
+      ? 'Non-compliance is a severe credibility hit; treat it as throwing or babbling.'
+      : difficulty === 'silly'
+      ? 'Non-compliance is allowed as a silly tactic, but label it and limit what it can prove.'
+      : 'Non-compliance reduces credibility; do not treat it as truth.';
   return `
     Phase: VERDICT. Type: ${isBench ? 'BENCH' : 'JURY'}.
     Case: ${JSON.stringify(caseData)}
     Motion Result: ${motionResult.ruling} (${motionResult.score})
     Jury: ${JSON.stringify(seatedJurors)}
-    Argument: "${argument}"
+    Argument (compliant-only): "${argument}"
+    Submission Compliance: ${JSON.stringify(complianceContext)}
     
     1. JUDGE SCORE (0-100) based on Difficulty ${difficulty}.
     ${!isBench ? '2. JURY DELIBERATION: Do biases align? Vote Guilty/Not Guilty. 2v2=Hung.' : ''}
     3. LEGENDARY CHECK (100+ score).
+    4. Docket rule: Only docket facts/evidence/witnesses/jurors/rulings count as true.
+    5. ${complianceGuidance}
     
     Return JSON:
     {

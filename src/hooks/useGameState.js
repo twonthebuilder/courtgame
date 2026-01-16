@@ -23,7 +23,213 @@ import {
 /** @typedef {import('../lib/types').Juror} Juror */
 /** @typedef {import('../lib/types').JurorStatus} JurorStatus */
 /** @typedef {import('../lib/types').MotionResult} MotionResult */
+/** @typedef {import('../lib/types').SubmissionValidation} SubmissionValidation */
 /** @typedef {import('../lib/types').VerdictResult} VerdictResult */
+
+const DOCKET_REFERENCE_PATTERN =
+  /\b(fact|facts|evidence|witness|witnesses|juror|jurors|ruling|rulings)\s*#?\s*(\d+)\b/gi;
+
+const normalizeReferenceBucket = (bucket) => [...new Set(bucket)].sort((a, b) => a - b);
+
+const normalizeReferenceEntity = (entity) => {
+  if (entity.startsWith('fact')) return 'facts';
+  if (entity.startsWith('evidence')) return 'evidence';
+  if (entity.startsWith('witness')) return 'witnesses';
+  if (entity.startsWith('juror')) return 'jurors';
+  return 'rulings';
+};
+
+const buildDocketRegistry = (historyState) => {
+  const facts = new Map();
+  (historyState.case?.facts ?? []).forEach((fact, index) => {
+    if (typeof fact === 'string' && fact.trim()) facts.set(index + 1, true);
+  });
+
+  const evidence = new Map();
+  (historyState.case?.evidence ?? []).forEach((item, index) => {
+    const id = typeof item?.id === 'number' ? item.id : index + 1;
+    const status = item?.status === 'suppressed' ? 'suppressed' : 'admissible';
+    evidence.set(id, status);
+  });
+
+  const witnesses = new Map();
+  (historyState.case?.witnesses ?? []).forEach((witness, index) => {
+    if (witness && typeof witness === 'object') {
+      witnesses.set(index + 1, true);
+    }
+  });
+
+  const jurors = new Map();
+  (historyState.case?.jurors ?? []).forEach((juror) => {
+    if (typeof juror?.id === 'number') jurors.set(juror.id, true);
+  });
+
+  const rulings = new Map();
+  if (historyState.motion?.ruling) {
+    rulings.set(1, true);
+  }
+
+  return { facts, evidence, witnesses, jurors, rulings };
+};
+
+const parseDocketReferences = (text) => {
+  const references = {
+    facts: [],
+    evidence: [],
+    witnesses: [],
+    jurors: [],
+    rulings: [],
+  };
+
+  if (!text) return references;
+
+  for (const match of text.matchAll(DOCKET_REFERENCE_PATTERN)) {
+    const entity = normalizeReferenceEntity(match[1].toLowerCase());
+    const id = Number(match[2]);
+    if (Number.isNaN(id)) continue;
+    references[entity].push(id);
+  }
+
+  return {
+    facts: normalizeReferenceBucket(references.facts),
+    evidence: normalizeReferenceBucket(references.evidence),
+    witnesses: normalizeReferenceBucket(references.witnesses),
+    jurors: normalizeReferenceBucket(references.jurors),
+    rulings: normalizeReferenceBucket(references.rulings),
+  };
+};
+
+const validateSubmissionReferences = (text, registry) => {
+  const references = parseDocketReferences(text);
+  const resolved = {
+    facts: { found: [], missing: [] },
+    evidence: { found: [], missing: [], inadmissible: [] },
+    witnesses: { found: [], missing: [] },
+    jurors: { found: [], missing: [] },
+    rulings: { found: [], missing: [] },
+  };
+
+  references.facts.forEach((id) => {
+    if (registry.facts.has(id)) resolved.facts.found.push(id);
+    else resolved.facts.missing.push(id);
+  });
+  references.witnesses.forEach((id) => {
+    if (registry.witnesses.has(id)) resolved.witnesses.found.push(id);
+    else resolved.witnesses.missing.push(id);
+  });
+  references.jurors.forEach((id) => {
+    if (registry.jurors.has(id)) resolved.jurors.found.push(id);
+    else resolved.jurors.missing.push(id);
+  });
+  references.rulings.forEach((id) => {
+    if (registry.rulings.has(id)) resolved.rulings.found.push(id);
+    else resolved.rulings.missing.push(id);
+  });
+  references.evidence.forEach((id) => {
+    if (registry.evidence.has(id)) {
+      resolved.evidence.found.push(id);
+      if (registry.evidence.get(id) === 'suppressed') {
+        resolved.evidence.inadmissible.push(id);
+      }
+    } else {
+      resolved.evidence.missing.push(id);
+    }
+  });
+
+  const totalReferences =
+    references.facts.length +
+    references.evidence.length +
+    references.witnesses.length +
+    references.jurors.length +
+    references.rulings.length;
+  const missingCount =
+    resolved.facts.missing.length +
+    resolved.evidence.missing.length +
+    resolved.witnesses.missing.length +
+    resolved.jurors.missing.length +
+    resolved.rulings.missing.length;
+  const inadmissibleCount = resolved.evidence.inadmissible.length;
+  const compliantFoundCount =
+    resolved.facts.found.length +
+    resolved.witnesses.found.length +
+    resolved.jurors.found.length +
+    resolved.rulings.found.length +
+    (resolved.evidence.found.length - resolved.evidence.inadmissible.length);
+
+  let classification = 'compliant';
+  if (totalReferences === 0) {
+    classification = 'compliant';
+  } else if (missingCount === 0 && inadmissibleCount === 0) {
+    classification = 'compliant';
+  } else if (compliantFoundCount === 0) {
+    classification = 'non_compliant';
+  } else {
+    classification = 'partially_compliant';
+  }
+
+  return {
+    references: resolved,
+    classification,
+  };
+};
+
+const redactInvalidReferences = (text, validation) => {
+  if (!text) return '';
+  const invalidIds = [
+    ...validation.references.facts.missing.map((id) => ({ entity: 'fact', id })),
+    ...validation.references.evidence.missing.map((id) => ({ entity: 'evidence', id })),
+    ...validation.references.evidence.inadmissible.map((id) => ({ entity: 'evidence', id })),
+    ...validation.references.witnesses.missing.map((id) => ({ entity: 'witness', id })),
+    ...validation.references.jurors.missing.map((id) => ({ entity: 'juror', id })),
+    ...validation.references.rulings.missing.map((id) => ({ entity: 'ruling', id })),
+  ];
+
+  return invalidIds.reduce((updated, entry) => {
+    const pattern = new RegExp(
+      `\\b${entry.entity}s?\\s*#?\\s*${entry.id}\\b`,
+      'gi'
+    );
+    return updated.replace(pattern, '[redacted off-docket reference]');
+  }, text);
+};
+
+const summarizeNonCompliance = (validation) => {
+  const missingCount =
+    validation.references.facts.missing.length +
+    validation.references.evidence.missing.length +
+    validation.references.witnesses.missing.length +
+    validation.references.jurors.missing.length +
+    validation.references.rulings.missing.length;
+  const inadmissibleCount = validation.references.evidence.inadmissible.length;
+  return {
+    classification: validation.classification,
+    missing: {
+      facts: validation.references.facts.missing,
+      evidence: validation.references.evidence.missing,
+      witnesses: validation.references.witnesses.missing,
+      jurors: validation.references.jurors.missing,
+      rulings: validation.references.rulings.missing,
+    },
+    inadmissible_evidence: validation.references.evidence.inadmissible,
+    totals: {
+      missing: missingCount,
+      inadmissible: inadmissibleCount,
+    },
+  };
+};
+
+const createValidationRecord = (phase, submittedBy, text, registry) => {
+  const validation = validateSubmissionReferences(text, registry);
+  return {
+    id: `${phase}-${submittedBy}-${Date.now()}`,
+    phase,
+    submitted_by: submittedBy,
+    text,
+    references: validation.references,
+    classification: validation.classification,
+    timestamp: new Date().toISOString(),
+  };
+};
 
 const normalizeEvidenceDocket = (evidence) =>
   (evidence ?? [])
@@ -208,7 +414,8 @@ const useGameState = () => {
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
-        trial: { locked: false },
+        trial: { locked: false, rejectedVerdicts: [] },
+        validationHistory: [],
       });
 
       setGameState('playing');
@@ -312,15 +519,25 @@ const useGameState = () => {
       return;
     }
 
-    setHistory((prev) => ({
-      ...prev,
-      motion: {
-        ...prev.motion,
-        motionText: isMotionStep ? trimmed : prev.motion.motionText,
-        rebuttalText: isMotionStep ? prev.motion.rebuttalText : trimmed,
-        motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
-      },
-    }));
+    setHistory((prev) => {
+      const registry = buildDocketRegistry(prev);
+      const validationRecord = createValidationRecord(
+        isMotionStep ? 'motion' : 'rebuttal',
+        expectedRole,
+        trimmed,
+        registry
+      );
+      return {
+        ...prev,
+        motion: {
+          ...prev.motion,
+          motionText: isMotionStep ? trimmed : prev.motion.motionText,
+          rebuttalText: isMotionStep ? prev.motion.rebuttalText : trimmed,
+          motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
+        },
+        validationHistory: [...(prev.validationHistory ?? []), validationRecord],
+      };
+    });
   };
 
   /**
@@ -363,6 +580,15 @@ const useGameState = () => {
           rebuttalText: isMotionStep ? prev.motion.rebuttalText : data.text,
           motionPhase: isMotionStep ? 'rebuttal_submission' : prev.motion.motionPhase,
         },
+        validationHistory: [
+          ...(prev.validationHistory ?? []),
+          createValidationRecord(
+            isMotionStep ? 'motion' : 'rebuttal',
+            expectedRole,
+            data.text,
+            buildDocketRegistry(prev)
+          ),
+        ],
       }));
       setLoadingMsg(null);
     } catch (err) {
@@ -497,16 +723,37 @@ const useGameState = () => {
 
     setLoadingMsg('Judge is ruling on the motion...');
     try {
+      const docketRegistry = buildDocketRegistry(history);
+      const motionValidation = validateSubmissionReferences(
+        history.motion.motionText,
+        docketRegistry
+      );
+      const rebuttalValidation = validateSubmissionReferences(
+        history.motion.rebuttalText,
+        docketRegistry
+      );
+      const compliantMotionText = redactInvalidReferences(
+        history.motion.motionText,
+        motionValidation
+      );
+      const compliantRebuttalText = redactInvalidReferences(
+        history.motion.rebuttalText,
+        rebuttalValidation
+      );
       const payload = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
           history.case,
-          history.motion.motionText,
-          history.motion.rebuttalText,
+          compliantMotionText,
+          compliantRebuttalText,
           config.difficulty,
           history.motion.motionBy,
           history.motion.rebuttalBy,
-          config.role
+          config.role,
+          {
+            motion: summarizeNonCompliance(motionValidation),
+            rebuttal: summarizeNonCompliance(rebuttalValidation),
+          }
         ),
         responseLabel: 'motion',
       });
@@ -545,6 +792,15 @@ const useGameState = () => {
   const submitArgument = async (text) => {
     setLoadingMsg('The Court is deliberating...');
     try {
+      const docketRegistry = buildDocketRegistry(history);
+      const argumentRecord = createValidationRecord('argument', config.role, text, docketRegistry);
+      const compliantArgument = redactInvalidReferences(text, argumentRecord);
+
+      setHistory((prev) => ({
+        ...prev,
+        trial: { ...prev.trial, text },
+        validationHistory: [...(prev.validationHistory ?? []), argumentRecord],
+      }));
       /** @type {Juror[]} */
       const seatedJurors = history.jury?.skipped
         ? []
@@ -557,19 +813,69 @@ const useGameState = () => {
           caseForVerdict,
           history.motion.ruling,
           seatedJurors,
-          text,
-          config.difficulty
+          compliantArgument,
+          config.difficulty,
+          summarizeNonCompliance(argumentRecord)
         ),
         responseLabel: 'verdict',
       });
       /** @type {VerdictResult} */
-      const data = parseVerdictResponse(payload);
+      const data = parseVerdictResponse(payload, {
+        isJuryTrial: history.case?.is_jury_trial,
+        seatedJurorIds: seatedJurors.map((juror) => juror.id),
+        docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
+      });
+      const verdictText = [
+        data.final_ruling,
+        data.judge_opinion,
+        data.jury_reasoning,
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const verdictValidation = validateSubmissionReferences(verdictText, docketRegistry);
+      const verdictRecord = createValidationRecord(
+        'verdict',
+        'judge',
+        verdictText,
+        docketRegistry
+      );
+      const isVerdictCompliant = verdictValidation.classification === 'compliant';
 
-      setHistory((prev) => ({
-        ...prev,
-        trial: { text, verdict: data, locked: true },
-        counselNotes: deriveVerdictCounselNotes(data, config.role),
-      }));
+      setHistory((prev) => {
+        if (!isVerdictCompliant) {
+          return {
+            ...prev,
+            trial: {
+              ...prev.trial,
+              text,
+              verdict: prev.trial?.verdict,
+              locked: false,
+              rejectedVerdicts: [
+                ...(prev.trial?.rejectedVerdicts ?? []),
+                {
+                  payload,
+                  reason: 'Verdict referenced off-docket or inadmissible material.',
+                  validation: verdictRecord,
+                  timestamp: new Date().toISOString(),
+                },
+              ],
+            },
+            validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+          };
+        }
+
+        return {
+          ...prev,
+          trial: { text, verdict: data, locked: true },
+          counselNotes: deriveVerdictCounselNotes(data, config.role),
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        };
+      });
+      if (!isVerdictCompliant) {
+        setError('Verdict rejected for off-docket or inadmissible references.');
+        setLoadingMsg(null);
+        return;
+      }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);

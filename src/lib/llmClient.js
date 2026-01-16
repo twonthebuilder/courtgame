@@ -155,6 +155,30 @@ const assertBoolean = (value, field, responseLabel) => {
 };
 
 /**
+ * Ensure a value is either undefined/null or a non-empty string.
+ *
+ * @param {unknown} value - Value to validate.
+ * @param {string} field - Field name for error context.
+ * @param {string} responseLabel - Response label for user messaging.
+ */
+const assertOptionalString = (value, field, responseLabel) => {
+  if (value === undefined || value === null) return;
+  assertString(value, field, responseLabel);
+};
+
+/**
+ * Ensure a value is either undefined/null or a number.
+ *
+ * @param {unknown} value - Value to validate.
+ * @param {string} field - Field name for error context.
+ * @param {string} responseLabel - Response label for user messaging.
+ */
+const assertOptionalNumber = (value, field, responseLabel) => {
+  if (value === undefined || value === null) return;
+  assertNumber(value, field, responseLabel);
+};
+
+/**
  * Coerce unknown values into safe string fields for profile display.
  *
  * @param {unknown} value - Value to sanitize.
@@ -399,9 +423,10 @@ export const parseMotionTextResponse = (payload) => {
  * Validate and return a final verdict response.
  *
  * @param {object} payload - Parsed JSON payload.
+ * @param {{isJuryTrial?: boolean, seatedJurorIds?: number[], docketJurorIds?: number[]}} [context] - Docket context.
  * @returns {object} Sanitized verdict response payload.
  */
-export const parseVerdictResponse = (payload) => {
+export const parseVerdictResponse = (payload, context = {}) => {
   if (!payload || typeof payload !== 'object') {
     throw createLlmError('Verdict response is not an object.', {
       code: 'INVALID_RESPONSE',
@@ -413,6 +438,45 @@ export const parseVerdictResponse = (payload) => {
   assertString(payload.final_ruling, 'final_ruling', 'verdict');
   assertNumber(payload.final_weighted_score, 'final_weighted_score', 'verdict');
   assertString(payload.judge_opinion, 'judge_opinion', 'verdict');
+
+  const isJuryTrial = context.isJuryTrial === true;
+  if (isJuryTrial) {
+    assertString(payload.jury_verdict, 'jury_verdict', 'verdict');
+    assertString(payload.jury_reasoning, 'jury_reasoning', 'verdict');
+    assertNumber(payload.jury_score, 'jury_score', 'verdict');
+  } else if (context.isJuryTrial === false) {
+    assertOptionalString(payload.jury_verdict, 'jury_verdict', 'verdict');
+    assertOptionalString(payload.jury_reasoning, 'jury_reasoning', 'verdict');
+    assertOptionalNumber(payload.jury_score, 'jury_score', 'verdict');
+    const juryVerdict = typeof payload.jury_verdict === 'string' ? payload.jury_verdict.trim() : '';
+    const hasNonBenchVerdict =
+      juryVerdict.length > 0 && !['n/a', 'na'].includes(juryVerdict.toLowerCase());
+    const hasNonBenchReasoning =
+      typeof payload.jury_reasoning === 'string' &&
+      payload.jury_reasoning.trim().length > 0 &&
+      !['n/a', 'na'].includes(payload.jury_reasoning.trim().toLowerCase());
+    const hasNonBenchScore =
+      typeof payload.jury_score === 'number' && payload.jury_score !== 0;
+    if (hasNonBenchVerdict || hasNonBenchReasoning || hasNonBenchScore) {
+      throw createLlmError('Bench trials must not include jury-only outputs.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an invalid verdict. Please retry.',
+        context: { payload },
+      });
+    }
+  }
+
+  if (Array.isArray(context.seatedJurorIds) && Array.isArray(context.docketJurorIds)) {
+    const docketJurors = new Set(context.docketJurorIds);
+    const invalidJuror = context.seatedJurorIds.find((id) => !docketJurors.has(id));
+    if (invalidJuror !== undefined) {
+      throw createLlmError('Seated juror IDs were not found in the docket.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an invalid verdict. Please retry.',
+        context: { invalidJuror, seatedJurorIds: context.seatedJurorIds },
+      });
+    }
+  }
 
   return payload;
 };
