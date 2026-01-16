@@ -47,6 +47,20 @@ const juryCasePayload = {
     current_posture: 'Setting an aggressive pace.',
   },
 };
+const buildSanctionsEntry = ({
+  id,
+  state = 'warned',
+  trigger = 'decorum_violation',
+  docketText = 'The court notes misconduct on the record.',
+  timestamp,
+} = {}) => ({
+  id: id ?? `s-${Math.random().toString(16).slice(2)}`,
+  state,
+  trigger,
+  docket_text: docketText,
+  visibility: 'public',
+  timestamp: timestamp ?? new Date().toISOString(),
+});
 
 describe('useGameState transitions', () => {
   beforeEach(() => {
@@ -170,6 +184,63 @@ describe('useGameState transitions', () => {
       __testables.SANCTIONS_STATE.RECENTLY_REINSTATED
     );
     expect(result.current.sanctionsState.recentlyReinstatedUntil).toBeTruthy();
+  });
+
+  it('retains public defender mode after a guilty verdict', async () => {
+    const nowMs = Date.now();
+    const storedState = {
+      ...__testables.buildDefaultSanctionsState(nowMs),
+      state: __testables.SANCTIONS_STATE.PUBLIC_DEFENDER,
+      level: 3,
+      startedAt: new Date(nowMs).toISOString(),
+      expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
+      recentlyReinstatedUntil: null,
+    };
+    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [
+          { id: 1, status: 'admissible' },
+          { id: 2, status: 'suppressed' },
+        ],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Guilty',
+        final_weighted_score: 44,
+        judge_opinion: 'Bench decision',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', 'USA', 'standard');
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing');
+    });
+
+    expect(result.current.sanctionsState.state).toBe(
+      __testables.SANCTIONS_STATE.PUBLIC_DEFENDER
+    );
   });
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
@@ -528,14 +599,11 @@ describe('useGameState transitions', () => {
     const nowMs = Date.now();
     const baseState = __testables.buildDefaultSanctionsState(nowMs);
     const sanctionsLog = [
-      {
+      buildSanctionsEntry({
         id: 's-1',
-        state: 'warned',
-        trigger: 'decorum_violation',
-        docket_text: 'The court issues a warning for decorum.',
-        visibility: 'public',
+        docketText: 'The court issues a warning for decorum.',
         timestamp: new Date(nowMs).toISOString(),
-      },
+      }),
     ];
 
     const nextState = __testables.deriveSanctionsState(baseState, sanctionsLog, nowMs);
@@ -545,14 +613,11 @@ describe('useGameState transitions', () => {
   });
 
   it('ignores non-trigger docket text when evaluating conduct', () => {
-    const entry = {
+    const entry = buildSanctionsEntry({
       id: 's-2',
-      state: 'warned',
       trigger: 'other',
-      docket_text: 'Losing on the merits is not misconduct.',
-      visibility: 'public',
-      timestamp: new Date().toISOString(),
-    };
+      docketText: 'Losing on the merits is not misconduct.',
+    });
 
     const evaluation = __testables.evaluateConductTrigger(
       entry,
@@ -578,22 +643,18 @@ describe('useGameState transitions', () => {
       recentlyReinstatedUntil: null,
     };
     const sanctionsLog = [
-      {
+      buildSanctionsEntry({
         id: 's-3',
-        state: 'warned',
         trigger: 'deadline_violation',
-        docket_text: 'Procedural violation: missed deadline.',
-        visibility: 'public',
+        docketText: 'Procedural violation: missed deadline.',
         timestamp: new Date(firstEntryTime).toISOString(),
-      },
-      {
+      }),
+      buildSanctionsEntry({
         id: 's-4',
-        state: 'warned',
         trigger: 'deadline_violation',
-        docket_text: 'Repeated procedural violation on the docket.',
-        visibility: 'public',
+        docketText: 'Repeated procedural violation on the docket.',
         timestamp: new Date(secondEntryTime).toISOString(),
-      },
+      }),
     ];
 
     const nextState = __testables.deriveSanctionsState(
@@ -603,5 +664,89 @@ describe('useGameState transitions', () => {
     );
 
     expect(nextState.state).toBe(__testables.SANCTIONS_STATE.PUBLIC_DEFENDER);
+  });
+
+  it('transitions from clean to warned on first misconduct entry', () => {
+    const nowMs = Date.now();
+    const baseState = __testables.buildDefaultSanctionsState(nowMs);
+    const sanctionsLog = [
+      buildSanctionsEntry({
+        id: 's-5',
+        docketText: 'The court issues a warning for decorum.',
+        timestamp: new Date(nowMs).toISOString(),
+      }),
+    ];
+
+    const nextState = __testables.deriveSanctionsState(baseState, sanctionsLog, nowMs);
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.expiresAt).toBeTruthy();
+  });
+
+  it('escalates warned counsel to sanctioned on recidivism within the window', () => {
+    const nowMs = Date.now();
+    const firstEntryTime = nowMs - 10 * 60 * 1000;
+    const warnedState = {
+      ...__testables.buildDefaultSanctionsState(firstEntryTime),
+      state: __testables.SANCTIONS_STATE.WARNED,
+      level: 1,
+      startedAt: new Date(firstEntryTime).toISOString(),
+      expiresAt: new Date(nowMs + 10 * 60 * 1000).toISOString(),
+      lastMisconductAt: new Date(firstEntryTime).toISOString(),
+      recidivismCount: 1,
+      recentlyReinstatedUntil: null,
+    };
+    const sanctionsLog = [
+      buildSanctionsEntry({
+        id: 's-6',
+        docketText: 'Another warning for decorum.',
+        timestamp: new Date(nowMs).toISOString(),
+      }),
+    ];
+
+    const nextState = __testables.deriveSanctionsState(warnedState, sanctionsLog, nowMs);
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.SANCTIONED);
+  });
+
+  it('decays recidivism counts after the cooldown window passes', () => {
+    const nowMs = Date.now();
+    const lastMisconductAt = nowMs - 3 * 60 * 60 * 1000;
+    const warnedState = {
+      ...__testables.buildDefaultSanctionsState(lastMisconductAt),
+      state: __testables.SANCTIONS_STATE.WARNED,
+      level: 1,
+      startedAt: new Date(lastMisconductAt).toISOString(),
+      expiresAt: new Date(nowMs + 10 * 60 * 1000).toISOString(),
+      lastMisconductAt: new Date(lastMisconductAt).toISOString(),
+      recidivismCount: 2,
+      recentlyReinstatedUntil: null,
+    };
+
+    const nextState = __testables.deriveSanctionsState(warnedState, [], nowMs);
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.WARNED);
+    expect(nextState.recidivismCount).toBe(0);
+  });
+
+  it('clears sanctions after time served expires', () => {
+    const nowMs = Date.now();
+    const expiredAt = nowMs - 5 * 60 * 1000;
+    const sanctionedState = {
+      ...__testables.buildDefaultSanctionsState(expiredAt),
+      state: __testables.SANCTIONS_STATE.SANCTIONED,
+      level: 2,
+      startedAt: new Date(expiredAt).toISOString(),
+      expiresAt: new Date(expiredAt).toISOString(),
+      lastMisconductAt: new Date(expiredAt).toISOString(),
+      recidivismCount: 1,
+      recentlyReinstatedUntil: null,
+    };
+
+    const nextState = __testables.deriveSanctionsState(sanctionedState, [], nowMs);
+
+    expect(nextState.state).toBe(__testables.SANCTIONS_STATE.CLEAN);
+    expect(nextState.expiresAt).toBeNull();
+    expect(nextState.recidivismCount).toBe(0);
   });
 });

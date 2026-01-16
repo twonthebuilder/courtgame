@@ -128,6 +128,50 @@ describe('prompt builders', () => {
     expect(rebuttalPrompt).toContain('Draft a concise rebuttal');
   });
 
+  it('includes sanction context for judges/counsel but not jury prompts', () => {
+    const sanctionContext = {
+      state: 'sanctioned',
+      expiresAt: '2024-01-01T00:00:00.000Z',
+    };
+    const caseData = {
+      title: 'State v. Example',
+      charge: 'Theft',
+      facts: ['Fact'],
+      judge: { name: 'Hon. Reed', philosophy: 'Textualist', bias: 'Textualist' },
+    };
+
+    const opposingPrompt = getOpposingCounselPrompt(
+      caseData,
+      'normal',
+      'motion_submission',
+      'defense',
+      '',
+      {},
+      sanctionContext
+    );
+    expect(opposingPrompt).toContain('Court Status:');
+    expect(opposingPrompt).toContain('license is suspended');
+
+    const judgePrompt = getMotionPrompt(
+      caseData,
+      'Suppress evidence',
+      'Opposing response',
+      'normal',
+      'defense',
+      'prosecution',
+      'defense',
+      {},
+      {},
+      sanctionContext
+    );
+    expect(judgePrompt).toContain('Court Status:');
+    expect(judgePrompt).toContain('license is suspended');
+
+    const juryPrompt = getJuryStrikePrompt({ title: 'State v. Example' }, [1, 3], 'defense');
+    expect(juryPrompt).not.toContain('Court Status:');
+    expect(juryPrompt).not.toContain('license is suspended');
+  });
+
   it('normalizes legacy difficulty identifiers before rendering prompts', () => {
     const prompt = getMotionDraftPrompt(
       {
