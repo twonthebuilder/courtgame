@@ -216,6 +216,12 @@ const buildSanctionsState = (state, nowMs, overrides = {}) => ({
       : null,
 });
 
+const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
+  const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
+  if (!reinstatedUntilMs || nowMs >= reinstatedUntilMs) return {};
+  return { recentlyReinstatedUntil: sanctionsState.recentlyReinstatedUntil };
+};
+
 const normalizeSanctionsState = (state, nowMs) => {
   if (!state) return buildDefaultSanctionsState(nowMs);
 
@@ -272,6 +278,11 @@ const normalizeSanctionsState = (state, nowMs) => {
   }
 
   return hydratedState;
+};
+
+const isMeritReleaseVerdict = (verdict) => {
+  const ruling = verdict?.final_ruling?.toLowerCase() ?? '';
+  return ruling.includes('not guilty') || ruling.includes('dismiss');
 };
 
 const getNextSanctionsState = ({ currentState, entryState, recidivismCount, severe }) => {
@@ -702,6 +713,19 @@ const useGameState = () => {
     persistSanctionsState(sanctionsState);
   }, [sanctionsState]);
 
+  useEffect(() => {
+    const expiryCandidates = [
+      toTimestampMs(sanctionsState.expiresAt),
+      toTimestampMs(sanctionsState.recentlyReinstatedUntil),
+    ].filter((timestamp) => timestamp && timestamp > Date.now());
+    if (expiryCandidates.length === 0) return undefined;
+    const nextExpiryMs = Math.min(...expiryCandidates);
+    const timeoutId = window.setTimeout(() => {
+      setSanctionsState((prev) => normalizeSanctionsState(prev, Date.now()));
+    }, Math.max(nextExpiryMs - Date.now(), 0));
+    return () => window.clearTimeout(timeoutId);
+  }, [sanctionsState.expiresAt, sanctionsState.recentlyReinstatedUntil, sanctionsState.state]);
+
   /**
    * Build the initial motion exchange state for the pre-trial phase.
    *
@@ -944,6 +968,7 @@ const useGameState = () => {
         : 'Opposing counsel is drafting a rebuttal...'
     );
     try {
+      const visibilityContext = buildVisibilityContext(sanctionsState);
       const payload = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
         systemPrompt: getOpposingCounselPrompt(
@@ -951,7 +976,8 @@ const useGameState = () => {
           config.difficulty,
           history.motion.motionPhase,
           expectedRole,
-          history.motion.motionText
+          history.motion.motionText,
+          visibilityContext
         ),
         responseLabel: 'motion_text',
       });
@@ -1108,6 +1134,7 @@ const useGameState = () => {
 
     setLoadingMsg('Judge is ruling on the motion...');
     try {
+      const visibilityContext = buildVisibilityContext(sanctionsState);
       const docketRegistry = buildDocketRegistry(history);
       const motionValidation = validateSubmissionReferences(
         history.motion.motionText,
@@ -1138,7 +1165,8 @@ const useGameState = () => {
           {
             motion: summarizeNonCompliance(motionValidation),
             rebuttal: summarizeNonCompliance(rebuttalValidation),
-          }
+          },
+          visibilityContext
         ),
         responseLabel: 'motion',
       });
@@ -1261,6 +1289,15 @@ const useGameState = () => {
         setError('Verdict rejected for off-docket or inadmissible references.');
         setLoadingMsg(null);
         return;
+      }
+      if (isMeritReleaseVerdict(data)) {
+        setSanctionsState((prev) => {
+          if (prev.state !== SANCTIONS_STATE.PUBLIC_DEFENDER) return prev;
+          return buildSanctionsState(SANCTIONS_STATE.RECENTLY_REINSTATED, Date.now(), {
+            lastMisconductAt: prev.lastMisconductAt,
+            recidivismCount: prev.recidivismCount,
+          });
+        });
       }
       setLoadingMsg(null);
     } catch (err) {

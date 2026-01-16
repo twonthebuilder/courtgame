@@ -164,16 +164,23 @@ export const getMotionRebuttalPrompt = (caseData, motionText, difficulty) => `
  * @param {string} [motionText] - Motion text to rebut when in rebuttal phase.
  * @returns {string} Prompt text for the opposing counsel model.
  */
+const buildVisibilityContextLine = (visibilityContext = {}) => {
+  if (!visibilityContext || Object.keys(visibilityContext).length === 0) return '';
+  return `Visibility Context (judge + counsel only): ${JSON.stringify(visibilityContext)}.`;
+};
+
 export const getOpposingCounselPrompt = (
   caseData,
   difficulty,
   phase,
   opponentRole,
-  motionText = ''
+  motionText = '',
+  visibilityContext = {}
 ) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   const roleLabel = opponentRole === 'defense' ? 'Defense Attorney' : 'Prosecutor';
   const isMotionPhase = phase === 'motion_submission';
+  const visibilityLine = buildVisibilityContextLine(visibilityContext);
   const baseContext = `
     Phase: PRE-TRIAL MOTION.
     Role: ${roleLabel}.
@@ -182,6 +189,7 @@ export const getOpposingCounselPrompt = (
     Facts: ${JSON.stringify(caseData.facts)}
     Judge: ${caseData.judge.name} (${caseData.judge.philosophy}).
     Difficulty: ${normalizedDifficulty}.
+    ${visibilityLine}
     Docket rule: If it is not recorded in the docket, it is not true.
     Do not introduce facts, evidence, or entities not present in the docket inputs.
   `;
@@ -232,7 +240,8 @@ export const getMotionPrompt = (
   motionBy,
   rebuttalBy,
   playerRole,
-  complianceContext = {}
+  complianceContext = {},
+  visibilityContext = {}
 ) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
   const evidenceSnapshot = (caseData?.evidence ?? []).map((item, index) => ({
@@ -240,6 +249,7 @@ export const getMotionPrompt = (
     text: typeof item?.text === 'string' ? item.text : item,
     status: item?.status === 'suppressed' ? 'suppressed' : 'admissible',
   }));
+  const visibilityLine = buildVisibilityContextLine(visibilityContext);
 
   return `
     Judge ${caseData.judge.name} ruling on Pre-Trial Motion.
@@ -250,6 +260,7 @@ export const getMotionPrompt = (
     Difficulty: ${normalizedDifficulty}.
     Evidence Docket: ${JSON.stringify(evidenceSnapshot)}
     Submission Compliance: ${JSON.stringify(complianceContext)}
+    ${visibilityLine}
     Scoring rule: The score reflects the legal quality of the motion, not the procedural outcome.
     
     Docket rule: If it is not recorded in the docket, it is not true.
