@@ -182,6 +182,30 @@ const assertNumberArray = (value, field, responseLabel) => {
 };
 
 /**
+ * Normalize evidence entries into docket-ready objects.
+ *
+ * @param {unknown} value - Evidence payload from the model.
+ * @returns {{id: number, text: string, status: 'admissible' | 'suppressed'}[]} Evidence entries.
+ */
+const normalizeEvidenceItems = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item.trim(), status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        const id = typeof item.id === 'number' ? item.id : index + 1;
+        const text = typeof item.text === 'string' ? item.text.trim() : '';
+        const status = item.status === 'suppressed' ? 'suppressed' : 'admissible';
+        return { id, text, status };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.length > 0);
+};
+
+/**
  * Request JSON from the Gemini API using a system prompt and user prompt string.
  *
  * @param {{systemPrompt: string, userPrompt: string, responseLabel?: string}} params - Prompt configuration.
@@ -280,6 +304,7 @@ export const parseCaseResponse = (payload) => {
 
   return {
     ...payload,
+    evidence: normalizeEvidenceItems(payload.evidence),
     opposing_counsel: normalizedOpposingCounsel,
   };
 };
@@ -323,6 +348,29 @@ export const parseMotionResponse = (payload) => {
 
   assertString(payload.ruling, 'ruling', 'motion');
   assertString(payload.outcome_text, 'outcome_text', 'motion');
+  assertNumber(payload.score, 'score', 'motion');
+  assertArray(payload.evidence_status_updates, 'evidence_status_updates', 'motion');
+
+  payload.evidence_status_updates.forEach((update, index) => {
+    if (!update || typeof update !== 'object') {
+      throw createLlmError(`Evidence status update ${index + 1} is not an object.`, {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+        context: { update, index },
+      });
+    }
+    assertNumber(update.id, `evidence_status_updates[${index}].id`, 'motion');
+    if (update.status !== 'admissible' && update.status !== 'suppressed') {
+      throw createLlmError(
+        `Evidence status update ${index + 1} has invalid status.`,
+        {
+          code: 'INVALID_RESPONSE',
+          userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+          context: { update, index },
+        }
+      );
+    }
+  });
 
   return payload;
 };

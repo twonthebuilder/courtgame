@@ -16,6 +16,7 @@ describe('llmClient response parsers', () => {
     is_jury_trial: true,
     judge: { name: 'Hon. Ada Lovelace' },
     jurors: [{ id: 1, name: 'Juror One' }],
+    evidence: ['Camera still'],
     opposing_counsel: {
       name: 'Jordan Wright',
       age_range: '30s',
@@ -26,7 +27,10 @@ describe('llmClient response parsers', () => {
   };
 
   it('accepts a valid case response', () => {
-    expect(parseCaseResponse(baseCase)).toEqual(baseCase);
+    expect(parseCaseResponse(baseCase)).toEqual({
+      ...baseCase,
+      evidence: [{ id: 1, text: 'Camera still', status: 'admissible' }],
+    });
   });
 
   it('rejects an invalid case response', () => {
@@ -67,7 +71,12 @@ describe('llmClient response parsers', () => {
   });
 
   it('accepts a valid motion response', () => {
-    const payload = { ruling: 'Denied', outcome_text: 'Insufficient basis.' };
+    const payload = {
+      ruling: 'Denied',
+      outcome_text: 'Insufficient basis.',
+      score: 55,
+      evidence_status_updates: [{ id: 1, status: 'admissible' }],
+    };
     expect(parseMotionResponse(payload)).toEqual(payload);
   });
 

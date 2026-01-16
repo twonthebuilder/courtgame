@@ -16,7 +16,8 @@ The game state hook centralizes the following fields:
 
 ### History Structure
 
-- `history.case`: Generated case payload (facts, judge, jurors, etc.).
+- `history.case`: Generated case payload (facts, judge, jurors, etc.). Evidence entries are
+  stored as docket items with IDs and admissibility status (`admissible` or `suppressed`).
 - `history.jury`:
   - `skipped`: `true` when the case is a bench trial.
   - `pool`, `myStrikes`, `opponentStrikes`, `seatedIds`, `comment`, `locked` when jury is active.
@@ -25,6 +26,8 @@ The game state hook centralizes the following fields:
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
 - **Invariant:** Only juror IDs recorded in the docket may be referenced.
+- **Invariant:** Evidence admissibility is controlled in the docket; evidence is marked
+  `suppressed` rather than removed.
 
 ## Screen Flow (`gameState`)
 
@@ -59,6 +62,9 @@ The game state hook centralizes the following fields:
 - **Submit motion**
   - Trigger: `submitMotion(text)`.
   - Transition: `history.motion.locked` becomes `true`, and `history.trial.locked` resets to `false`.
+- **Ruling updates evidence**
+  - Trigger: `requestMotionRuling()`.
+  - Transition: `history.case.evidence` statuses update based on the ruling payload.
 
 ### Trial / Verdict
 

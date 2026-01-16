@@ -25,6 +25,40 @@ import {
 /** @typedef {import('../lib/types').MotionResult} MotionResult */
 /** @typedef {import('../lib/types').VerdictResult} VerdictResult */
 
+const normalizeEvidenceDocket = (evidence) =>
+  (evidence ?? [])
+    .map((item, index) => {
+      if (typeof item === 'string') {
+        return { id: index + 1, text: item, status: 'admissible' };
+      }
+      if (item && typeof item === 'object') {
+        return {
+          id: typeof item.id === 'number' ? item.id : index + 1,
+          text: typeof item.text === 'string' ? item.text : '',
+          status: item.status === 'suppressed' ? 'suppressed' : 'admissible',
+        };
+      }
+      return null;
+    })
+    .filter((item) => item && item.text.trim().length > 0);
+
+const applyEvidenceStatusUpdates = (evidence, updates) => {
+  if (!Array.isArray(evidence)) return [];
+  if (!Array.isArray(updates) || updates.length === 0) return evidence;
+  const updateMap = new Map(updates.map((update) => [update.id, update.status]));
+  return evidence.map((item) => {
+    const nextStatus = updateMap.get(item.id);
+    if (!nextStatus) return item;
+    if (item.status === nextStatus) return item;
+    return { ...item, status: nextStatus };
+  });
+};
+
+const getAdmissibleEvidence = (evidence) =>
+  (evidence ?? [])
+    .filter((item) => item.status !== 'suppressed')
+    .map((item) => item.text);
+
 const findDuplicateId = (ids) => {
   const seen = new Set();
   for (const id of ids) {
@@ -165,9 +199,10 @@ const useGameState = () => {
       const data = parseCaseResponse(payload);
 
       const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
+      const evidenceDocket = normalizeEvidenceDocket(data.evidence);
 
       setHistory({
-        case: data,
+        case: { ...data, evidence: evidenceDocket },
         jury: data.is_jury_trial
           ? { pool: juryPool, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
@@ -486,6 +521,10 @@ const useGameState = () => {
           motionPhase: 'motion_ruling_locked',
           locked: true,
         },
+        case: {
+          ...prev.case,
+          evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
+        },
         counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
         trial: { ...prev.trial, locked: false },
       }));
@@ -510,10 +549,12 @@ const useGameState = () => {
       const seatedJurors = history.jury?.skipped
         ? []
         : history.jury?.pool?.filter((juror) => juror.status === 'seated') ?? [];
+      const admissibleEvidence = getAdmissibleEvidence(history.case?.evidence);
+      const caseForVerdict = { ...history.case, evidence: admissibleEvidence };
       const payload = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
-          history.case,
+          caseForVerdict,
           history.motion.ruling,
           seatedJurors,
           text,

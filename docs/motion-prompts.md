@@ -16,5 +16,6 @@ Pocket Court keeps motion-related LLM instructions centralized in `src/lib/promp
 
 - Which side filed the motion and rebuttal.
 - Which role the player is currently taking.
+- The current evidence docket (IDs, descriptions, and admissibility status).
 
-The ruling prompt still returns a structured JSON payload with the ruling, explanation, and score so the motion phase can flow into trial scoring.
+The ruling prompt still returns a structured JSON payload with the ruling, explanation, score, and required `evidence_status_updates` entries so admissibility decisions flow into the docket and the trial phase.

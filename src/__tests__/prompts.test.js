@@ -54,7 +54,10 @@ describe('prompt builders', () => {
     expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
 
     const motionPrompt = getMotionPrompt(
-      { judge: { name: 'Hon. Reed', bias: 'Textualist' } },
+      {
+        judge: { name: 'Hon. Reed', bias: 'Textualist' },
+        evidence: [{ id: 1, text: 'Security footage', status: 'admissible' }],
+      },
       'Suppress evidence',
       'Opposing response',
       'regular',
@@ -67,6 +70,7 @@ describe('prompt builders', () => {
     expect(motionPrompt).toContain('Player Role: defense');
     expect(motionPrompt).toContain('Motion (defense): "Suppress evidence"');
     expect(motionPrompt).toContain('Rebuttal (prosecution): "Opposing response"');
+    expect(motionPrompt).toContain('evidence_status_updates');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },
