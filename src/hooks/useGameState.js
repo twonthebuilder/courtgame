@@ -24,6 +24,27 @@ import {
 /** @typedef {import('../lib/types').MotionResult} MotionResult */
 /** @typedef {import('../lib/types').VerdictResult} VerdictResult */
 
+const findDuplicateId = (ids) => {
+  const seen = new Set();
+  for (const id of ids) {
+    if (seen.has(id)) return id;
+    seen.add(id);
+  }
+  return null;
+};
+
+const validateJurorIdSubset = (docketJurorIds, ids) => {
+  const duplicateId = findDuplicateId(ids);
+  if (duplicateId !== null) {
+    return { valid: false, reason: 'duplicate', id: duplicateId };
+  }
+  const invalidId = ids.find((id) => !docketJurorIds.has(id));
+  if (invalidId !== undefined) {
+    return { valid: false, reason: 'unknown', id: invalidId };
+  }
+  return { valid: true };
+};
+
 /**
  * Manage the Pocket Court game state and actions in one place.
  *
@@ -123,7 +144,7 @@ const useGameState = () => {
       setHistory({
         case: data,
         jury: data.is_jury_trial
-          ? { pool: data.jurors, myStrikes: [], locked: false }
+          ? { pool: data.jurors, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
@@ -153,6 +174,24 @@ const useGameState = () => {
         responseLabel: 'jury',
       });
       const data = parseJuryResponse(payload);
+      // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
+      const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
+      const opponentValidation = validateJurorIdSubset(docketJurorIds, data.opponent_strikes);
+      const seatedValidation = validateJurorIdSubset(docketJurorIds, data.seated_juror_ids);
+
+      if (!opponentValidation.valid || !seatedValidation.valid) {
+        setHistory((prev) => ({
+          ...prev,
+          jury: {
+            ...prev.jury,
+            myStrikes: strikes,
+            invalidStrike: true,
+          },
+        }));
+        setError('Strike results referenced jurors outside the docket. Please retry.');
+        setLoadingMsg(null);
+        return;
+      }
 
       setHistory((prev) => {
         const seatedJurors =
@@ -165,6 +204,7 @@ const useGameState = () => {
             opponentStrikes: data.opponent_strikes,
             seatedIds: data.seated_juror_ids,
             comment: data.judge_comment,
+            invalidStrike: false,
             locked: true,
           },
           motion: createMotionState(),
