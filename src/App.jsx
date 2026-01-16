@@ -138,11 +138,10 @@ export default function PocketCourt() {
           {!history.jury.skipped && (
             <PhaseSection title="Jury Selection" icon={Users}>
               <JurySection
-                pool={history.case.jurors}
+                pool={history.jury.pool}
                 isLocked={history.jury.locked}
                 myStrikes={history.jury.myStrikes || []}
                 opponentStrikes={history.jury.opponentStrikes || []}
-                seatedIds={history.jury.seatedIds || []}
                 judgeComment={history.jury.comment}
                 onStrike={toggleStrikeSelection}
               />

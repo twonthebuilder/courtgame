@@ -20,6 +20,8 @@ The game state hook centralizes the following fields:
 - `history.jury`:
   - `skipped`: `true` when the case is a bench trial.
   - `pool`, `myStrikes`, `opponentStrikes`, `seatedIds`, `comment`, `locked` when jury is active.
+  - `pool` jurors retain a stable `status` (`eligible`, `struck_by_player`, `struck_by_opponent`,
+    `seated`) with optional `status_history` to record transitions.
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
 - **Invariant:** Only juror IDs recorded in the docket may be referenced.
@@ -48,6 +50,9 @@ The game state hook centralizes the following fields:
 - **Submit strikes**
   - Trigger: `submitStrikes(strikes)`.
   - Transition: `history.jury.locked` becomes `true` and `history.motion.locked` remains `false`.
+  - Jurors are never removed from the pool; each juror status moves from `eligible` to
+    `struck_by_player`, `struck_by_opponent`, or `seated` based on the strike outcome. The
+    `status_history` array records each transition.
 
 ### Motions
 
