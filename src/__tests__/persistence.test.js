@@ -44,6 +44,18 @@ describe('persistence helpers', () => {
     expect(loaded).toMatchObject(saved);
   });
 
+  it('persists v1 schema metadata when saving and loading profiles', () => {
+    const saved = savePlayerProfile({ schemaVersion: 0, sanctions: { state: 'clean' } });
+
+    expect(saved.schemaVersion).toBe(1);
+    expect(JSON.parse(window.localStorage.getItem(PROFILE_KEY))).toMatchObject({
+      schemaVersion: 1,
+    });
+
+    const loaded = loadPlayerProfile();
+    expect(loaded.schemaVersion).toBe(1);
+  });
+
   it('roundtrips run history via localStorage', () => {
     const saved = saveRunHistory({ runs: [{ id: 'run-1' }] });
     const loaded = loadRunHistory();

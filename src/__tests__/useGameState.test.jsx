@@ -11,6 +11,7 @@ import {
   SANCTION_REASON_CODES,
   SANCTION_STATES,
   SANCTION_VISIBILITY,
+  SANCTIONS_TIMERS_MS,
   PROFILE_STORAGE_KEY,
 } from '../lib/constants';
 import { requestLlmJson } from '../lib/llmClient';
@@ -1164,6 +1165,29 @@ describe('useGameState transitions', () => {
 
     expect(nextState.state).toBe(SANCTION_STATES.WARNED);
     expect(nextState.recidivismCount).toBe(0);
+  });
+
+  it('prunes recidivism counts on read when the cooldown window has passed', () => {
+    const nowMs = Date.now();
+    const lastMisconductAt = nowMs - SANCTIONS_TIMERS_MS.COOLDOWN_RESET - 10 * 1000;
+    const storedState = {
+      ...__testables.buildDefaultSanctionsState(lastMisconductAt),
+      state: SANCTION_STATES.WARNED,
+      lastMisconductAt: new Date(lastMisconductAt).toISOString(),
+      expiresAt: new Date(nowMs + 10 * 60 * 1000).toISOString(),
+      recidivismCount: 2,
+      recentlyReinstatedUntil: null,
+    };
+
+    window.localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
+    );
+
+    const { result } = renderHook(() => useGameState());
+
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.WARNED);
+    expect(result.current.sanctionsState.recidivismCount).toBe(0);
   });
 
   it('clears sanctions after time served expires', () => {
