@@ -1343,6 +1343,11 @@ const useGameState = () => {
       });
       /** @type {MotionResult} */
       const data = parseMotionResponse(payload);
+      // Temporary instrumentation: remove after validating motion ruling payloads.
+      console.info('Motion ruling received', {
+        ruling: data?.ruling,
+        outcomeText: data?.outcome_text,
+      });
       const nextDisposition = deriveDispositionFromMotion({
         ...history.motion,
         ruling: data,

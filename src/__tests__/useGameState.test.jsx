@@ -920,6 +920,53 @@ describe('useGameState transitions', () => {
     expect(result.current.history.disposition.source).toBe('motion');
   });
 
+  it('does not set disposition on denied motions and allows verdict submission', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Motion denied; case not dismissed.',
+        score: 45,
+        evidence_status_updates: [],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Not Guilty',
+        final_weighted_score: 77,
+        judge_opinion: 'Bench decision',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Move to dismiss.',
+        motionBy: 'defense',
+        rebuttalText: 'Opposes dismissal.',
+        rebuttalBy: 'prosecution',
+        ruling: null,
+        motionPhase: 'rebuttal_submission',
+        locked: false,
+      };
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.disposition).toBeNull();
+
+    await act(async () => {
+      await result.current.submitArgument('Closing argument.');
+    });
+
+    expect(requestLlmJson).toHaveBeenCalledTimes(3);
+    expect(result.current.error).toBeNull();
+  });
+
   it('blocks verdict submissions once a terminal disposition is set', async () => {
     requestLlmJson.mockResolvedValueOnce(benchCasePayload);
 
