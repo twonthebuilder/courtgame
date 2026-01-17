@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import {
   debugEnabled,
   getDebugState,
@@ -6,8 +6,58 @@ import {
   subscribeDebugStore,
 } from '../lib/debugStore';
 
-const useDebugStore = () =>
-  useSyncExternalStore(subscribeDebugStore, getDebugState, getDebugState);
+const fallbackDebugState = Object.freeze({
+  events: [],
+  lastAction: null,
+  flags: {
+    bypassJuryLlm: false,
+    verboseLogging: false,
+  },
+});
+const failedSnapshot = Object.freeze({
+  debugState: fallbackDebugState,
+  storeAvailable: false,
+});
+
+let hasStoreFailure = false;
+
+const markStoreFailure = () => {
+  hasStoreFailure = true;
+};
+
+const useDebugStore = () => {
+  const safeGetSnapshot = useCallback(() => {
+    if (hasStoreFailure) {
+      return failedSnapshot;
+    }
+    try {
+      return { debugState: getDebugState(), storeAvailable: true };
+    } catch {
+      markStoreFailure();
+      return failedSnapshot;
+    }
+  }, []);
+
+  const safeSubscribe = useCallback((listener) => {
+    if (hasStoreFailure) {
+      return () => {};
+    }
+    try {
+      return subscribeDebugStore(listener);
+    } catch {
+      markStoreFailure();
+      return () => {};
+    }
+  }, []);
+
+  const snapshot = useSyncExternalStore(
+    safeSubscribe,
+    safeGetSnapshot,
+    safeGetSnapshot
+  );
+
+  return snapshot;
+};
 
 const formatJson = (value) => {
   if (!value) return '—';
@@ -28,7 +78,7 @@ const truncateText = (value, limit = 400) => {
 
 export default function DebugOverlay({ gameState, config, history, sanctionsState }) {
   const [visible, setVisible] = useState(false);
-  const debugState = useDebugStore();
+  const { debugState, storeAvailable } = useDebugStore();
 
   useEffect(() => {
     const handleKeydown = (event) => {
@@ -50,7 +100,7 @@ export default function DebugOverlay({ gameState, config, history, sanctionsStat
   const remainingStrikes = Math.max(0, 2 - selectedJurorIds.length);
   const juryPoolIds = juryPool.map((juror) => juror.id);
 
-  if (!debugEnabled() || !visible) return null;
+  if (!storeAvailable || !debugEnabled() || !visible) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[100] pointer-events-none">

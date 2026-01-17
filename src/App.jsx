@@ -38,6 +38,7 @@ const RunShell = ({
   startPayload,
   onExitToMenu,
   onShellEvent,
+  onDebugData,
 }) => {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
@@ -81,6 +82,22 @@ const RunShell = ({
   }, [
     generateCase,
     startPayload,
+  ]);
+
+  useEffect(() => {
+    if (!onDebugData) return;
+    onDebugData({
+      gameState,
+      config,
+      history,
+      sanctionsState: gameStateData.sanctionsState,
+    });
+  }, [
+    config,
+    gameState,
+    gameStateData.sanctionsState,
+    history,
+    onDebugData,
   ]);
 
   // Auto-scroll logic
@@ -259,12 +276,6 @@ const RunShell = ({
         </PaperContainer>
       </main>
       <DebugToast message={debugBanner} />
-      <DebugOverlay
-        gameState={gameState}
-        config={config}
-        history={history}
-        sanctionsState={gameStateData.sanctionsState}
-      />
     </div>
   );
 
@@ -285,8 +296,12 @@ export default function PocketCourt() {
   });
   const [startPayload, setStartPayload] = useState(null);
   const [runOutcome, setRunOutcome] = useState(null);
+  const [debugPayload, setDebugPayload] = useState(null);
 
   const transitionShell = useCallback((nextState) => {
+    if (nextState !== appShellState.Run) {
+      setDebugPayload(null);
+    }
     setShellState(nextState);
   }, []);
 
@@ -331,13 +346,16 @@ export default function PocketCourt() {
     transitionShell(appShellState.MainMenu);
   }, [transitionShell]);
 
+  let shellView = null;
+
   switch (shellState) {
     case appShellState.MainMenu:
-      return (
+      shellView = (
         <MainMenu onPlay={() => transitionShell(appShellState.SetupHub)} />
       );
+      break;
     case appShellState.SetupHub:
-      return (
+      shellView = (
         <SetupHub
           onStart={handleStart}
           error={setupError}
@@ -346,22 +364,40 @@ export default function PocketCourt() {
           initializingRole={null}
         />
       );
+      break;
     case appShellState.PostRun:
-      return (
+      shellView = (
         <PostRun
           outcome={runOutcome}
           onNewCase={startNewCase}
           onMainMenu={returnToMenu}
         />
       );
+      break;
     case appShellState.Run:
     default:
-      return (
+      shellView = (
         <RunShell
           startPayload={startPayload}
           onExitToMenu={exitToMenu}
           onShellEvent={handleShellEvent}
+          onDebugData={setDebugPayload}
         />
       );
+      break;
   }
+
+  return (
+    <>
+      {shellView}
+      {shellState === appShellState.Run && (
+        <DebugOverlay
+          gameState={debugPayload?.gameState}
+          config={debugPayload?.config}
+          history={debugPayload?.history}
+          sanctionsState={debugPayload?.sanctionsState}
+        />
+      )}
+    </>
+  );
 }
