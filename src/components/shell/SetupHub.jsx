@@ -8,51 +8,43 @@ import {
 } from '../../lib/config';
 import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
+import InitializationScreen from '../screens/InitializationScreen';
 
 /**
- * Entry screen for selecting a game mode, jurisdiction, and side.
+ * Setup hub for selecting a game mode, jurisdiction, and side.
  *
  * @param {object} props - Component props.
  * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
  * @param {object | null} props.sanctionsState - Current sanctions state.
- * @returns {JSX.Element} The start screen layout.
+ * @param {boolean} props.isInitializing - Whether setup is starting a run.
+ * @param {string | null} props.initializingRole - Role to display while initializing.
+ * @returns {JSX.Element} The setup hub layout.
  */
-const StartScreen = ({ onStart, error, sanctionsState }) => {
+const SetupHub = ({ onStart, error, sanctionsState, isInitializing, initializingRole }) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
   const [courtType, setCourtType] = useState(DEFAULT_GAME_CONFIG.courtType);
+  const storedApiKey = loadStoredApiKey();
   const [provider, setProvider] = useState(AI_PROVIDERS[0]?.value ?? 'gemini');
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(storedApiKey ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [rememberKey, setRememberKey] = useState(false);
-  const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
+  const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
   const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
 
   useEffect(() => {
-    const storedKey = loadStoredApiKey();
-    if (storedKey) {
-      setApiKey(storedKey);
-      setRememberKey(true);
-    }
-    setHasLoadedStoredKey(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedStoredKey) return;
     persistApiKey(apiKey, rememberKey);
-  }, [apiKey, rememberKey, hasLoadedStoredKey]);
-
-  useEffect(() => {
-    if (!isPublicDefenderMode) return;
-    setCourtType(COURT_TYPES.NIGHT_COURT);
-  }, [isPublicDefenderMode]);
+  }, [apiKey, rememberKey]);
 
   const handleStart = (role) => {
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
     onStart(effectiveRole, difficulty, jurisdiction, effectiveCourtType);
   };
+
+  if (isInitializing) {
+    return <InitializationScreen role={initializingRole} />;
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
@@ -216,4 +208,4 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
   );
 };
 
-export default StartScreen;
+export default SetupHub;
