@@ -282,13 +282,15 @@
  * @typedef {object} RunHistoryEntry
  * @property {string} id - Unique run identifier.
  * @property {string} startedAt - ISO timestamp when the run started.
- * @property {string} endedAt - ISO timestamp when the run ended.
- * @property {string} role - Player role for the run.
- * @property {string} difficulty - Difficulty setting for the run.
+ * @property {string | null} endedAt - ISO timestamp when the run ended.
  * @property {string} jurisdiction - Jurisdiction selected for the run.
- * @property {string} caseType - Case type for the run.
- * @property {string | null} disposition - Final disposition type when available.
- * @property {number | null} verdictScore - Final weighted score when a verdict is reached.
+ * @property {string} difficulty - Difficulty setting for the run.
+ * @property {string} playerRole - Player role for the run.
+ * @property {string | null} caseTitle - Case title for the run.
+ * @property {string | null} judgeName - Presiding judge for the run.
+ * @property {string | null} outcome - Final outcome type when available.
+ * @property {number | null} score - Final weighted score when a verdict is reached.
+ * @property {string | null} achievementId - Achievement identifier when awarded.
  */
 
 /**
