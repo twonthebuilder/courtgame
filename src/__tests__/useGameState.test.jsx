@@ -133,6 +133,39 @@ describe('useGameState transitions', () => {
     expect(result.current.history.counselNotes).toBe('');
   });
 
+  it('emits RUN_ENDED and clears run state when resetGame is called', async () => {
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
+
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.resetGame();
+    });
+
+    const runEndedEvent = onShellEvent.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === 'RUN_ENDED');
+
+    expect(runEndedEvent).toEqual(
+      expect.objectContaining({
+        type: 'RUN_ENDED',
+        payload: expect.objectContaining({
+          sanctions: expect.objectContaining({
+            before: expect.objectContaining({ state: SANCTION_STATES.CLEAN }),
+            after: expect.objectContaining({ state: SANCTION_STATES.CLEAN }),
+          }),
+        }),
+      })
+    );
+    expect(result.current.runOutcome).toBeNull();
+    expect(result.current.history.disposition).toBeNull();
+  });
+
   it('normalizes legacy difficulty values before storing config', async () => {
     requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
