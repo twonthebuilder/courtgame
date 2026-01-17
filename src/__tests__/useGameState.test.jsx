@@ -1114,6 +1114,65 @@ describe('useGameState transitions', () => {
     expect(result.current.runOutcome.disposition.type).toBe(
       FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
     );
+    expect(result.current.gameState).toBe(GAME_STATES.PLAYING);
+  });
+
+  it('ends the run on a dismissal and blocks further docket submissions', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'GRANTED',
+          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          score: 90,
+          evidence_status_updates: [],
+        })
+      );
+
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Move to dismiss.',
+        motionBy: 'defense',
+        rebuttalText: 'Opposes dismissal.',
+        rebuttalBy: 'prosecution',
+        ruling: null,
+        motionPhase: 'rebuttal_submission',
+        locked: false,
+      };
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const runEndedEvent = onShellEvent.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === 'RUN_ENDED');
+
+    expect(runEndedEvent).toEqual(
+      expect.objectContaining({
+        type: 'RUN_ENDED',
+        payload: expect.objectContaining({
+          disposition: expect.objectContaining({
+            type: FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE,
+          }),
+        }),
+      })
+    );
+
+    await act(async () => {
+      await result.current.submitArgument('Closing argument.');
+    });
+
+    expect(result.current.error).toBe('This case has already reached a terminal disposition.');
+    expect(requestLlmJson).toHaveBeenCalledTimes(2);
   });
 
   it('does not set disposition on denied motions and allows verdict submission', async () => {
@@ -1219,6 +1278,72 @@ describe('useGameState transitions', () => {
       })
     );
     expect(result.current.runOutcome.disposition.type).toBe(FINAL_DISPOSITIONS.NOT_GUILTY);
+    expect(result.current.gameState).toBe(GAME_STATES.PLAYING);
+  });
+
+  it('ends the run on a mistrial verdict and blocks further submissions', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildVerdict({
+            final_ruling: 'Mistrial declared.',
+            final_weighted_score: 0,
+            judge_opinion: 'The court declares a mistrial.',
+            jury_reasoning: 'N/A',
+          })
+        )
+      );
+
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Denied.',
+          score: 45,
+          evidence_status_updates: [],
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing statement.');
+    });
+
+    const runEndedEvent = onShellEvent.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === 'RUN_ENDED');
+
+    expect(runEndedEvent).toEqual(
+      expect.objectContaining({
+        type: 'RUN_ENDED',
+        payload: expect.objectContaining({
+          disposition: expect.objectContaining({
+            type: FINAL_DISPOSITIONS.MISTRIAL_CONDUCT,
+          }),
+        }),
+      })
+    );
+
+    await act(async () => {
+      await result.current.submitArgument('Another closing.');
+    });
+
+    expect(result.current.error).toBe('This case has already reached a terminal disposition.');
+    expect(requestLlmJson).toHaveBeenCalledTimes(2);
   });
 
   it('blocks verdict submissions once a terminal disposition is set', async () => {
