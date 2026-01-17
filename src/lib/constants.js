@@ -90,6 +90,11 @@ export const SANCTIONS_TIMERS_MS = Object.freeze({
   REINSTATEMENT_GRACE: 20 * 60 * 1000,
 });
 
+export const PROFILE_STORAGE_KEY = 'pocketcourt.profile.v1';
+export const RUN_HISTORY_STORAGE_KEY = 'pocketcourt.runHistory.v1';
+export const PROFILE_SCHEMA_VERSION = 1;
+export const RUN_HISTORY_SCHEMA_VERSION = 1;
+
 const isCanonicalValue = (value, values) => values.includes(value);
 
 /**

@@ -1,8 +1,11 @@
-const PROFILE_STORAGE_KEY = 'pocketcourt.profile.v1';
-const RUN_HISTORY_STORAGE_KEY = 'pocketcourt.runHistory.v1';
+import {
+  PROFILE_SCHEMA_VERSION,
+  PROFILE_STORAGE_KEY,
+  RUN_HISTORY_SCHEMA_VERSION,
+  RUN_HISTORY_STORAGE_KEY,
+} from './constants';
+
 const LEGACY_SANCTIONS_STORAGE_KEY = 'courtgame.sanctions.state';
-const PROFILE_SCHEMA_VERSION = 1;
-const RUN_HISTORY_SCHEMA_VERSION = 1;
 
 const hasWindowStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
 
