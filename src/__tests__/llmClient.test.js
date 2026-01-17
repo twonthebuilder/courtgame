@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fetchWithRetry } from '../lib/api';
 import { getActiveApiKey } from '../lib/runtimeConfig';
-import { LlmClientError, getLlmClientErrorMessage, requestLlmJson } from '../lib/llmClient';
+import {
+  LlmClientError,
+  getLlmClientErrorMessage,
+  parseCaseResponse,
+  requestLlmJson,
+} from '../lib/llmClient';
 
 vi.mock('../lib/runtimeConfig', () => ({
   getActiveApiKey: vi.fn(() => 'test-key'),
@@ -60,5 +65,34 @@ describe('llm client wrappers', () => {
     ).rejects.toMatchObject({
       userMessage: 'LLM API key is missing. Please check configuration.',
     });
+  });
+
+  it('rejects duplicate juror ids in case responses', () => {
+    const payload = {
+      title: 'Case',
+      facts: ['Fact'],
+      is_jury_trial: true,
+      judge: { name: 'Judge' },
+      jurors: [
+        { id: 1, name: 'A' },
+        { id: 1, name: 'B' },
+      ],
+      opposing_counsel: { name: 'Opposing' },
+    };
+
+    expect(() => parseCaseResponse(payload)).toThrow('Duplicate juror id');
+  });
+
+  it('rejects non-numeric juror ids in case responses', () => {
+    const payload = {
+      title: 'Case',
+      facts: ['Fact'],
+      is_jury_trial: true,
+      judge: { name: 'Judge' },
+      jurors: [{ id: 'one', name: 'A' }],
+      opposing_counsel: { name: 'Opposing' },
+    };
+
+    expect(() => parseCaseResponse(payload)).toThrow('jurors[0].id');
   });
 });

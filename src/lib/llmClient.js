@@ -302,6 +302,19 @@ export const parseCaseResponse = (payload) => {
 
   if (payload.is_jury_trial) {
     assertArray(payload.jurors, 'jurors', 'case');
+    const seenJurorIds = new Set();
+    payload.jurors.forEach((juror, index) => {
+      const fieldLabel = `jurors[${index}].id`;
+      assertNumber(juror?.id, fieldLabel, 'case');
+      if (seenJurorIds.has(juror.id)) {
+        throw createLlmError(`Duplicate juror id at ${fieldLabel}.`, {
+          code: 'INVALID_RESPONSE',
+          userMessage: 'The AI returned an incomplete case. Please try again.',
+          context: { field: fieldLabel, responseLabel: 'case', value: juror.id },
+        });
+      }
+      seenJurorIds.add(juror.id);
+    });
   }
 
   const opposingCounselPayload = payload.opposing_counsel;

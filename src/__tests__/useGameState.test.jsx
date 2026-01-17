@@ -143,6 +143,44 @@ describe('useGameState transitions', () => {
     expect(result.current.config.difficulty).toBe('normal');
   });
 
+  it('toggles strike selections and ignores invalid ids', async () => {
+    requestLlmJson.mockResolvedValueOnce(juryCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase(
+        'defense',
+        'normal',
+        JURISDICTIONS.USA,
+        CASE_TYPES.STANDARD
+      );
+    });
+
+    expect(result.current.history.jury.myStrikes).toEqual([]);
+
+    act(() => {
+      result.current.toggleStrikeSelection(1);
+    });
+    expect(result.current.history.jury.myStrikes).toEqual([1]);
+
+    act(() => {
+      result.current.toggleStrikeSelection(1);
+    });
+    expect(result.current.history.jury.myStrikes).toEqual([]);
+
+    act(() => {
+      result.current.toggleStrikeSelection('bad-id');
+    });
+    expect(result.current.history.jury.myStrikes).toEqual([]);
+
+    act(() => {
+      result.current.toggleStrikeSelection(2);
+      result.current.toggleStrikeSelection(Number.NaN);
+    });
+    expect(result.current.history.jury.myStrikes).toEqual([2]);
+  });
+
   it('locks the config when public defender mode is active', async () => {
     const nowMs = Date.now();
     const storedState = {
