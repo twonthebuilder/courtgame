@@ -87,6 +87,13 @@ are not stored by default; only high-level run metadata and sanctions summaries 
    - Trigger: `resetGame()` from the navbar or “Start New Case” button.
    - Side effects: clears `loadingMsg`, `error`, and `copied` UI flags.
 
+## App Shell Flow (Main Menu → Run → Post-Run)
+
+- **`Run` → `PostRun`**
+  - Trigger: terminal disposition (dismissal, mistrial, or verdict).
+  - Side effects: `RUN_ENDED` event emitted to the app shell with an outcome payload
+    containing the final disposition and sanctions snapshot.
+
 ## Living Docket Phase Transitions
 
 ### Jury Selection
