@@ -30,7 +30,12 @@ import {
   parseVerdictResponse,
   requestLlmJson,
 } from '../lib/llmClient';
-import { loadPlayerProfile, savePlayerProfile } from '../lib/persistence';
+import {
+  loadPlayerProfile,
+  loadRunHistory,
+  savePlayerProfile,
+  saveRunHistory,
+} from '../lib/persistence';
 import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
@@ -98,9 +103,37 @@ const buildDefaultSanctionsState = (nowMs = Date.now()) => ({
   recentlyReinstatedUntil: null,
 });
 
+const buildPdStatusSnapshot = (sanctionsState) => {
+  if (!sanctionsState || sanctionsState.state !== SANCTION_STATES.PUBLIC_DEFENDER) return null;
+  return {
+    startedAt: sanctionsState.startedAt,
+    expiresAt: sanctionsState.expiresAt,
+  };
+};
+
+const buildReinstatementSnapshot = (sanctionsState) => {
+  if (!sanctionsState?.recentlyReinstatedUntil) return null;
+  return { until: sanctionsState.recentlyReinstatedUntil };
+};
+
+const updatePlayerProfile = (updater) => {
+  const currentProfile = loadPlayerProfile();
+  const nextProfile = updater(currentProfile);
+  return savePlayerProfile(nextProfile);
+};
+
+const buildDefaultStats = () => ({
+  runsCompleted: 0,
+  verdictsFinalized: 0,
+});
+
 const persistSanctionsState = (state) => {
-  const profile = loadPlayerProfile();
-  savePlayerProfile({ ...profile, sanctions: state });
+  updatePlayerProfile((profile) => ({
+    ...profile,
+    sanctions: state,
+    pdStatus: buildPdStatusSnapshot(state),
+    reinstatement: buildReinstatementSnapshot(state),
+  }));
 };
 
 const isJudicialAcknowledgment = (entry) =>
@@ -672,6 +705,9 @@ const updateJurorStatus = (juror, nextStatus) => {
   };
 };
 
+const createRunId = () =>
+  `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 /**
  * Manage the Pocket Court game state and actions in one place.
  *
@@ -709,6 +745,7 @@ const useGameState = () => {
       Date.now()
     );
   });
+  const [runMeta, setRunMeta] = useState(null);
 
   useEffect(() => {
     setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
@@ -717,6 +754,61 @@ const useGameState = () => {
   useEffect(() => {
     persistSanctionsState(sanctionsState);
   }, [sanctionsState]);
+
+  const appendAchievement = (title) => {
+    if (!title) return;
+    updatePlayerProfile((profile) => {
+      const achievements = Array.isArray(profile.achievements) ? profile.achievements : [];
+      return {
+        ...profile,
+        achievements: [
+          ...achievements,
+          {
+            title,
+            awardedAt: new Date().toISOString(),
+            runId: runMeta?.id ?? null,
+          },
+        ],
+      };
+    });
+  };
+
+  const updateRunStats = (hasVerdict) => {
+    updatePlayerProfile((profile) => {
+      const stats = profile.stats ?? buildDefaultStats();
+      return {
+        ...profile,
+        stats: {
+          runsCompleted: stats.runsCompleted + 1,
+          verdictsFinalized: stats.verdictsFinalized + (hasVerdict ? 1 : 0),
+        },
+      };
+    });
+  };
+
+  const appendRunHistoryEntry = (verdict, disposition) => {
+    if (!runMeta || runMeta.endedAt) return;
+    const endedAt = new Date().toISOString();
+    const entry = {
+      id: runMeta.id ?? createRunId(),
+      startedAt: runMeta.startedAt ?? endedAt,
+      endedAt,
+      role: runMeta.role ?? config.role,
+      difficulty: runMeta.difficulty ?? config.difficulty,
+      jurisdiction: runMeta.jurisdiction ?? config.jurisdiction,
+      caseType: runMeta.caseType ?? config.caseType,
+      disposition: disposition?.type ?? null,
+      verdictScore:
+        typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
+    };
+    const history = loadRunHistory();
+    saveRunHistory({
+      ...history,
+      runs: [...(history.runs ?? []), entry],
+    });
+    updateRunStats(Boolean(verdict));
+    setRunMeta({ ...runMeta, endedAt });
+  };
 
   useEffect(() => {
     const expiryCandidates = [
@@ -758,6 +850,7 @@ const useGameState = () => {
     setError(null);
     setCopied(false);
     setHistory({ counselNotes: '', disposition: null });
+    setRunMeta(null);
   };
 
   /**
@@ -836,6 +929,14 @@ const useGameState = () => {
         trial: { locked: false, rejectedVerdicts: [] },
         sanctions: [],
         validationHistory: [],
+      });
+      setRunMeta({
+        id: createRunId(),
+        startedAt: new Date().toISOString(),
+        role: lockedRole,
+        difficulty: normalizedDifficulty,
+        jurisdiction: lockedJurisdiction,
+        caseType: lockedCaseType,
       });
 
       setGameState(GAME_STATES.PLAYING);
@@ -1195,6 +1296,10 @@ const useGameState = () => {
       });
       /** @type {MotionResult} */
       const data = parseMotionResponse(payload);
+      const nextDisposition = deriveDispositionFromMotion({
+        ...history.motion,
+        ruling: data,
+      });
 
       setHistory((prev) => {
         const updatedMotion = {
@@ -1203,7 +1308,6 @@ const useGameState = () => {
           motionPhase: 'motion_ruling_locked',
           locked: true,
         };
-        const nextDisposition = deriveDispositionFromMotion(updatedMotion);
         return {
           ...prev,
           motion: updatedMotion,
@@ -1217,6 +1321,9 @@ const useGameState = () => {
         };
       });
       setLoadingMsg(null);
+      if (isTerminalDisposition(nextDisposition)) {
+        appendRunHistoryEntry(null, nextDisposition);
+      }
     } catch (err) {
       console.error(err);
       setError(getLlmClientErrorMessage(err, 'Motion ruling failed.'));
@@ -1337,6 +1444,10 @@ const useGameState = () => {
           });
         });
       }
+      if (data.achievement_title) {
+        appendAchievement(data.achievement_title);
+      }
+      appendRunHistoryEntry(data, nextDisposition);
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);

@@ -24,6 +24,10 @@ describe('persistence helpers', () => {
     expect(profile.createdAt).toBeTruthy();
     expect(profile.updatedAt).toBeTruthy();
     expect(profile.sanctions).toBeNull();
+    expect(profile.pdStatus).toBeNull();
+    expect(profile.reinstatement).toBeNull();
+    expect(profile.stats).toEqual({ runsCompleted: 0, verdictsFinalized: 0 });
+    expect(profile.achievements).toEqual([]);
   });
 
   it('builds default run history metadata', () => {

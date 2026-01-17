@@ -231,6 +231,38 @@
  */
 
 /**
+ * Persisted public defender status snapshot.
+ *
+ * @typedef {object} PublicDefenderStatus
+ * @property {string} startedAt - ISO timestamp for the public defender assignment.
+ * @property {string | null} expiresAt - ISO timestamp for the public defender assignment end.
+ */
+
+/**
+ * Persisted reinstatement status snapshot.
+ *
+ * @typedef {object} ReinstatementStatus
+ * @property {string} until - ISO timestamp for the reinstatement grace period.
+ */
+
+/**
+ * Persisted player stats snapshot.
+ *
+ * @typedef {object} PlayerStats
+ * @property {number} runsCompleted - Total completed runs.
+ * @property {number} verdictsFinalized - Total finalized verdicts.
+ */
+
+/**
+ * Persisted achievement metadata.
+ *
+ * @typedef {object} PlayerAchievement
+ * @property {string} title - Achievement title.
+ * @property {string} awardedAt - ISO timestamp when the achievement was awarded.
+ * @property {string | null} runId - Associated run identifier, if available.
+ */
+
+/**
  * Persisted player profile metadata (v1 schema).
  *
  * @typedef {object} PlayerProfile
@@ -238,6 +270,10 @@
  * @property {string} createdAt - ISO timestamp when the profile was created.
  * @property {string} updatedAt - ISO timestamp when the profile was last updated.
  * @property {PlayerSanctionsState | null} sanctions - Persisted sanctions state snapshot.
+ * @property {PublicDefenderStatus | null} pdStatus - Public defender assignment snapshot.
+ * @property {ReinstatementStatus | null} reinstatement - Reinstatement grace snapshot.
+ * @property {PlayerStats} stats - Aggregated player stats.
+ * @property {PlayerAchievement[]} achievements - Awarded achievements.
  */
 
 /**
@@ -245,6 +281,14 @@
  *
  * @typedef {object} RunHistoryEntry
  * @property {string} id - Unique run identifier.
+ * @property {string} startedAt - ISO timestamp when the run started.
+ * @property {string} endedAt - ISO timestamp when the run ended.
+ * @property {string} role - Player role for the run.
+ * @property {string} difficulty - Difficulty setting for the run.
+ * @property {string} jurisdiction - Jurisdiction selected for the run.
+ * @property {string} caseType - Case type for the run.
+ * @property {string | null} disposition - Final disposition type when available.
+ * @property {number | null} verdictScore - Final weighted score when a verdict is reached.
  */
 
 /**

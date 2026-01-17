@@ -46,6 +46,13 @@ export const defaultPlayerProfile = () => {
     createdAt: timestamp,
     updatedAt: timestamp,
     sanctions: null,
+    pdStatus: null,
+    reinstatement: null,
+    stats: {
+      runsCompleted: 0,
+      verdictsFinalized: 0,
+    },
+    achievements: [],
   };
 };
 

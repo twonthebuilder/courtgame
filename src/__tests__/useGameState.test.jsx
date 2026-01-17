@@ -14,7 +14,7 @@ import {
   PROFILE_STORAGE_KEY,
 } from '../lib/constants';
 import { requestLlmJson } from '../lib/llmClient';
-import { defaultPlayerProfile } from '../lib/persistence';
+import { defaultPlayerProfile, loadPlayerProfile, loadRunHistory } from '../lib/persistence';
 
 vi.mock('../lib/clipboard', () => ({
   copyToClipboard: vi.fn(),
@@ -471,6 +471,99 @@ describe('useGameState transitions', () => {
     });
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
+  });
+
+  it('records stats, run history, and achievements on verdict finalization', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'DENIED',
+        outcome_text: 'Denied',
+        score: 50,
+        evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      })
+      .mockResolvedValueOnce({
+        final_ruling: 'Not Guilty',
+        final_weighted_score: 99,
+        judge_opinion: 'Bench decision',
+        achievement_title: 'Order of Operations',
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing');
+    });
+
+    const profile = loadPlayerProfile();
+    const runHistory = loadRunHistory();
+
+    expect(profile.stats).toEqual({ runsCompleted: 1, verdictsFinalized: 1 });
+    expect(profile.achievements[0]).toMatchObject({
+      title: 'Order of Operations',
+    });
+    expect(runHistory.runs).toHaveLength(1);
+    expect(runHistory.runs[0]).toMatchObject({
+      disposition: 'not_guilty',
+      verdictScore: 99,
+    });
+  });
+
+  it('records run history when a motion ends the run early', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(benchCasePayload)
+      .mockResolvedValueOnce({ text: 'Opposing response.' })
+      .mockResolvedValueOnce({
+        ruling: 'GRANTED',
+        outcome_text: 'Dismissed with prejudice',
+        score: 50,
+        evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      });
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const profile = loadPlayerProfile();
+    const runHistory = loadRunHistory();
+
+    expect(profile.stats).toEqual({ runsCompleted: 1, verdictsFinalized: 0 });
+    expect(runHistory.runs).toHaveLength(1);
+    expect(runHistory.runs[0]).toMatchObject({
+      disposition: 'dismissed_with_prejudice',
+      verdictScore: null,
+    });
   });
 
   it('updates counsel notes when the jury is seated', async () => {
