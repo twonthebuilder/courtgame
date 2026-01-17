@@ -1026,6 +1026,63 @@ describe('useGameState transitions', () => {
     expect(result.current.history.disposition.source).toBe('motion');
   });
 
+  it('emits RUN_ENDED with outcome payload when a dismissal ends the run', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'GRANTED',
+          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          score: 90,
+          evidence_status_updates: [],
+        })
+      );
+
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Move to dismiss.',
+        motionBy: 'defense',
+        rebuttalText: 'Opposes dismissal.',
+        rebuttalBy: 'prosecution',
+        ruling: null,
+        motionPhase: 'rebuttal_submission',
+        locked: false,
+      };
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const runEndedEvent = onShellEvent.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === 'RUN_ENDED');
+
+    expect(runEndedEvent).toEqual(
+      expect.objectContaining({
+        type: 'RUN_ENDED',
+        payload: expect.objectContaining({
+          disposition: expect.objectContaining({
+            type: FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE,
+          }),
+          sanctions: expect.objectContaining({
+            after: expect.objectContaining({ state: SANCTION_STATES.CLEAN }),
+          }),
+        }),
+      })
+    );
+    expect(result.current.runOutcome.disposition.type).toBe(
+      FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
+    );
+  });
+
   it('does not set disposition on denied motions and allows verdict submission', async () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
@@ -1075,6 +1132,60 @@ describe('useGameState transitions', () => {
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
     expect(result.current.error).toBeNull();
+  });
+
+  it('emits RUN_ENDED with outcome payload after a final verdict', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse(buildVerdict({ jury_reasoning: 'N/A' })));
+
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Denied.',
+          score: 45,
+          evidence_status_updates: [],
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing statement.');
+    });
+
+    const runEndedEvent = onShellEvent.mock.calls
+      .map(([event]) => event)
+      .find((event) => event.type === 'RUN_ENDED');
+
+    expect(runEndedEvent).toEqual(
+      expect.objectContaining({
+        type: 'RUN_ENDED',
+        payload: expect.objectContaining({
+          disposition: expect.objectContaining({
+            type: FINAL_DISPOSITIONS.NOT_GUILTY,
+          }),
+          sanctions: expect.objectContaining({
+            before: expect.objectContaining({ state: SANCTION_STATES.CLEAN }),
+            after: expect.objectContaining({ state: SANCTION_STATES.CLEAN }),
+          }),
+        }),
+      })
+    );
+    expect(result.current.runOutcome.disposition.type).toBe(FINAL_DISPOSITIONS.NOT_GUILTY);
   });
 
   it('blocks verdict submissions once a terminal disposition is set', async () => {

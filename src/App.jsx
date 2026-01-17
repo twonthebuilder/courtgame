@@ -11,6 +11,7 @@ import PaperContainer from './components/layout/PaperContainer';
 import PhaseSection from './components/layout/PhaseSection';
 import InitializationScreen from './components/screens/InitializationScreen';
 import MainMenu from './components/shell/MainMenu';
+import PostRun from './components/shell/PostRun';
 import SetupHub from './components/shell/SetupHub';
 import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
@@ -283,6 +284,7 @@ export default function PocketCourt() {
     return stored ? normalizeSanctionsState(stored, Date.now()) : null;
   });
   const [startPayload, setStartPayload] = useState(null);
+  const [runOutcome, setRunOutcome] = useState(null);
 
   const transitionShell = useCallback((nextState) => {
     setShellState(nextState);
@@ -304,12 +306,28 @@ export default function PocketCourt() {
         setStartPayload(null);
         transitionShell(appShellState.SetupHub);
       }
+      if (event?.type === 'RUN_ENDED') {
+        setStartPayload(null);
+        setRunOutcome(event.payload ?? null);
+        transitionShell(appShellState.PostRun);
+      }
     },
     [transitionShell]
   );
 
   const exitToMenu = useCallback(() => {
     setStartPayload(null);
+    setRunOutcome(null);
+    transitionShell(appShellState.MainMenu);
+  }, [transitionShell]);
+
+  const startNewCase = useCallback(() => {
+    setRunOutcome(null);
+    transitionShell(appShellState.SetupHub);
+  }, [transitionShell]);
+
+  const returnToMenu = useCallback(() => {
+    setRunOutcome(null);
     transitionShell(appShellState.MainMenu);
   }, [transitionShell]);
 
@@ -329,7 +347,13 @@ export default function PocketCourt() {
         />
       );
     case appShellState.PostRun:
-      return <MainMenu onPlay={() => transitionShell(appShellState.SetupHub)} />;
+      return (
+        <PostRun
+          outcome={runOutcome}
+          onNewCase={startNewCase}
+          onMainMenu={returnToMenu}
+        />
+      );
     case appShellState.Run:
     default:
       return (

@@ -254,6 +254,8 @@ const buildSanctionsState = (state, nowMs, overrides = {}) => {
   };
 };
 
+const cloneSanctionsSnapshot = (state) => (state ? { ...state } : null);
+
 const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
   const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
   if (!reinstatedUntilMs || nowMs >= reinstatedUntilMs) return {};
@@ -728,6 +730,10 @@ const createRunId = () =>
  *   loadingMsg: string | null,
  *   error: string | null,
  *   copied: boolean,
+ *   runOutcome: {
+ *     disposition: import('../lib/types').DispositionRecord | null,
+ *     sanctions: { before: import('../lib/types').PlayerSanctionsState | null, after: import('../lib/types').PlayerSanctionsState | null },
+ *   } | null,
  *   generateCase: (role: string, difficulty: string, jurisdiction: string, courtType: string) => Promise<boolean>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
  *   submitMotionStep: (text: string) => Promise<void>,
@@ -751,6 +757,7 @@ const useGameState = (options = {}) => {
   const [copied, setCopied] = useState(false);
   const [debugBanner, setDebugBanner] = useState(null);
   const debugBannerTimeoutRef = useRef(null);
+  const runStartSanctionsRef = useRef(null);
   const [sanctionsState, setSanctionsState] = useState(() => {
     const storedState = loadPlayerProfile()?.sanctions ?? null;
     return normalizeSanctionsState(
@@ -759,6 +766,7 @@ const useGameState = (options = {}) => {
     );
   });
   const [runMeta, setRunMeta] = useState(null);
+  const [runOutcome, setRunOutcome] = useState(null);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -772,6 +780,17 @@ const useGameState = (options = {}) => {
       }
     },
     [onShellEvent]
+  );
+
+  const buildRunOutcome = useCallback(
+    (disposition, sanctionsAfter) => ({
+      disposition: disposition ?? null,
+      sanctions: {
+        before: runStartSanctionsRef.current ?? cloneSanctionsSnapshot(sanctionsState),
+        after: cloneSanctionsSnapshot(sanctionsAfter),
+      },
+    }),
+    [sanctionsState]
   );
 
   useEffect(() => {
@@ -909,6 +928,8 @@ const useGameState = (options = {}) => {
     setError(null);
     setCopied(false);
     setDebugBanner(null);
+    setRunOutcome(null);
+    runStartSanctionsRef.current = null;
     if (debugBannerTimeoutRef.current) {
       window.clearTimeout(debugBannerTimeoutRef.current);
       debugBannerTimeoutRef.current = null;
@@ -1015,6 +1036,8 @@ const useGameState = (options = {}) => {
 
       const startedAt = new Date().toISOString();
       const runId = createRunId();
+      runStartSanctionsRef.current = cloneSanctionsSnapshot(sanctionsState);
+      setRunOutcome(null);
       setHistory({
         case: { ...data, evidence: evidenceDocket },
         jury: data.is_jury_trial
@@ -1545,6 +1568,9 @@ const useGameState = (options = {}) => {
       });
       setLoadingMsg(null);
       if (isTerminalDisposition(nextDisposition)) {
+        const outcomePayload = buildRunOutcome(nextDisposition, sanctionsState);
+        setRunOutcome(outcomePayload);
+        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
         finalizeRunHistoryEntry(null, nextDisposition, null);
       }
     } catch (err) {
@@ -1658,19 +1684,28 @@ const useGameState = (options = {}) => {
         setLoadingMsg(null);
         return;
       }
-      if (isMeritReleaseDisposition(nextDisposition)) {
-        setSanctionsState((prev) => {
-          if (prev.state !== SANCTION_STATES.PUBLIC_DEFENDER) return prev;
-          return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, Date.now(), {
-            lastMisconductAt: prev.lastMisconductAt,
-            recidivismCount: prev.recidivismCount,
-          });
-        });
+      const shouldReinstate =
+        isMeritReleaseDisposition(nextDisposition) &&
+        sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+      const nowMs = shouldReinstate ? Date.now() : null;
+      const nextSanctionsState = shouldReinstate
+        ? buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
+            lastMisconductAt: sanctionsState.lastMisconductAt,
+            recidivismCount: sanctionsState.recidivismCount,
+          })
+        : sanctionsState;
+      if (shouldReinstate) {
+        setSanctionsState(nextSanctionsState);
       }
       if (data.achievement_title) {
         appendAchievement(data.achievement_title);
       }
       finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
+      if (isTerminalDisposition(nextDisposition)) {
+        const outcomePayload = buildRunOutcome(nextDisposition, nextSanctionsState);
+        setRunOutcome(outcomePayload);
+        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+      }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
@@ -1824,6 +1859,7 @@ const useGameState = (options = {}) => {
     error,
     copied,
     debugBanner,
+    runOutcome,
     sanctionsState,
     generateCase,
     submitStrikes,
