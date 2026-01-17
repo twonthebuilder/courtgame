@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
 import { DEFAULT_GAME_CONFIG, normalizeCourtType, normalizeDifficulty } from '../lib/config';
 import {
@@ -260,7 +260,7 @@ const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
   return { recentlyReinstatedUntil: sanctionsState.recentlyReinstatedUntil };
 };
 
-const normalizeSanctionsState = (state, nowMs) => {
+export const normalizeSanctionsState = (state, nowMs) => {
   if (!state) return buildDefaultSanctionsState(nowMs);
 
   const hydratedState = {
@@ -719,6 +719,8 @@ const createRunId = () =>
 /**
  * Manage the Pocket Court game state and actions in one place.
  *
+ * @param {object} [options] - Optional shell callbacks.
+ * @param {(event: {type: string, message?: string, payload?: object}) => void} [options.onShellEvent]
  * @returns {{
  *   gameState: string,
  *   history: HistoryState,
@@ -737,7 +739,8 @@ const createRunId = () =>
  *   toggleStrikeSelection: (id: number) => void,
  * }} Game state values and action handlers.
  */
-const useGameState = () => {
+const useGameState = (options = {}) => {
+  const { onShellEvent } = options;
   const [gameState, setGameState] = useState(GAME_STATES.START);
   const [loadingMsg, setLoadingMsg] = useState(null);
   const [history, setHistory] = useState(
@@ -762,9 +765,19 @@ const useGameState = () => {
     setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
   }, [history.sanctions]);
 
+  const emitShellEvent = useCallback(
+    (event) => {
+      if (typeof onShellEvent === 'function') {
+        onShellEvent(event);
+      }
+    },
+    [onShellEvent]
+  );
+
   useEffect(() => {
     persistSanctionsState(sanctionsState);
-  }, [sanctionsState]);
+    emitShellEvent({ type: 'sanctions_sync', payload: sanctionsState });
+  }, [emitShellEvent, sanctionsState]);
 
   const appendAchievement = (title) => {
     if (!title) return;
@@ -902,6 +915,7 @@ const useGameState = () => {
     }
     setHistory({ counselNotes: '', disposition: null });
     setRunMeta(null);
+    emitShellEvent({ type: 'reset' });
   };
 
   /**
@@ -1042,8 +1056,9 @@ const useGameState = () => {
       return true;
     } catch (err) {
       console.error(err);
-      setError(getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.'));
-      setGameState(GAME_STATES.START);
+      const message = getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.');
+      setError(message);
+      emitShellEvent({ type: 'start_failed', message });
       return false;
     }
   };

@@ -9,12 +9,15 @@ import ActionFooter from './components/layout/ActionFooter';
 import DocketHeader from './components/layout/DocketHeader';
 import PaperContainer from './components/layout/PaperContainer';
 import PhaseSection from './components/layout/PhaseSection';
+import InitializationScreen from './components/screens/InitializationScreen';
 import MainMenu from './components/shell/MainMenu';
 import SetupHub from './components/shell/SetupHub';
 import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
 import LoadingView from './components/ui/LoadingView';
-import useGameState from './hooks/useGameState';
+import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
+import { GAME_STATES } from './lib/constants';
+import { loadPlayerProfile } from './lib/persistence';
 
 /** @typedef {import('./lib/types').HistoryState} HistoryState */
 
@@ -30,16 +33,14 @@ const appShellState = Object.freeze({
   PostRun: 'PostRun',
 });
 
-/**
- * Main Pocket Court application component.
- *
- * @returns {JSX.Element} The app shell with game state routing.
- */
-export default function PocketCourt() {
+const RunShell = ({
+  startPayload,
+  onExitToMenu,
+  onShellEvent,
+}) => {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
-  const shellPayloadRef = useRef(null);
-  const gameStateData = useGameState();
+  const gameStateData = useGameState({ onShellEvent });
   const {
     gameState,
     config,
@@ -59,27 +60,27 @@ export default function PocketCourt() {
   } = gameStateData;
   /** @type {HistoryState} */
   const history = gameStateData.history;
-  const [shellState, setShellState] = useState(appShellState.MainMenu);
-  const [isInitializing, setIsInitializing] = useState(false);
-  const [initializingRole, setInitializingRole] = useState(null);
-
-  const transitionShell = useCallback((nextState, payload = null) => {
-    shellPayloadRef.current = payload;
-    setShellState(nextState);
-  }, []);
 
   const handleReset = () => {
     resetGame();
-    transitionShell(appShellState.MainMenu);
+    onExitToMenu();
   };
 
-  const handleStart = async (role, difficulty, jurisdiction, courtType) => {
-    setInitializingRole(role);
-    setIsInitializing(true);
-    const didStart = await generateCase(role, difficulty, jurisdiction, courtType);
-    setIsInitializing(false);
-    transitionShell(didStart ? appShellState.Run : appShellState.MainMenu);
-  };
+  useEffect(() => {
+    if (!startPayload) return;
+    const startRun = async () => {
+      await generateCase(
+        startPayload.role,
+        startPayload.difficulty,
+        startPayload.jurisdiction,
+        startPayload.courtType
+      );
+    };
+    startRun();
+  }, [
+    generateCase,
+    startPayload,
+  ]);
 
   // Auto-scroll logic
   useEffect(() => {
@@ -117,6 +118,10 @@ export default function PocketCourt() {
     requestMotionRuling,
     triggerAiMotionSubmission,
   ]);
+
+  if (gameState !== GAME_STATES.PLAYING) {
+    return <InitializationScreen role={startPayload?.role ?? null} />;
+  }
 
   // --- MAIN RENDER ---
 
@@ -262,6 +267,52 @@ export default function PocketCourt() {
     </div>
   );
 
+  return runView;
+};
+
+/**
+ * Main Pocket Court application component.
+ *
+ * @returns {JSX.Element} The app shell with game state routing.
+ */
+export default function PocketCourt() {
+  const [shellState, setShellState] = useState(appShellState.MainMenu);
+  const [setupError, setSetupError] = useState(null);
+  const [sanctionsSnapshot, setSanctionsSnapshot] = useState(() => {
+    const stored = loadPlayerProfile()?.sanctions ?? null;
+    return stored ? normalizeSanctionsState(stored, Date.now()) : null;
+  });
+  const [startPayload, setStartPayload] = useState(null);
+
+  const transitionShell = useCallback((nextState) => {
+    setShellState(nextState);
+  }, []);
+
+  const handleStart = (role, difficulty, jurisdiction, courtType) => {
+    setSetupError(null);
+    setStartPayload({ role, difficulty, jurisdiction, courtType });
+    transitionShell(appShellState.Run);
+  };
+
+  const handleShellEvent = useCallback(
+    (event) => {
+      if (event?.type === 'sanctions_sync') {
+        setSanctionsSnapshot(event.payload ?? null);
+      }
+      if (event?.type === 'start_failed') {
+        setSetupError(event.message ?? 'Unable to start the case.');
+        setStartPayload(null);
+        transitionShell(appShellState.SetupHub);
+      }
+    },
+    [transitionShell]
+  );
+
+  const exitToMenu = useCallback(() => {
+    setStartPayload(null);
+    transitionShell(appShellState.MainMenu);
+  }, [transitionShell]);
+
   switch (shellState) {
     case appShellState.MainMenu:
       return (
@@ -271,16 +322,22 @@ export default function PocketCourt() {
       return (
         <SetupHub
           onStart={handleStart}
-          error={error}
-          sanctionsState={gameStateData.sanctionsState}
-          isInitializing={isInitializing}
-          initializingRole={initializingRole}
+          error={setupError}
+          sanctionsState={sanctionsSnapshot}
+          isInitializing={false}
+          initializingRole={null}
         />
       );
     case appShellState.PostRun:
       return <MainMenu onPlay={() => transitionShell(appShellState.SetupHub)} />;
     case appShellState.Run:
     default:
-      return runView;
+      return (
+        <RunShell
+          startPayload={startPayload}
+          onExitToMenu={exitToMenu}
+          onShellEvent={handleShellEvent}
+        />
+      );
   }
 }
