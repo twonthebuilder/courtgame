@@ -977,7 +977,7 @@ const useGameState = () => {
     });
 
     try {
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Generate',
         systemPrompt: getGeneratorPrompt(
           normalizedDifficulty,
@@ -994,7 +994,7 @@ const useGameState = () => {
         responseLabel: 'case',
       });
       /** @type {CaseData} */
-      const data = parseCaseResponse(payload);
+      const data = parseCaseResponse(parsed);
 
       const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
       const evidenceDocket = normalizeEvidenceDocket(data.evidence);
@@ -1130,7 +1130,7 @@ const useGameState = () => {
         logEvent('Bypass LLM enabled: auto-approving jury strikes.');
       } else {
         logEvent('Jury strikes request started.');
-        const payload = await requestLlmJson({
+        const { parsed, rawText } = await requestLlmJson({
           userPrompt: 'Strike',
           systemPrompt: getJuryStrikePrompt(
             buildDocketPromptCase(history.case),
@@ -1139,12 +1139,13 @@ const useGameState = () => {
           ),
           responseLabel: 'jury',
         });
+        setLastAction({ rawModelText: rawText });
         logEvent('Jury strikes request finished.');
-        logEvent(`Jury strikes raw payload size: ${JSON.stringify(payload).length}`, {
+        logEvent(`Jury strikes raw payload size: ${rawText.length}`, {
           verbose: true,
         });
         try {
-          data = parseJuryResponse(payload);
+          data = parseJuryResponse(parsed);
           logEvent('Jury strikes parse success.');
         } catch (parseError) {
           finalizeAction({ result: 'parse_fail', rejectReason: 'parse_failed' });
@@ -1285,7 +1286,7 @@ const useGameState = () => {
     );
     try {
       const visibilityContext = buildVisibilityContext(sanctionsState);
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
         systemPrompt: getOpposingCounselPrompt(
           buildDocketPromptCase(history.case),
@@ -1301,7 +1302,7 @@ const useGameState = () => {
         ),
         responseLabel: 'motion_text',
       });
-      const data = parseMotionTextResponse(payload);
+      const data = parseMotionTextResponse(parsed);
 
       setHistory((prev) => ({
         ...prev,
@@ -1472,7 +1473,7 @@ const useGameState = () => {
         history.motion.rebuttalText,
         rebuttalValidation
       );
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
           buildDocketPromptCase(history.case),
@@ -1495,7 +1496,7 @@ const useGameState = () => {
         responseLabel: 'motion',
       });
       /** @type {MotionResult} */
-      const data = parseMotionResponse(payload);
+      const data = parseMotionResponse(parsed);
       // Temporary instrumentation: remove after validating motion ruling payloads.
       console.info('Motion ruling received', {
         ruling: data?.ruling,
@@ -1565,7 +1566,7 @@ const useGameState = () => {
       const caseForVerdict = buildDocketPromptCase(history.case, {
         evidenceMode: 'admissible',
       });
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
           caseForVerdict,
@@ -1582,7 +1583,7 @@ const useGameState = () => {
         responseLabel: 'verdict',
       });
       /** @type {VerdictResult} */
-      const data = parseVerdictResponse(payload, {
+      const data = parseVerdictResponse(parsed, {
         isJuryTrial: history.case?.is_jury_trial,
         seatedJurorIds: seatedJurors.map((juror) => juror.id),
         docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
@@ -1616,7 +1617,7 @@ const useGameState = () => {
               rejectedVerdicts: [
                 ...(prev.trial?.rejectedVerdicts ?? []),
                 {
-                  payload,
+                  payload: parsed,
                   reason: 'Verdict referenced off-docket or inadmissible material.',
                   validation: verdictRecord,
                   timestamp: new Date().toISOString(),

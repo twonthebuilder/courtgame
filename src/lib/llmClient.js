@@ -233,7 +233,7 @@ const normalizeEvidenceItems = (value) => {
  * Request JSON from the Gemini API using a system prompt and user prompt string.
  *
  * @param {{systemPrompt: string, userPrompt: string, responseLabel?: string}} params - Prompt configuration.
- * @returns {Promise<object>} Parsed JSON payload.
+ * @returns {Promise<{parsed: object, rawText: string}>} Parsed JSON payload and raw response text.
  */
 export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel = 'response' }) => {
   const apiKey = getActiveApiKey();
@@ -257,7 +257,10 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
     });
 
     const responseText = extractResponseText(response, responseLabel);
-    return parseResponseJson(responseText, responseLabel);
+    return {
+      parsed: parseResponseJson(responseText, responseLabel),
+      rawText: responseText,
+    };
   } catch (error) {
     if (error instanceof LlmClientError) {
       throw error;
