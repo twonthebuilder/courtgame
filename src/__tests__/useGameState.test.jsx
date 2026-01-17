@@ -11,8 +11,10 @@ import {
   SANCTION_REASON_CODES,
   SANCTION_STATES,
   SANCTION_VISIBILITY,
+  PROFILE_STORAGE_KEY,
 } from '../lib/constants';
 import { requestLlmJson } from '../lib/llmClient';
+import { defaultPlayerProfile } from '../lib/persistence';
 
 vi.mock('../lib/clipboard', () => ({
   copyToClipboard: vi.fn(),
@@ -146,7 +148,10 @@ describe('useGameState transitions', () => {
       ...__testables.buildDefaultSanctionsState(nowMs),
       state: SANCTION_STATES.PUBLIC_DEFENDER,
     };
-    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+    window.localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
+    );
 
     requestLlmJson.mockResolvedValueOnce(benchCasePayload);
 
@@ -173,7 +178,10 @@ describe('useGameState transitions', () => {
       expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
       recentlyReinstatedUntil: null,
     };
-    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+    window.localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
+    );
 
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
@@ -231,7 +239,10 @@ describe('useGameState transitions', () => {
       expiresAt: new Date(nowMs + 60 * 60 * 1000).toISOString(),
       recentlyReinstatedUntil: null,
     };
-    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+    window.localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
+    );
 
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)
@@ -338,7 +349,10 @@ describe('useGameState transitions', () => {
       expiresAt: new Date(nowMs + 20 * 60 * 1000).toISOString(),
       recentlyReinstatedUntil: new Date(nowMs + 20 * 60 * 1000).toISOString(),
     };
-    window.localStorage.setItem('courtgame.sanctions.state', JSON.stringify(storedState));
+    window.localStorage.setItem(
+      PROFILE_STORAGE_KEY,
+      JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
+    );
 
     requestLlmJson
       .mockResolvedValueOnce(benchCasePayload)

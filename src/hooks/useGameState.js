@@ -30,6 +30,7 @@ import {
   parseVerdictResponse,
   requestLlmJson,
 } from '../lib/llmClient';
+import { loadPlayerProfile, savePlayerProfile } from '../lib/persistence';
 import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
@@ -59,7 +60,6 @@ const normalizeReferenceEntity = (entity) => {
   return 'rulings';
 };
 
-const SANCTIONS_STORAGE_KEY = 'courtgame.sanctions.state';
 // Real-time windows to allow recidivism escalation and cooldown resets across sessions.
 const RECIDIVISM_WINDOW_MS = SANCTIONS_TIMERS_MS.RECIDIVISM_WINDOW;
 const COOLDOWN_RESET_MS = SANCTIONS_TIMERS_MS.COOLDOWN_RESET;
@@ -98,23 +98,9 @@ const buildDefaultSanctionsState = (nowMs = Date.now()) => ({
   recentlyReinstatedUntil: null,
 });
 
-const readStoredSanctionsState = () => {
-  if (typeof window === 'undefined') return null;
-  const stored = window.localStorage.getItem(SANCTIONS_STORAGE_KEY);
-  if (!stored) return null;
-  try {
-    const parsed = JSON.parse(stored);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return parsed;
-  } catch (error) {
-    console.warn('Failed to parse stored sanctions state.', error);
-    return null;
-  }
-};
-
 const persistSanctionsState = (state) => {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(SANCTIONS_STORAGE_KEY, JSON.stringify(state));
+  const profile = loadPlayerProfile();
+  savePlayerProfile({ ...profile, sanctions: state });
 };
 
 const isJudicialAcknowledgment = (entry) =>
@@ -717,7 +703,7 @@ const useGameState = () => {
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [sanctionsState, setSanctionsState] = useState(() => {
-    const storedState = readStoredSanctionsState();
+    const storedState = loadPlayerProfile()?.sanctions ?? null;
     return normalizeSanctionsState(
       storedState ?? buildDefaultSanctionsState(),
       Date.now()
