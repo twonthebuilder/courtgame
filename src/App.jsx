@@ -9,8 +9,8 @@ import ActionFooter from './components/layout/ActionFooter';
 import DocketHeader from './components/layout/DocketHeader';
 import PaperContainer from './components/layout/PaperContainer';
 import PhaseSection from './components/layout/PhaseSection';
-import InitializationScreen from './components/screens/InitializationScreen';
-import StartScreen from './components/screens/StartScreen';
+import MainMenu from './components/shell/MainMenu';
+import SetupHub from './components/shell/SetupHub';
 import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
 import LoadingView from './components/ui/LoadingView';
@@ -60,6 +60,8 @@ export default function PocketCourt() {
   /** @type {HistoryState} */
   const history = gameStateData.history;
   const [shellState, setShellState] = useState(appShellState.MainMenu);
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [initializingRole, setInitializingRole] = useState(null);
 
   const transitionShell = useCallback((nextState, payload = null) => {
     shellPayloadRef.current = payload;
@@ -72,8 +74,10 @@ export default function PocketCourt() {
   };
 
   const handleStart = async (role, difficulty, jurisdiction, courtType) => {
-    transitionShell(appShellState.SetupHub, { role, difficulty, jurisdiction, courtType });
+    setInitializingRole(role);
+    setIsInitializing(true);
     const didStart = await generateCase(role, difficulty, jurisdiction, courtType);
+    setIsInitializing(false);
     transitionShell(didStart ? appShellState.Run : appShellState.MainMenu);
   };
 
@@ -261,22 +265,20 @@ export default function PocketCourt() {
   switch (shellState) {
     case appShellState.MainMenu:
       return (
-        <StartScreen
-          onStart={handleStart}
-          error={error}
-          sanctionsState={gameStateData.sanctionsState}
-        />
+        <MainMenu onPlay={() => transitionShell(appShellState.SetupHub)} />
       );
     case appShellState.SetupHub:
-      return <InitializationScreen role={config.role} />;
-    case appShellState.PostRun:
       return (
-        <StartScreen
+        <SetupHub
           onStart={handleStart}
           error={error}
           sanctionsState={gameStateData.sanctionsState}
+          isInitializing={isInitializing}
+          initializingRole={initializingRole}
         />
       );
+    case appShellState.PostRun:
+      return <MainMenu onPlay={() => transitionShell(appShellState.SetupHub)} />;
     case appShellState.Run:
     default:
       return runView;
