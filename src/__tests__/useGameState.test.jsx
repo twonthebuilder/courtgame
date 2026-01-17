@@ -90,6 +90,10 @@ const buildVerdict = (overrides = {}) => ({
   achievement_title: null,
   ...overrides,
 });
+const buildLlmResponse = (payload, rawText = JSON.stringify(payload)) => ({
+  parsed: payload,
+  rawText,
+});
 
 describe('useGameState transitions', () => {
   beforeEach(() => {
@@ -120,7 +124,7 @@ describe('useGameState transitions', () => {
     expect(result.current.gameState).toBe(GAME_STATES.INITIALIZING);
 
     await act(async () => {
-      resolveRequest(benchCasePayload);
+      resolveRequest(buildLlmResponse(benchCasePayload));
       await deferred;
     });
 
@@ -130,7 +134,7 @@ describe('useGameState transitions', () => {
   });
 
   it('normalizes legacy difficulty values before storing config', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -147,7 +151,7 @@ describe('useGameState transitions', () => {
   });
 
   it('toggles strike selections and ignores invalid ids', async () => {
-    requestLlmJson.mockResolvedValueOnce(juryCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -195,7 +199,7 @@ describe('useGameState transitions', () => {
       JSON.stringify({ ...defaultPlayerProfile(), sanctions: storedState })
     );
 
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -227,22 +231,26 @@ describe('useGameState transitions', () => {
     );
 
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 50,
-        evidence_status_updates: [
-          { id: 1, status: 'admissible' },
-          { id: 2, status: 'suppressed' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Not Guilty',
-        final_weighted_score: 77,
-        judge_opinion: 'Bench decision',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 50,
+          evidence_status_updates: [
+            { id: 1, status: 'admissible' },
+            { id: 2, status: 'suppressed' },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Not Guilty',
+          final_weighted_score: 77,
+          judge_opinion: 'Bench decision',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -303,22 +311,26 @@ describe('useGameState transitions', () => {
     );
 
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 50,
-        evidence_status_updates: [
-          { id: 1, status: 'admissible' },
-          { id: 2, status: 'suppressed' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Guilty',
-        final_weighted_score: 44,
-        judge_opinion: 'Bench decision',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 50,
+          evidence_status_updates: [
+            { id: 1, status: 'admissible' },
+            { id: 2, status: 'suppressed' },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Guilty',
+          final_weighted_score: 44,
+          judge_opinion: 'Bench decision',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -349,22 +361,26 @@ describe('useGameState transitions', () => {
 
   it('tracks the jury skip path and uses empty seated jurors on verdict', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 50,
-        evidence_status_updates: [
-          { id: 1, status: 'admissible' },
-          { id: 2, status: 'suppressed' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Acquitted',
-        final_weighted_score: 77,
-        judge_opinion: 'Bench decision',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 50,
+          evidence_status_updates: [
+            { id: 1, status: 'admissible' },
+            { id: 2, status: 'suppressed' },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Acquitted',
+          final_weighted_score: 77,
+          judge_opinion: 'Bench decision',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -413,14 +429,16 @@ describe('useGameState transitions', () => {
     );
 
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'AI drafted motion.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 45,
-        evidence_status_updates: [{ id: 1, status: 'admissible' }],
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI drafted motion.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 45,
+          evidence_status_updates: [{ id: 1, status: 'admissible' }],
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -461,8 +479,8 @@ describe('useGameState transitions', () => {
 
   it('enforces defense/prosecution turn order during the motion exchange', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'AI drafted motion.' });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI drafted motion.' }));
 
     const { result } = renderHook(() => useGameState());
 
@@ -493,14 +511,16 @@ describe('useGameState transitions', () => {
 
   it('locks the motion phase after a ruling is issued', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'AI rebuttal.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 45,
-        evidence_status_updates: [{ id: 1, status: 'admissible' }],
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI rebuttal.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 45,
+          evidence_status_updates: [{ id: 1, status: 'admissible' }],
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -533,20 +553,24 @@ describe('useGameState transitions', () => {
 
   it('records stats, run history, and achievements on verdict finalization', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 50,
-        evidence_status_updates: [{ id: 1, status: 'admissible' }],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Not Guilty',
-        final_weighted_score: 99,
-        judge_opinion: 'Bench decision',
-        achievement_title: 'Order of Operations',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 50,
+          evidence_status_updates: [{ id: 1, status: 'admissible' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Not Guilty',
+          final_weighted_score: 99,
+          judge_opinion: 'Bench decision',
+          achievement_title: 'Order of Operations',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -593,14 +617,16 @@ describe('useGameState transitions', () => {
 
   it('records run history when a motion ends the run early', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'GRANTED',
-        outcome_text: 'Dismissed with prejudice',
-        score: 50,
-        evidence_status_updates: [{ id: 1, status: 'admissible' }],
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'GRANTED',
+          outcome_text: 'Dismissed with prejudice',
+          score: 50,
+          evidence_status_updates: [{ id: 1, status: 'admissible' }],
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -640,12 +666,14 @@ describe('useGameState transitions', () => {
 
   it('updates counsel notes when the jury is seated', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(juryCasePayload)
-      .mockResolvedValueOnce({
-        opponent_strikes: [3],
-        seated_juror_ids: [1],
-        judge_comment: 'Seated.',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(juryCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          opponent_strikes: [3],
+          seated_juror_ids: [1],
+          judge_comment: 'Seated.',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -669,12 +697,14 @@ describe('useGameState transitions', () => {
 
   it('marks invalid strike submissions that reference jurors outside the docket', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(juryCasePayload)
-      .mockResolvedValueOnce({
-        opponent_strikes: [99],
-        seated_juror_ids: [1, 1],
-        judge_comment: 'Invalid juror IDs.',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(juryCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          opponent_strikes: [99],
+          seated_juror_ids: [1, 1],
+          judge_comment: 'Invalid juror IDs.',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -695,7 +725,7 @@ describe('useGameState transitions', () => {
   });
 
   it('rejects jury strikes that are outside the current pool', async () => {
-    requestLlmJson.mockResolvedValueOnce(juryCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -722,21 +752,53 @@ describe('useGameState transitions', () => {
     expect(requestLlmJson).toHaveBeenCalledTimes(1);
   });
 
+  it('stores raw model text on jury strike submissions', async () => {
+    const rawStrikeText = '{"opponent_strikes":[3],"seated_juror_ids":[1],"judge_comment":"Seated."}';
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(juryCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          {
+            opponent_strikes: [3],
+            seated_juror_ids: [1],
+            judge_comment: 'Seated.',
+          },
+          rawStrikeText
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([2]);
+    });
+
+    expect(getDebugState().lastAction?.rawModelText).toBe(rawStrikeText);
+  });
+
   it('overwrites counsel notes after motion ruling and verdict', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'GRANTED',
-        outcome_text: 'Granted',
-        score: 50,
-        evidence_status_updates: [{ id: 1, status: 'suppressed' }],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Acquitted',
-        final_weighted_score: 77,
-        judge_opinion: 'Bench decision',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'GRANTED',
+          outcome_text: 'Granted',
+          score: 50,
+          evidence_status_updates: [{ id: 1, status: 'suppressed' }],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Acquitted',
+          final_weighted_score: 77,
+          judge_opinion: 'Bench decision',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -768,22 +830,26 @@ describe('useGameState transitions', () => {
 
   it('rejects verdicts that cite suppressed evidence', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({ text: 'Opposing response.' })
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Denied',
-        score: 50,
-        evidence_status_updates: [
-          { id: 1, status: 'admissible' },
-          { id: 2, status: 'suppressed' },
-        ],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Guilty based on Evidence 2',
-        final_weighted_score: 60,
-        judge_opinion: 'Evidence 2 controls this outcome.',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Denied',
+          score: 50,
+          evidence_status_updates: [
+            { id: 1, status: 'admissible' },
+            { id: 2, status: 'suppressed' },
+          ],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Guilty based on Evidence 2',
+          final_weighted_score: 60,
+          judge_opinion: 'Evidence 2 controls this outcome.',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -815,7 +881,7 @@ describe('useGameState transitions', () => {
   });
 
   it('includes counsel notes in the copied docket when present', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -838,7 +904,7 @@ describe('useGameState transitions', () => {
   });
 
   it('includes achievement titles in the copied docket when present', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -868,7 +934,7 @@ describe('useGameState transitions', () => {
   });
 
   it('omits trial and verdict details when a dismissal ends the case', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -917,13 +983,15 @@ describe('useGameState transitions', () => {
 
   it('records canonical dismissal dispositions from motion rulings', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({
-        ruling: 'GRANTED',
-        outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
-        score: 90,
-        evidence_status_updates: [],
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'GRANTED',
+          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          score: 90,
+          evidence_status_updates: [],
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -955,18 +1023,22 @@ describe('useGameState transitions', () => {
 
   it('does not set disposition on denied motions and allows verdict submission', async () => {
     requestLlmJson
-      .mockResolvedValueOnce(benchCasePayload)
-      .mockResolvedValueOnce({
-        ruling: 'DENIED',
-        outcome_text: 'Motion denied; case not dismissed.',
-        score: 45,
-        evidence_status_updates: [],
-      })
-      .mockResolvedValueOnce({
-        final_ruling: 'Not Guilty',
-        final_weighted_score: 77,
-        judge_opinion: 'Bench decision',
-      });
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          ruling: 'DENIED',
+          outcome_text: 'Motion denied; case not dismissed.',
+          score: 45,
+          evidence_status_updates: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          final_ruling: 'Not Guilty',
+          final_weighted_score: 77,
+          judge_opinion: 'Bench decision',
+        })
+      );
 
     const { result } = renderHook(() => useGameState());
 
@@ -1001,7 +1073,7 @@ describe('useGameState transitions', () => {
   });
 
   it('blocks verdict submissions once a terminal disposition is set', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -1027,7 +1099,7 @@ describe('useGameState transitions', () => {
   });
 
   it('copies full text without ellipses', async () => {
-    requestLlmJson.mockResolvedValueOnce(benchCasePayload);
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
 
     const { result } = renderHook(() => useGameState());
 
@@ -1068,12 +1140,14 @@ describe('useGameState transitions', () => {
   });
 
   it('keeps the section order stable', async () => {
-    requestLlmJson.mockResolvedValueOnce({
-      ...juryCasePayload,
-      title: 'Order Case',
-      facts: ['First fact', 'Second fact'],
-      judge: { name: 'Hon. Order' },
-    });
+    requestLlmJson.mockResolvedValueOnce(
+      buildLlmResponse({
+        ...juryCasePayload,
+        title: 'Order Case',
+        facts: ['First fact', 'Second fact'],
+        judge: { name: 'Hon. Order' },
+      })
+    );
 
     const { result } = renderHook(() => useGameState());
 

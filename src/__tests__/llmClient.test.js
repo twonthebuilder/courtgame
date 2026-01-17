@@ -26,7 +26,7 @@ describe('llm client wrappers', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns parsed JSON from the response payload', async () => {
+  it('returns parsed JSON and raw text from the response payload', async () => {
     fetchWithRetry.mockResolvedValue({
       candidates: [{ content: { parts: [{ text: '{"decision":"ok"}' }] } }],
     });
@@ -41,7 +41,10 @@ describe('llm client wrappers', () => {
       expect.stringContaining('generativelanguage.googleapis.com'),
       expect.objectContaining({ method: 'POST' })
     );
-    expect(result).toEqual({ decision: 'ok' });
+    expect(result).toEqual({
+      parsed: { decision: 'ok' },
+      rawText: '{"decision":"ok"}',
+    });
   });
 
   it('prefers user-friendly messages from LlmClientError', () => {
