@@ -8,6 +8,7 @@
  *
  * @typedef {typeof import('./constants').GAME_PHASES[keyof typeof import('./constants').GAME_PHASES]} GamePhase
  * @typedef {typeof import('./constants').CASE_TYPES[keyof typeof import('./constants').CASE_TYPES]} CaseType
+ * @typedef {typeof import('./constants').COURT_TYPES[keyof typeof import('./constants').COURT_TYPES]} CourtType
  * @typedef {typeof import('./constants').JURISDICTIONS[keyof typeof import('./constants').JURISDICTIONS]} Jurisdiction
  * @typedef {typeof import('./constants').FINAL_DISPOSITIONS[keyof typeof import('./constants').FINAL_DISPOSITIONS]} FinalDisposition
  * @typedef {typeof import('./constants').SANCTION_STATES[keyof typeof import('./constants').SANCTION_STATES]} SanctionsState
@@ -285,6 +286,7 @@
  * @property {string | null} endedAt - ISO timestamp when the run ended.
  * @property {string} jurisdiction - Jurisdiction selected for the run.
  * @property {string} difficulty - Difficulty setting for the run.
+ * @property {string} courtType - Court type selected for the run.
  * @property {string} playerRole - Player role for the run.
  * @property {string | null} caseTitle - Case title for the run.
  * @property {string | null} judgeName - Presiding judge for the run.

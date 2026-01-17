@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
-import { DEFAULT_GAME_CONFIG, normalizeDifficulty } from '../lib/config';
+import { DEFAULT_GAME_CONFIG, normalizeCourtType, normalizeDifficulty } from '../lib/config';
 import {
   CASE_TYPES,
+  COURT_TYPES,
   GAME_STATES,
   JURISDICTIONS,
   SANCTION_ENTRY_STATES,
@@ -715,11 +716,11 @@ const createRunId = () =>
  * @returns {{
  *   gameState: string,
  *   history: HistoryState,
- *   config: {difficulty: string, jurisdiction: string, role: string, caseType: string},
+ *   config: {difficulty: string, jurisdiction: string, courtType: string, role: string, caseType: string},
  *   loadingMsg: string | null,
  *   error: string | null,
  *   copied: boolean,
- *   generateCase: (role: string, difficulty: string, jurisdiction: string, caseType: string) => Promise<void>,
+ *   generateCase: (role: string, difficulty: string, jurisdiction: string, courtType: string) => Promise<void>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
  *   submitMotionStep: (text: string) => Promise<void>,
  *   triggerAiMotionSubmission: () => Promise<void>,
@@ -807,6 +808,7 @@ const useGameState = () => {
       startedAt: runMeta.startedAt ?? endedAt,
       jurisdiction: runMeta.jurisdiction ?? config.jurisdiction,
       difficulty: runMeta.difficulty ?? config.difficulty,
+      courtType: runMeta.courtType ?? config.courtType,
       playerRole: runMeta.playerRole ?? config.role,
       caseTitle: runMeta.caseTitle ?? history.case?.title ?? null,
       judgeName: runMeta.judgeName ?? history.case?.judge?.name ?? null,
@@ -906,41 +908,54 @@ const useGameState = () => {
    * @param {string} role - Player role (defense or prosecution).
    * @param {string} difficulty - Difficulty setting.
    * @param {string} jurisdiction - Selected jurisdiction.
-   * @param {string} caseType - Selected case type.
+   * @param {string} courtType - Selected court type.
    * @returns {Promise<void>} Resolves once the case is generated.
    */
-  const generateCase = async (role, difficulty, jurisdiction, caseType) => {
+  const generateCase = async (role, difficulty, jurisdiction, courtType) => {
     setGameState(GAME_STATES.INITIALIZING);
     setError(null);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
-    const resolvedCaseType = normalizeCaseType(caseType ?? DEFAULT_GAME_CONFIG.caseType);
+    const resolvedCaseType = normalizeCaseType(DEFAULT_GAME_CONFIG.caseType);
     const resolvedJurisdiction = normalizeJurisdiction(
       jurisdiction ?? DEFAULT_GAME_CONFIG.jurisdiction
     );
+    const resolvedCourtType = normalizeCourtType(courtType ?? DEFAULT_GAME_CONFIG.courtType);
     const isPublicDefenderMode = sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
-    const lockedJurisdiction = isPublicDefenderMode
-      ? JURISDICTIONS.MUNICIPAL_NIGHT_COURT
-      : resolvedJurisdiction;
+    const legacyNightCourt =
+      resolvedJurisdiction === JURISDICTIONS.MUNICIPAL_NIGHT_COURT
+        ? COURT_TYPES.NIGHT_COURT
+        : null;
+    const lockedJurisdiction = resolvedJurisdiction;
     const lockedCaseType = isPublicDefenderMode
       ? CASE_TYPES.PUBLIC_DEFENDER
       : resolvedCaseType;
+    const lockedCourtType = isPublicDefenderMode
+      ? COURT_TYPES.NIGHT_COURT
+      : legacyNightCourt ?? resolvedCourtType;
     const lockedRole = isPublicDefenderMode ? 'defense' : role;
     setConfig({
       role: lockedRole,
       difficulty: normalizedDifficulty,
       jurisdiction: lockedJurisdiction,
+      courtType: lockedCourtType,
       caseType: lockedCaseType,
     });
 
     try {
       const payload = await requestLlmJson({
         userPrompt: 'Generate',
-        systemPrompt: getGeneratorPrompt(normalizedDifficulty, lockedJurisdiction, lockedRole, {
+        systemPrompt: getGeneratorPrompt(
+          normalizedDifficulty,
+          lockedJurisdiction,
+          lockedCourtType,
+          lockedRole,
+          {
           ...buildSanctionPromptContext(sanctionsState, {
             caseType: lockedCaseType,
             lockedJurisdiction,
           }),
-        }),
+          }
+        ),
         responseLabel: 'case',
       });
       /** @type {CaseData} */
@@ -969,6 +984,7 @@ const useGameState = () => {
         endedAt: null,
         jurisdiction: lockedJurisdiction,
         difficulty: normalizedDifficulty,
+        courtType: lockedCourtType,
         playerRole: lockedRole,
         caseTitle: data.title,
         judgeName: data.judge?.name ?? null,
@@ -982,6 +998,7 @@ const useGameState = () => {
         playerRole: lockedRole,
         difficulty: normalizedDifficulty,
         jurisdiction: lockedJurisdiction,
+        courtType: lockedCourtType,
         caseTitle: data.title,
         judgeName: data.judge?.name ?? null,
       });

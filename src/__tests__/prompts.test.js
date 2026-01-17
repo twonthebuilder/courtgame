@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CASE_TYPES, JURISDICTIONS, SANCTION_STATES } from '../lib/constants';
+import { CASE_TYPES, COURT_TYPES, JURISDICTIONS, SANCTION_STATES } from '../lib/constants';
 import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
@@ -12,23 +12,36 @@ import {
 
 describe('prompt builders', () => {
   it('includes the player role and tone in generator prompts', () => {
-    const prompt = getGeneratorPrompt('silly', JURISDICTIONS.FICTIONAL, 'defense');
+    const prompt = getGeneratorPrompt(
+      'silly',
+      JURISDICTIONS.FICTIONAL,
+      COURT_TYPES.STANDARD,
+      'defense'
+    );
 
     expect(prompt).toContain('**DEFENSE**');
     expect(prompt).toContain('wacky, humorous, and absurd');
+    expect(prompt).toContain('Court Type: Standard');
     expect(prompt).toContain('"title": "Case Name"');
   });
 
   it('adds public defender constraints when sanctioned', () => {
-    const prompt = getGeneratorPrompt('normal', JURISDICTIONS.MUNICIPAL_NIGHT_COURT, 'defense', {
-      state: SANCTION_STATES.PUBLIC_DEFENDER,
-      caseType: CASE_TYPES.PUBLIC_DEFENDER,
-      expiresAt: '2024-01-01T00:00:00.000Z',
-      lockedJurisdiction: JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
-    });
+    const prompt = getGeneratorPrompt(
+      'normal',
+      JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
+      COURT_TYPES.NIGHT_COURT,
+      'defense',
+      {
+        state: SANCTION_STATES.PUBLIC_DEFENDER,
+        caseType: CASE_TYPES.PUBLIC_DEFENDER,
+        expiresAt: '2024-01-01T00:00:00.000Z',
+        lockedJurisdiction: JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
+      }
+    );
 
     expect(prompt).toContain('Public Defender Mode is in effect');
     expect(prompt).toContain('Jurisdiction is locked to Municipal Night Court');
+    expect(prompt).toContain('Court Type: Night Court');
     expect(prompt).toContain('license is restricted');
     expect(prompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
     expect(prompt).toContain('gritty, petty, difficult cases');
