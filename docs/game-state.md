@@ -14,6 +14,48 @@ The game state hook centralizes the following fields:
 - `error`: Last fatal error message, used to return the player to start.
 - `copied`: UI flag for the “Copy Docket” button feedback.
 
+## Persisted Profile & Run History
+
+Client-side persistence tracks metadata only. Docket text, arguments, and full case content
+are not stored by default; only high-level run metadata and sanctions summaries are retained.
+
+### PlayerProfile (Local Storage)
+
+`PlayerProfile` captures long-lived player metadata:
+
+- `schemaVersion`: profile schema version identifier.
+- `createdAt`, `updatedAt`: ISO timestamps for the profile lifecycle.
+- `sanctions`: snapshot of the current sanctions state (no docket text).
+- `pdStatus`: public defender assignment window (`startedAt`, `expiresAt`) when applicable.
+- `reinstatement`: grace window snapshot (`until`) when applicable.
+- `stats`: aggregated totals (`runsCompleted`, `verdictsFinalized`).
+- `achievements`: list of awarded achievements with timestamps and optional run linkage.
+
+### RunHistory (Local Storage)
+
+`RunHistory` stores a capped list of run metadata:
+
+- `schemaVersion`: run history schema version identifier.
+- `createdAt`, `updatedAt`: ISO timestamps for history lifecycle.
+- `runs`: array of run entries including `id`, `startedAt`, `endedAt`, `jurisdiction`,
+  `difficulty`, `playerRole`, `caseTitle`, `judgeName`, `outcome`, `score`, and
+  `achievementId`.
+
+### Schema Versioning, Migration, and Reset Rules
+
+- Both profile and run history records include `schemaVersion`. On mismatch, the stored
+  data is reset to defaults and a warning is logged.
+- If stored JSON fails to parse, persistence resets to defaults.
+- Player profiles perform a one-time migration of legacy sanctions state into the v1
+  profile when no modern profile exists. If legacy data is unreadable, defaults are restored.
+
+### Recidivism Window Pruning
+
+- Sanctions state normalization clears `recidivismCount` when the cooldown window has
+  elapsed since `lastMisconductAt`.
+- Any completed warning, sanction, or reinstatement window also resets `recidivismCount`
+  back to zero during normalization.
+
 ### History Structure
 
 - `history.case`: Generated case payload (facts, judge, jurors, etc.). Evidence entries are
