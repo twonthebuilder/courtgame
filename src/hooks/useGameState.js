@@ -72,6 +72,7 @@ const WARNING_DURATION_MS = SANCTIONS_TIMERS_MS.WARNING_DURATION;
 const SANCTION_DURATION_MS = SANCTIONS_TIMERS_MS.SANCTION_DURATION;
 const PUBLIC_DEFENDER_DURATION_MS = SANCTIONS_TIMERS_MS.PUBLIC_DEFENDER_DURATION;
 const REINSTATEMENT_GRACE_MS = SANCTIONS_TIMERS_MS.REINSTATEMENT_GRACE;
+const RUN_HISTORY_LIMIT = 20;
 
 const NON_TRIGGER_PATTERNS = [
   /losing on the merits/i,
@@ -786,25 +787,47 @@ const useGameState = () => {
     });
   };
 
-  const appendRunHistoryEntry = (verdict, disposition) => {
+  const capRunHistoryEntries = (runs) => runs.slice(-RUN_HISTORY_LIMIT);
+
+  const recordRunHistoryEntry = (entry) => {
+    const historySnapshot = loadRunHistory();
+    const runs = historySnapshot.runs ?? [];
+    saveRunHistory({
+      ...historySnapshot,
+      runs: capRunHistoryEntries([...runs, entry]),
+    });
+  };
+
+  const finalizeRunHistoryEntry = (verdict, disposition, achievementId) => {
     if (!runMeta || runMeta.endedAt) return;
     const endedAt = new Date().toISOString();
-    const entry = {
-      id: runMeta.id ?? createRunId(),
+    const runId = runMeta.id ?? createRunId();
+    const baseEntry = {
+      id: runId,
       startedAt: runMeta.startedAt ?? endedAt,
-      endedAt,
-      role: runMeta.role ?? config.role,
-      difficulty: runMeta.difficulty ?? config.difficulty,
       jurisdiction: runMeta.jurisdiction ?? config.jurisdiction,
-      caseType: runMeta.caseType ?? config.caseType,
-      disposition: disposition?.type ?? null,
-      verdictScore:
-        typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
+      difficulty: runMeta.difficulty ?? config.difficulty,
+      playerRole: runMeta.playerRole ?? config.role,
+      caseTitle: runMeta.caseTitle ?? history.case?.title ?? null,
+      judgeName: runMeta.judgeName ?? history.case?.judge?.name ?? null,
     };
-    const history = loadRunHistory();
+    const entry = {
+      ...baseEntry,
+      endedAt,
+      outcome: disposition?.type ?? null,
+      score:
+        typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
+      achievementId: achievementId ?? null,
+    };
+    const historySnapshot = loadRunHistory();
+    const runs = historySnapshot.runs ?? [];
+    const hasExisting = runs.some((run) => run.id === runId);
+    const updatedRuns = hasExisting
+      ? runs.map((run) => (run.id === runId ? { ...run, ...entry } : run))
+      : [...runs, entry];
     saveRunHistory({
-      ...history,
-      runs: [...(history.runs ?? []), entry],
+      ...historySnapshot,
+      runs: capRunHistoryEntries(updatedRuns),
     });
     updateRunStats(Boolean(verdict));
     setRunMeta({ ...runMeta, endedAt });
@@ -918,6 +941,8 @@ const useGameState = () => {
       const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
       const evidenceDocket = normalizeEvidenceDocket(data.evidence);
 
+      const startedAt = new Date().toISOString();
+      const runId = createRunId();
       setHistory({
         case: { ...data, evidence: evidenceDocket },
         jury: data.is_jury_trial
@@ -930,13 +955,27 @@ const useGameState = () => {
         sanctions: [],
         validationHistory: [],
       });
+      recordRunHistoryEntry({
+        id: runId,
+        startedAt,
+        endedAt: null,
+        jurisdiction: lockedJurisdiction,
+        difficulty: normalizedDifficulty,
+        playerRole: lockedRole,
+        caseTitle: data.title,
+        judgeName: data.judge?.name ?? null,
+        outcome: null,
+        score: null,
+        achievementId: null,
+      });
       setRunMeta({
-        id: createRunId(),
-        startedAt: new Date().toISOString(),
-        role: lockedRole,
+        id: runId,
+        startedAt,
+        playerRole: lockedRole,
         difficulty: normalizedDifficulty,
         jurisdiction: lockedJurisdiction,
-        caseType: lockedCaseType,
+        caseTitle: data.title,
+        judgeName: data.judge?.name ?? null,
       });
 
       setGameState(GAME_STATES.PLAYING);
@@ -1322,7 +1361,7 @@ const useGameState = () => {
       });
       setLoadingMsg(null);
       if (isTerminalDisposition(nextDisposition)) {
-        appendRunHistoryEntry(null, nextDisposition);
+        finalizeRunHistoryEntry(null, nextDisposition, null);
       }
     } catch (err) {
       console.error(err);
@@ -1447,7 +1486,7 @@ const useGameState = () => {
       if (data.achievement_title) {
         appendAchievement(data.achievement_title);
       }
-      appendRunHistoryEntry(data, nextDisposition);
+      finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);

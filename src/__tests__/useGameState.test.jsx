@@ -207,6 +207,20 @@ describe('useGameState transitions', () => {
       await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
     });
 
+    const runHistoryAfterStart = loadRunHistory();
+    expect(runHistoryAfterStart.runs).toHaveLength(1);
+    expect(runHistoryAfterStart.runs[0]).toMatchObject({
+      jurisdiction: JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
+      difficulty: 'normal',
+      playerRole: 'defense',
+      caseTitle: 'Bench Trial',
+      judgeName: 'Hon. River',
+      endedAt: null,
+      outcome: null,
+      score: null,
+      achievementId: null,
+    });
+
     await act(async () => {
       await result.current.submitMotionStep('Suppress evidence');
     });
@@ -521,9 +535,16 @@ describe('useGameState transitions', () => {
     });
     expect(runHistory.runs).toHaveLength(1);
     expect(runHistory.runs[0]).toMatchObject({
-      disposition: 'not_guilty',
-      verdictScore: 99,
+      jurisdiction: JURISDICTIONS.USA,
+      difficulty: 'normal',
+      playerRole: 'defense',
+      caseTitle: 'Bench Trial',
+      judgeName: 'Hon. River',
+      outcome: 'not_guilty',
+      score: 99,
+      achievementId: 'Order of Operations',
     });
+    expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
   it('records run history when a motion ends the run early', async () => {
@@ -561,9 +582,16 @@ describe('useGameState transitions', () => {
     expect(profile.stats).toEqual({ runsCompleted: 1, verdictsFinalized: 0 });
     expect(runHistory.runs).toHaveLength(1);
     expect(runHistory.runs[0]).toMatchObject({
-      disposition: 'dismissed_with_prejudice',
-      verdictScore: null,
+      jurisdiction: JURISDICTIONS.USA,
+      difficulty: 'normal',
+      playerRole: 'defense',
+      caseTitle: 'Bench Trial',
+      judgeName: 'Hon. River',
+      outcome: 'dismissed_with_prejudice',
+      score: null,
+      achievementId: null,
     });
+    expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
   it('updates counsel notes when the jury is seated', async () => {
