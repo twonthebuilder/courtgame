@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
 import { DEFAULT_GAME_CONFIG, normalizeCourtType, normalizeDifficulty } from '../lib/config';
 import {
@@ -44,6 +44,12 @@ import {
   getMotionPrompt,
   getOpposingCounselPrompt,
 } from '../lib/prompts';
+import {
+  debugEnabled,
+  getDebugState,
+  logEvent,
+  setLastAction,
+} from '../lib/debugStore';
 
 /** @typedef {import('../lib/types').CaseData} CaseData */
 /** @typedef {import('../lib/types').HistoryState} HistoryState */
@@ -740,6 +746,8 @@ const useGameState = () => {
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [debugBanner, setDebugBanner] = useState(null);
+  const debugBannerTimeoutRef = useRef(null);
   const [sanctionsState, setSanctionsState] = useState(() => {
     const storedState = loadPlayerProfile()?.sanctions ?? null;
     return normalizeSanctionsState(
@@ -750,6 +758,7 @@ const useGameState = () => {
   const [runMeta, setRunMeta] = useState(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
   }, [history.sanctions]);
 
@@ -866,6 +875,18 @@ const useGameState = () => {
     locked: false,
   });
 
+  const showDebugBanner = (reason) => {
+    if (!debugEnabled()) return;
+    const message = `Strikes not applied: ${reason}`;
+    setDebugBanner(message);
+    if (debugBannerTimeoutRef.current) {
+      window.clearTimeout(debugBannerTimeoutRef.current);
+    }
+    debugBannerTimeoutRef.current = window.setTimeout(() => {
+      setDebugBanner(null);
+    }, 4000);
+  };
+
   /**
    * Return to the start screen and clear transient UI state.
    */
@@ -874,6 +895,11 @@ const useGameState = () => {
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
+    setDebugBanner(null);
+    if (debugBannerTimeoutRef.current) {
+      window.clearTimeout(debugBannerTimeoutRef.current);
+      debugBannerTimeoutRef.current = null;
+    }
     setHistory({ counselNotes: '', disposition: null });
     setRunMeta(null);
   };
@@ -892,13 +918,22 @@ const useGameState = () => {
         myStrikes: current,
       });
       if (typeof id !== 'number' || Number.isNaN(id)) {
+        logEvent('Jury strike selection ignored (invalid id).', { verbose: true });
+        return prev;
+      }
+      if (!prev.jury) {
+        logEvent('Jury strike selection ignored (jury state missing).');
         return prev;
       }
       if (current.includes(id)) {
-        return { ...prev, jury: { ...prev.jury, myStrikes: current.filter((x) => x !== id) } };
+        const updated = current.filter((x) => x !== id);
+        logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
+        return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
       }
       if (current.length >= 2) return prev;
-      return { ...prev, jury: { ...prev.jury, myStrikes: [...current, id] } };
+      const updated = [...current, id];
+      logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
+      return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
     });
   };
 
@@ -1018,18 +1053,87 @@ const useGameState = () => {
    * @returns {Promise<void>} Resolves once strikes are processed.
    */
   const submitStrikes = async (strikes) => {
+    const startedAt = new Date().toISOString();
+    const startedAtMs = Date.parse(startedAt);
     setLoadingMsg('Judge is ruling on strikes...');
-    try {
-      const payload = await requestLlmJson({
-        userPrompt: 'Strike',
-        systemPrompt: getJuryStrikePrompt(
-          buildDocketPromptCase(history.case),
-          strikes,
-          config.role
-        ),
-        responseLabel: 'jury',
+    setLastAction({
+      name: 'submitJuryStrikes',
+      startedAt,
+      endedAt: null,
+      durationMs: null,
+      payload: { selectedJurorIds: strikes },
+      result: null,
+      rejectReason: null,
+      rawModelText: null,
+      parsed: null,
+    });
+    logEvent(`Jury strikes submit attempt: [${strikes.join(', ')}]`);
+
+    const finalizeAction = (details) => {
+      const endedAt = new Date().toISOString();
+      setLastAction({
+        endedAt,
+        durationMs: Date.parse(endedAt) - startedAtMs,
+        ...details,
       });
-      const data = parseJuryResponse(payload);
+    };
+
+    if (!history.jury || history.jury.locked || history.jury.skipped) {
+      finalizeAction({ result: 'noop', rejectReason: 'jury_unavailable' });
+      logEvent('Jury strikes submit ignored (jury unavailable).');
+      showDebugBanner('jury_unavailable');
+      setLoadingMsg(null);
+      return;
+    }
+
+    if (!Array.isArray(strikes) || strikes.length !== 2) {
+      logEvent('Jury strikes submitted with a non-standard selection count.', {
+        verbose: true,
+      });
+    }
+
+    try {
+      let data = null;
+      const debugFlags = getDebugState().flags;
+      if (debugEnabled() && debugFlags.bypassJuryLlm) {
+        const poolIds = history.jury.pool?.map((juror) => juror.id) ?? [];
+        const seatedIds = poolIds.filter((id) => !strikes.includes(id));
+        data = {
+          opponent_strikes: [],
+          seated_juror_ids: seatedIds,
+          judge_comment: 'Bypass LLM enabled: auto-approving strikes.',
+        };
+        logEvent('Bypass LLM enabled: auto-approving jury strikes.');
+      } else {
+        logEvent('Jury strikes request started.');
+        const payload = await requestLlmJson({
+          userPrompt: 'Strike',
+          systemPrompt: getJuryStrikePrompt(
+            buildDocketPromptCase(history.case),
+            strikes,
+            config.role
+          ),
+          responseLabel: 'jury',
+        });
+        logEvent('Jury strikes request finished.');
+        logEvent(`Jury strikes raw payload size: ${JSON.stringify(payload).length}`, {
+          verbose: true,
+        });
+        try {
+          data = parseJuryResponse(payload);
+          logEvent('Jury strikes parse success.');
+        } catch (parseError) {
+          finalizeAction({ result: 'parse_fail', rejectReason: 'parse_failed' });
+          logEvent('Jury strikes parse failed.');
+          showDebugBanner('parse_failed');
+          setError(getLlmClientErrorMessage(parseError, 'Strike failed.'));
+          setLoadingMsg(null);
+          return;
+        }
+      }
+
+      setLastAction({ parsed: data });
+
       // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
       const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
       const opponentValidation = validateJurorIdSubset(docketJurorIds, data.opponent_strikes);
@@ -1044,6 +1148,9 @@ const useGameState = () => {
             invalidStrike: true,
           },
         }));
+        finalizeAction({ result: 'rejected', rejectReason: 'invalid_ids' });
+        logEvent('Jury strikes rejected: invalid_ids.');
+        showDebugBanner('invalid_ids');
         setError('Strike results referenced jurors outside the docket. Please retry.');
         setLoadingMsg(null);
         return;
@@ -1082,9 +1189,14 @@ const useGameState = () => {
           counselNotes: deriveJuryCounselNotes(seatedJurors, config.role),
         };
       });
+      finalizeAction({ result: 'success' });
+      logEvent('Jury strikes applied successfully.');
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
+      finalizeAction({ result: 'error', rejectReason: 'request_failed' });
+      logEvent('Jury strikes request error.');
+      showDebugBanner('request_failed');
       setError(getLlmClientErrorMessage(err, 'Strike failed.'));
       setLoadingMsg(null);
     }
@@ -1669,6 +1781,7 @@ const useGameState = () => {
     loadingMsg,
     error,
     copied,
+    debugBanner,
     sanctionsState,
     generateCase,
     submitStrikes,

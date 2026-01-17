@@ -11,6 +11,8 @@ import PaperContainer from './components/layout/PaperContainer';
 import PhaseSection from './components/layout/PhaseSection';
 import InitializationScreen from './components/screens/InitializationScreen';
 import StartScreen from './components/screens/StartScreen';
+import DebugOverlay from './components/DebugOverlay';
+import DebugToast from './components/ui/DebugToast';
 import LoadingView from './components/ui/LoadingView';
 import useGameState from './hooks/useGameState';
 
@@ -36,6 +38,7 @@ export default function PocketCourt() {
     error,
     loadingMsg,
     copied,
+    debugBanner,
     generateCase,
     submitStrikes,
     submitMotionStep,
@@ -225,6 +228,13 @@ export default function PocketCourt() {
           <div ref={scrollRef} />
         </PaperContainer>
       </main>
+      <DebugToast message={debugBanner} />
+      <DebugOverlay
+        gameState={gameState}
+        config={config}
+        history={history}
+        sanctionsState={gameStateData.sanctionsState}
+      />
     </div>
   );
 }
