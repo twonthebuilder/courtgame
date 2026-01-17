@@ -93,6 +93,7 @@ courtgame/
 - [Gameplay flow](docs/gameplay-flow.md)
 - [LLM client notes](docs/llm-client.md)
 - [Game state](docs/game-state.md)
+- [App shell & run lifecycle](docs/app-shell.md)
 - [Configuration](docs/configuration.md)
 
 ---
