@@ -6,8 +6,9 @@ import {
 const normalizeDispositionText = (text) => {
   if (!text) return null;
   const normalized = text.toLowerCase();
+  const hasNegatedDismissal = /\b(?:not|no)\s+dismiss(?:ed|al)?\b/.test(normalized);
 
-  if (normalized.includes('dismiss')) {
+  if (normalized.includes('dismiss') && !hasNegatedDismissal) {
     if (normalized.includes('without prejudice')) {
       return FINAL_DISPOSITIONS.DISMISSED_WITHOUT_PREJUDICE;
     }
@@ -69,6 +70,8 @@ export const guardDisposition = (current, next) =>
   isTerminalDisposition(current) ? current : next;
 
 export const deriveDispositionFromMotion = (motion) => {
+  const ruling = motion?.ruling?.ruling?.toLowerCase().replace(/_/g, ' ').trim();
+  if (!ruling || !['granted', 'partially granted'].includes(ruling)) return null;
   const outcomeText = motion?.ruling?.outcome_text?.trim();
   if (!outcomeText) return null;
   const type = normalizeDispositionText(outcomeText);
