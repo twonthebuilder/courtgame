@@ -726,7 +726,7 @@ const createRunId = () =>
  *   loadingMsg: string | null,
  *   error: string | null,
  *   copied: boolean,
- *   generateCase: (role: string, difficulty: string, jurisdiction: string, courtType: string) => Promise<void>,
+ *   generateCase: (role: string, difficulty: string, jurisdiction: string, courtType: string) => Promise<boolean>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
  *   submitMotionStep: (text: string) => Promise<void>,
  *   triggerAiMotionSubmission: () => Promise<void>,
@@ -944,7 +944,7 @@ const useGameState = () => {
    * @param {string} difficulty - Difficulty setting.
    * @param {string} jurisdiction - Selected jurisdiction.
    * @param {string} courtType - Selected court type.
-   * @returns {Promise<void>} Resolves once the case is generated.
+   * @returns {Promise<boolean>} Resolves with true when the case is generated successfully.
    */
   const generateCase = async (role, difficulty, jurisdiction, courtType) => {
     setGameState(GAME_STATES.INITIALIZING);
@@ -1039,10 +1039,12 @@ const useGameState = () => {
       });
 
       setGameState(GAME_STATES.PLAYING);
+      return true;
     } catch (err) {
       console.error(err);
       setError(getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.'));
       setGameState(GAME_STATES.START);
+      return false;
     }
   };
 

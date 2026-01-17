@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Check, ClipboardCopy, FileText, Gavel, RefreshCw, Scale, Users } from 'lucide-react';
 import ArgumentSection from './components/docket/ArgumentSection';
 import CaseHeader from './components/docket/CaseHeader';
@@ -23,6 +23,13 @@ import useGameState from './hooks/useGameState';
    Action: Main application logic and state management.
    ======================================================================== */
 
+const appShellState = Object.freeze({
+  MainMenu: 'MainMenu',
+  SetupHub: 'SetupHub',
+  Run: 'Run',
+  PostRun: 'PostRun',
+});
+
 /**
  * Main Pocket Court application component.
  *
@@ -31,6 +38,7 @@ import useGameState from './hooks/useGameState';
 export default function PocketCourt() {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
+  const shellPayloadRef = useRef(null);
   const gameStateData = useGameState();
   const {
     gameState,
@@ -51,6 +59,23 @@ export default function PocketCourt() {
   } = gameStateData;
   /** @type {HistoryState} */
   const history = gameStateData.history;
+  const [shellState, setShellState] = useState(appShellState.MainMenu);
+
+  const transitionShell = useCallback((nextState, payload = null) => {
+    shellPayloadRef.current = payload;
+    setShellState(nextState);
+  }, []);
+
+  const handleReset = () => {
+    resetGame();
+    transitionShell(appShellState.MainMenu);
+  };
+
+  const handleStart = async (role, difficulty, jurisdiction, courtType) => {
+    transitionShell(appShellState.SetupHub, { role, difficulty, jurisdiction, courtType });
+    const didStart = await generateCase(role, difficulty, jurisdiction, courtType);
+    transitionShell(didStart ? appShellState.Run : appShellState.MainMenu);
+  };
 
   // Auto-scroll logic
   useEffect(() => {
@@ -91,23 +116,12 @@ export default function PocketCourt() {
 
   // --- MAIN RENDER ---
 
-  if (gameState === 'start') {
-    return (
-      <StartScreen
-        onStart={generateCase}
-        error={error}
-        sanctionsState={gameStateData.sanctionsState}
-      />
-    );
-  }
-  if (gameState === 'initializing') return <InitializationScreen role={config.role} />;
-
-  return (
+  const runView = (
     <div className="min-h-screen bg-neutral-100 text-slate-900 font-sans pb-24">
       {/* Navbar */}
       <header className="bg-slate-900 text-white p-4 shadow-md sticky top-0 z-50">
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={resetGame}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={handleReset}>
             <Scale className="w-6 h-6 text-amber-500" />
             <span className="font-bold tracking-tight">
               POCKET<span className="text-amber-500">COURT</span>
@@ -214,7 +228,7 @@ export default function PocketCourt() {
               <VerdictSection result={history.trial.verdict} />
               <ActionFooter className="mt-12 justify-center pt-8 border-t border-slate-100">
                 <button
-                  onClick={resetGame}
+                  onClick={handleReset}
                   className="text-slate-400 hover:text-slate-800 font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-2 mx-auto"
                 >
                   <RefreshCw className="w-4 h-4" /> Start New Case
@@ -243,4 +257,28 @@ export default function PocketCourt() {
       />
     </div>
   );
+
+  switch (shellState) {
+    case appShellState.MainMenu:
+      return (
+        <StartScreen
+          onStart={handleStart}
+          error={error}
+          sanctionsState={gameStateData.sanctionsState}
+        />
+      );
+    case appShellState.SetupHub:
+      return <InitializationScreen role={config.role} />;
+    case appShellState.PostRun:
+      return (
+        <StartScreen
+          onStart={handleStart}
+          error={error}
+          sanctionsState={gameStateData.sanctionsState}
+        />
+      );
+    case appShellState.Run:
+    default:
+      return runView;
+  }
 }
