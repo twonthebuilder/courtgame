@@ -3,7 +3,7 @@
  * Keep these values in sync with UI selectors and environment expectations.
  */
 
-import { CASE_TYPES, JURISDICTIONS } from './constants';
+import { CASE_TYPES, COURT_TYPES, JURISDICTIONS } from './constants';
 
 export const DEFAULT_DIFFICULTY = 'normal';
 
@@ -38,6 +38,39 @@ export const DIFFICULTY_OPTIONS = [
   { value: 'nuance', label: 'Nuance' },
 ];
 
+const COURT_TYPE_ALIASES = {
+  'municipal night court': COURT_TYPES.NIGHT_COURT,
+  'night court': COURT_TYPES.NIGHT_COURT,
+  'supreme court': COURT_TYPES.SUPREME_COURT,
+};
+
+export const CANONICAL_COURT_TYPES = Object.values(COURT_TYPES);
+
+/**
+ * Normalize court type inputs (including legacy aliases) into canonical IDs.
+ *
+ * @param {string} value - Court type value to normalize.
+ * @returns {string} Canonical court type identifier.
+ */
+export const normalizeCourtType = (value) => {
+  if (typeof value !== 'string') return COURT_TYPES.STANDARD;
+  const normalized = value.trim().toLowerCase();
+  if (COURT_TYPE_ALIASES[normalized]) return COURT_TYPE_ALIASES[normalized];
+  if (CANONICAL_COURT_TYPES.includes(value)) return value;
+  return COURT_TYPES.STANDARD;
+};
+
+/**
+ * Supported court types for the game setup flow.
+ *
+ * @type {{value: string, label: string}[]}
+ */
+export const COURT_TYPE_OPTIONS = [
+  { value: COURT_TYPES.NIGHT_COURT, label: 'Night Court' },
+  { value: COURT_TYPES.STANDARD, label: 'Standard' },
+  { value: COURT_TYPES.SUPREME_COURT, label: 'Supreme Court' },
+];
+
 /**
  * Supported jurisdictions for case generation.
  *
@@ -47,7 +80,6 @@ export const JURISDICTION_OPTIONS = [
   { value: JURISDICTIONS.USA, label: 'USA' },
   { value: JURISDICTIONS.CANADA, label: 'Canada' },
   { value: JURISDICTIONS.FICTIONAL, label: 'Fictional' },
-  { value: JURISDICTIONS.MUNICIPAL_NIGHT_COURT, label: 'Municipal Night Court' },
 ];
 
 /**
@@ -63,11 +95,12 @@ export const CASE_TYPE_OPTIONS = [
 /**
  * Default configuration values for a new game session.
  *
- * @type {{difficulty: string, jurisdiction: string, role: string, caseType: string}}
+ * @type {{difficulty: string, jurisdiction: string, courtType: string, role: string, caseType: string}}
  */
 export const DEFAULT_GAME_CONFIG = {
   difficulty: DEFAULT_DIFFICULTY,
   jurisdiction: JURISDICTIONS.USA,
+  courtType: COURT_TYPES.STANDARD,
   role: 'defense',
   caseType: CASE_TYPES.STANDARD,
 };

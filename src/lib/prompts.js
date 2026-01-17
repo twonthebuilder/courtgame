@@ -1,11 +1,12 @@
-import { normalizeDifficulty } from './config';
-import { CASE_TYPES, SANCTION_STATES } from './constants';
+import { normalizeCourtType, normalizeDifficulty } from './config';
+import { CASE_TYPES, COURT_TYPES, SANCTION_STATES } from './constants';
 
 /**
  * Builds the system prompt for generating a new case docket.
  *
  * @param {string} difficulty - Difficulty mode identifier.
  * @param {string} jurisdiction - Jurisdiction name.
+ * @param {string} courtType - Court type identifier.
  * @param {string} playerRole - Player role (defense/prosecution).
  * @param {object} [sanctionContext] - Optional sanctions metadata.
  * @param {string} [sanctionContext.state] - Sanctions state identifier.
@@ -64,8 +65,15 @@ const buildSanctionContextBlock = (sanctionContext = {}) => {
   `;
 };
 
-export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctionContext = {}) => {
+export const getGeneratorPrompt = (
+  difficulty,
+  jurisdiction,
+  courtType,
+  playerRole,
+  sanctionContext = {}
+) => {
   const normalizedDifficulty = normalizeDifficulty(difficulty);
+  const normalizedCourtType = normalizeCourtType(courtType ?? COURT_TYPES.STANDARD);
   let tone = '';
   if (normalizedDifficulty === 'silly') tone = 'wacky, humorous, and absurd. Think cartoons.';
   else if (normalizedDifficulty === 'normal') {
@@ -77,6 +85,31 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctio
   const isPublicDefenderMode =
     sanctionContext.state === SANCTION_STATES.PUBLIC_DEFENDER ||
     caseType === CASE_TYPES.PUBLIC_DEFENDER;
+  const courtTypeLabelMap = {
+    [COURT_TYPES.NIGHT_COURT]: 'Night Court',
+    [COURT_TYPES.SUPREME_COURT]: 'Supreme Court',
+    [COURT_TYPES.STANDARD]: 'Standard',
+  };
+  const courtTypeLabel = courtTypeLabelMap[normalizedCourtType] ?? normalizedCourtType;
+  const courtTypeGuidance = (() => {
+    if (normalizedCourtType === COURT_TYPES.NIGHT_COURT) {
+      return `
+    NIGHT COURT CONSTRAINTS:
+    - Focus on gritty, petty disputes suited for a late-night municipal docket.
+    - The docket is crowded and resources are strained.
+    - Keep stakes low-to-mid but messy, with procedural frictions.
+    `;
+    }
+    if (normalizedCourtType === COURT_TYPES.SUPREME_COURT) {
+      return `
+    SUPREME COURT CONSTRAINTS:
+    - High-stakes, precedent-setting disputes with constitutional or national impact.
+    - Cases should feel appellate or landmark in scope.
+    - Emphasize big-picture legal principles and institutional stakes.
+    `;
+    }
+    return '';
+  })();
   const sanctionStatusBlock = buildSanctionContextBlock({
     ...sanctionContext,
     lockedJurisdiction: sanctionContext.lockedJurisdiction ?? jurisdiction,
@@ -96,10 +129,12 @@ export const getGeneratorPrompt = (difficulty, jurisdiction, playerRole, sanctio
   return `
     You are a creative legal scenario generator. Player is **${playerRole.toUpperCase()}**.
     Jurisdiction: ${jurisdiction}.
+    Court Type: ${courtTypeLabel}.
     Case Type: ${caseType}.
     ${sanctionStatusBlock}
     Narrative tone should be ${tone}
     ${sanctionsGuidance}
+    ${courtTypeGuidance}
     
     1. DETERMINE TRIAL TYPE:
     - If case is minor/mundane -> is_jury_trial = false (Bench Trial).

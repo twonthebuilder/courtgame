@@ -74,6 +74,12 @@ export const CASE_TYPES = Object.freeze({
   PUBLIC_DEFENDER: 'public_defender',
 });
 
+export const COURT_TYPES = Object.freeze({
+  STANDARD: 'standard',
+  NIGHT_COURT: 'nightCourt',
+  SUPREME_COURT: 'supremeCourt',
+});
+
 export const JURISDICTIONS = Object.freeze({
   USA: 'USA',
   CANADA: 'Canada',

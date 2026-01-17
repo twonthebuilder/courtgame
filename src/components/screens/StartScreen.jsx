@@ -1,23 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
 import {
-  CASE_TYPE_OPTIONS,
+  COURT_TYPE_OPTIONS,
   DEFAULT_GAME_CONFIG,
   DIFFICULTY_OPTIONS,
   JURISDICTION_OPTIONS,
 } from '../../lib/config';
-import {
-  CASE_TYPES,
-  JURISDICTIONS,
-  SANCTION_STATES,
-} from '../../lib/constants';
+import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 
 /**
  * Entry screen for selecting a game mode, jurisdiction, and side.
  *
  * @param {object} props - Component props.
- * @param {(role: string, difficulty: string, jurisdiction: string, caseType: string) => void} props.onStart - Callback to start the game.
+ * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
  * @param {object | null} props.sanctionsState - Current sanctions state.
  * @returns {JSX.Element} The start screen layout.
@@ -25,17 +21,14 @@ import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtime
 const StartScreen = ({ onStart, error, sanctionsState }) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
-  const [caseType, setCaseType] = useState(DEFAULT_GAME_CONFIG.caseType);
+  const [courtType, setCourtType] = useState(DEFAULT_GAME_CONFIG.courtType);
   const [provider, setProvider] = useState(AI_PROVIDERS[0]?.value ?? 'gemini');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(false);
   const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
   const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const effectiveJurisdiction = isPublicDefenderMode
-    ? JURISDICTIONS.MUNICIPAL_NIGHT_COURT
-    : jurisdiction;
-  const effectiveCaseType = isPublicDefenderMode ? CASE_TYPES.PUBLIC_DEFENDER : caseType;
+  const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
 
   useEffect(() => {
     const storedKey = loadStoredApiKey();
@@ -53,13 +46,12 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
 
   useEffect(() => {
     if (!isPublicDefenderMode) return;
-    setJurisdiction(JURISDICTIONS.MUNICIPAL_NIGHT_COURT);
-    setCaseType(CASE_TYPES.PUBLIC_DEFENDER);
+    setCourtType(COURT_TYPES.NIGHT_COURT);
   }, [isPublicDefenderMode]);
 
   const handleStart = (role) => {
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
-    onStart(effectiveRole, difficulty, effectiveJurisdiction, effectiveCaseType);
+    onStart(effectiveRole, difficulty, jurisdiction, effectiveCourtType);
   };
 
   return (
@@ -169,12 +161,11 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
                 <button
                   key={option.value}
                   onClick={() => setJurisdiction(option.value)}
-                  disabled={isPublicDefenderMode}
                   className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
-                    effectiveJurisdiction === option.value
+                    jurisdiction === option.value
                       ? 'bg-slate-800 text-white border-slate-800'
                       : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
-                  } ${isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''}`}
+                  }`}
                 >
                   {option.label}
                 </button>
@@ -183,16 +174,16 @@ const StartScreen = ({ onStart, error, sanctionsState }) => {
           </div>
           <div>
             <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
-              Case Type
+              Court Type
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {CASE_TYPE_OPTIONS.map((option) => (
+            <div className="grid grid-cols-3 gap-2">
+              {COURT_TYPE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
-                  onClick={() => setCaseType(option.value)}
+                  onClick={() => setCourtType(option.value)}
                   disabled={isPublicDefenderMode}
                   className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
-                    effectiveCaseType === option.value
+                    effectiveCourtType === option.value
                       ? 'bg-slate-800 text-white border-slate-800'
                       : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
                   } ${isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''}`}

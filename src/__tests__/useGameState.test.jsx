@@ -4,6 +4,7 @@ import useGameState, { __testables } from '../hooks/useGameState';
 import { copyToClipboard } from '../lib/clipboard';
 import {
   CASE_TYPES,
+  COURT_TYPES,
   FINAL_DISPOSITIONS,
   GAME_STATES,
   JURISDICTIONS,
@@ -110,7 +111,7 @@ describe('useGameState transitions', () => {
         'defense',
         'normal',
         JURISDICTIONS.USA,
-        CASE_TYPES.STANDARD
+        COURT_TYPES.STANDARD
       );
     });
 
@@ -136,7 +137,7 @@ describe('useGameState transitions', () => {
         'defense',
         'regular',
         JURISDICTIONS.USA,
-        CASE_TYPES.STANDARD
+        COURT_TYPES.STANDARD
       );
     });
 
@@ -153,7 +154,7 @@ describe('useGameState transitions', () => {
         'defense',
         'normal',
         JURISDICTIONS.USA,
-        CASE_TYPES.STANDARD
+        COURT_TYPES.STANDARD
       );
     });
 
@@ -197,13 +198,14 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     const generatorCall = requestLlmJson.mock.calls[0][0];
     expect(generatorCall.systemPrompt).toContain('PUBLIC DEFENDER MODE CONSTRAINTS');
     expect(result.current.config.role).toBe('defense');
-    expect(result.current.config.jurisdiction).toBe(JURISDICTIONS.MUNICIPAL_NIGHT_COURT);
+    expect(result.current.config.jurisdiction).toBe(JURISDICTIONS.USA);
+    expect(result.current.config.courtType).toBe(COURT_TYPES.NIGHT_COURT);
     expect(result.current.config.caseType).toBe(CASE_TYPES.PUBLIC_DEFENDER);
   });
 
@@ -243,14 +245,15 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     const runHistoryAfterStart = loadRunHistory();
     expect(runHistoryAfterStart.runs).toHaveLength(1);
     expect(runHistoryAfterStart.runs[0]).toMatchObject({
-      jurisdiction: JURISDICTIONS.MUNICIPAL_NIGHT_COURT,
+      jurisdiction: JURISDICTIONS.USA,
       difficulty: 'normal',
+      courtType: COURT_TYPES.NIGHT_COURT,
       playerRole: 'defense',
       caseTitle: 'Bench Trial',
       judgeName: 'Hon. River',
@@ -318,7 +321,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -364,7 +367,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     expect(result.current.history.jury.skipped).toBe(true);
@@ -420,7 +423,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -447,7 +450,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     expect(result.current.gameState).toBe(GAME_STATES.START);
@@ -462,7 +465,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('prosecution', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -500,7 +503,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -546,7 +549,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -600,7 +603,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -645,7 +648,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -674,7 +677,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -708,7 +711,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -755,7 +758,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     await act(async () => {
@@ -787,7 +790,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -810,7 +813,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -840,7 +843,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -895,7 +898,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -938,7 +941,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -973,7 +976,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
@@ -999,7 +1002,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     const longArgument = Array.from({ length: 40 }, (_, index) => `Sentence ${index + 1}.`).join(' ');
@@ -1045,7 +1048,7 @@ describe('useGameState transitions', () => {
     const { result } = renderHook(() => useGameState());
 
     await act(async () => {
-      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, CASE_TYPES.STANDARD);
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
     act(() => {
