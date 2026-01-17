@@ -919,11 +919,7 @@ const useGameState = (options = {}) => {
     }, 4000);
   };
 
-  /**
-   * Return to the start screen and clear transient UI state.
-   */
-  const resetGame = () => {
-    setGameState(GAME_STATES.START);
+  const resetRunState = () => {
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
@@ -936,7 +932,16 @@ const useGameState = (options = {}) => {
     }
     setHistory({ counselNotes: '', disposition: null });
     setRunMeta(null);
-    emitShellEvent({ type: 'reset' });
+  };
+
+  /**
+   * End the current run and surface the outcome to the app shell.
+   */
+  const resetGame = () => {
+    const outcomePayload =
+      runOutcome ?? buildRunOutcome(history.disposition ?? null, sanctionsState);
+    emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+    resetRunState();
   };
 
   /**
@@ -982,8 +987,8 @@ const useGameState = (options = {}) => {
    * @returns {Promise<boolean>} Resolves with true when the case is generated successfully.
    */
   const generateCase = async (role, difficulty, jurisdiction, courtType) => {
+    resetRunState();
     setGameState(GAME_STATES.INITIALIZING);
-    setError(null);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
     const resolvedCaseType = normalizeCaseType(DEFAULT_GAME_CONFIG.caseType);
     const resolvedJurisdiction = normalizeJurisdiction(

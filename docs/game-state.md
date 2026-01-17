@@ -11,7 +11,7 @@ The game state hook centralizes the following fields:
 - `history`: Living docket data for the current case.
 - `config`: Player-selected configuration (`role`, `difficulty`, `jurisdiction`).
 - `loadingMsg`: Short-lived status messages for async actions.
-- `error`: Last fatal error message, used to return the player to start.
+- `error`: Last fatal error message surfaced in the docket UI when applicable.
 - `copied`: UI flag for the “Copy Docket” button feedback.
 
 ## Persisted Profile & Run History
@@ -77,15 +77,9 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 
 1. **`start` → `initializing`**
    - Trigger: `generateCase(role, difficulty, jurisdiction)`.
-   - Side effects: resets `error`, stores `config`.
+   - Side effects: resets run-local UI flags, stores `config`.
 2. **`initializing` → `playing`**
    - Trigger: case generation succeeds and `history` is initialized.
-3. **`initializing` → `start`**
-   - Trigger: case generation fails.
-   - Side effects: `error` is set to an explanatory message.
-4. **Any → `start`**
-   - Trigger: `resetGame()` from the navbar or “Start New Case” button.
-   - Side effects: clears `loadingMsg`, `error`, and `copied` UI flags.
 
 ## App Shell Flow (Main Menu → Run → Post-Run)
 
@@ -93,6 +87,10 @@ are not stored by default; only high-level run metadata and sanctions summaries 
   - Trigger: terminal disposition (dismissal, mistrial, or verdict).
   - Side effects: `RUN_ENDED` event emitted to the app shell with an outcome payload
     containing the final disposition and sanctions snapshot.
+- **`Run` → `PostRun`**
+  - Trigger: `resetGame()` invoked from the run shell.
+  - Side effects: `RUN_ENDED` event emitted to the app shell; run-local state is reset
+    when the next case is generated.
 
 ## Living Docket Phase Transitions
 
