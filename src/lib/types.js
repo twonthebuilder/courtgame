@@ -217,4 +217,44 @@
  * @property {SubmissionValidation[]} [validationHistory] - Docket validation history.
  */
 
+/**
+ * Persisted sanctions state snapshot for a player profile.
+ *
+ * @typedef {object} PlayerSanctionsState
+ * @property {SanctionsState} state - Canonical sanctions state identifier.
+ * @property {number} level - Numeric sanction level.
+ * @property {string} startedAt - ISO timestamp when the current sanctions state began.
+ * @property {string | null} expiresAt - ISO timestamp when the current sanctions state expires.
+ * @property {string | null} lastMisconductAt - ISO timestamp of the last misconduct entry.
+ * @property {number} recidivismCount - Count of recent misconduct events.
+ * @property {string | null} recentlyReinstatedUntil - ISO timestamp for the reinstatement grace period.
+ */
+
+/**
+ * Persisted player profile metadata (v1 schema).
+ *
+ * @typedef {object} PlayerProfile
+ * @property {number} schemaVersion - Profile schema version.
+ * @property {string} createdAt - ISO timestamp when the profile was created.
+ * @property {string} updatedAt - ISO timestamp when the profile was last updated.
+ * @property {PlayerSanctionsState | null} sanctions - Persisted sanctions state snapshot.
+ */
+
+/**
+ * Persisted run history entry (v1 schema).
+ *
+ * @typedef {object} RunHistoryEntry
+ * @property {string} id - Unique run identifier.
+ */
+
+/**
+ * Persisted run history metadata (v1 schema).
+ *
+ * @typedef {object} RunHistory
+ * @property {number} schemaVersion - Run history schema version.
+ * @property {string} createdAt - ISO timestamp when the history record was created.
+ * @property {string} updatedAt - ISO timestamp when the history record was last updated.
+ * @property {RunHistoryEntry[]} runs - Persisted run entries.
+ */
+
 export {};
