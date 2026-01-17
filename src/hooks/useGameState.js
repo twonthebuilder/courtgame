@@ -1055,6 +1055,7 @@ const useGameState = () => {
   const submitStrikes = async (strikes) => {
     const startedAt = new Date().toISOString();
     const startedAtMs = Date.parse(startedAt);
+    setError(null);
     setLoadingMsg('Judge is ruling on strikes...');
     setLastAction({
       name: 'submitJuryStrikes',
@@ -1082,6 +1083,29 @@ const useGameState = () => {
       finalizeAction({ result: 'noop', rejectReason: 'jury_unavailable' });
       logEvent('Jury strikes submit ignored (jury unavailable).');
       showDebugBanner('jury_unavailable');
+      setLoadingMsg(null);
+      return;
+    }
+
+    if (!Array.isArray(strikes)) {
+      finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
+      logEvent('Jury strikes rejected: invalid_selection.');
+      showDebugBanner('invalid_selection');
+      setError('Selected juror IDs are invalid. Please reselect from the current pool.');
+      setLoadingMsg(null);
+      return;
+    }
+
+    const poolJurorIds = new Set((history.jury.pool ?? []).map((juror) => juror.id));
+    const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
+    const allowedJurorIds = poolJurorIds.size ? poolJurorIds : docketJurorIds;
+    const strikeValidation = validateJurorIdSubset(allowedJurorIds, strikes);
+
+    if (!strikeValidation.valid) {
+      finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
+      logEvent('Jury strikes rejected: invalid_selection.');
+      showDebugBanner('invalid_selection');
+      setError('Selected juror IDs are invalid. Please reselect from the current pool.');
       setLoadingMsg(null);
       return;
     }

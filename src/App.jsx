@@ -139,6 +139,12 @@ export default function PocketCourt() {
             jurisdiction={config.jurisdiction}
             docketNumber={docketNumber}
           />
+          {error && (
+            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+              <p className="text-xs font-bold uppercase tracking-widest text-red-600">Action error</p>
+              <p className="mt-2">{error}</p>
+            </div>
+          )}
 
           {/* 1. Case Info */}
           <PhaseSection title="Case Information" icon={BookOpen}>
