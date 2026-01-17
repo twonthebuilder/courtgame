@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import useGameState, { __testables } from '../hooks/useGameState';
 import { copyToClipboard } from '../lib/clipboard';
+import { getDebugState, __testables as debugTestables } from '../lib/debugStore';
 import {
   CASE_TYPES,
   COURT_TYPES,
@@ -95,6 +96,7 @@ describe('useGameState transitions', () => {
     requestLlmJson.mockReset();
     copyToClipboard.mockClear();
     window.localStorage.clear();
+    debugTestables.resetDebugState();
   });
 
   it('moves from start to initializing to playing when a case is generated', async () => {
@@ -690,6 +692,34 @@ describe('useGameState transitions', () => {
     expect(result.current.error).toBe(
       'Strike results referenced jurors outside the docket. Please retry.'
     );
+  });
+
+  it('rejects jury strikes that are outside the current pool', async () => {
+    requestLlmJson.mockResolvedValueOnce(juryCasePayload);
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.toggleStrikeSelection(2);
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([99]);
+    });
+
+    expect(result.current.history.jury.myStrikes).toEqual([2]);
+    expect(result.current.error).toBe(
+      'Selected juror IDs are invalid. Please reselect from the current pool.'
+    );
+    expect(getDebugState().lastAction).toMatchObject({
+      result: 'rejected',
+      rejectReason: 'invalid_selection',
+    });
+    expect(requestLlmJson).toHaveBeenCalledTimes(1);
   });
 
   it('overwrites counsel notes after motion ruling and verdict', async () => {
