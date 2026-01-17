@@ -305,6 +305,8 @@ export default function PocketCourt() {
     setShellState(nextState);
   }, []);
 
+  const profileSnapshot = loadPlayerProfile();
+
   const handleStart = (role, difficulty, jurisdiction, courtType) => {
     setSetupError(null);
     setStartPayload({ role, difficulty, jurisdiction, courtType });
@@ -360,6 +362,7 @@ export default function PocketCourt() {
           onStart={handleStart}
           error={setupError}
           sanctionsState={sanctionsSnapshot}
+          profile={profileSnapshot}
           isInitializing={false}
           initializingRole={null}
         />
@@ -369,6 +372,8 @@ export default function PocketCourt() {
       shellView = (
         <PostRun
           outcome={runOutcome}
+          sanctionsState={sanctionsSnapshot}
+          profile={profileSnapshot}
           onNewCase={startNewCase}
           onMainMenu={returnToMenu}
         />

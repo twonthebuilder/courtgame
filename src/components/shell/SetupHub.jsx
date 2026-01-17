@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
 import {
   COURT_TYPE_OPTIONS,
@@ -10,6 +10,16 @@ import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 import InitializationScreen from '../screens/InitializationScreen';
 
+const SANCTIONS_LABELS = Object.freeze({
+  [SANCTION_STATES.CLEAN]: 'Clean Record',
+  [SANCTION_STATES.WARNED]: 'Warning Issued',
+  [SANCTION_STATES.SANCTIONED]: 'Sanctioned',
+  [SANCTION_STATES.PUBLIC_DEFENDER]: 'Public Defender Assignment',
+  [SANCTION_STATES.RECENTLY_REINSTATED]: 'Reinstated (Grace Period)',
+});
+
+const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
+
 /**
  * Setup hub for selecting a game mode, jurisdiction, and side.
  *
@@ -17,11 +27,19 @@ import InitializationScreen from '../screens/InitializationScreen';
  * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
  * @param {object | null} props.sanctionsState - Current sanctions state.
+ * @param {import('../../lib/types').PlayerProfile | null} props.profile - Persisted player profile snapshot.
  * @param {boolean} props.isInitializing - Whether setup is starting a run.
  * @param {string | null} props.initializingRole - Role to display while initializing.
  * @returns {JSX.Element} The setup hub layout.
  */
-const SetupHub = ({ onStart, error, sanctionsState, isInitializing, initializingRole }) => {
+const SetupHub = ({
+  onStart,
+  error,
+  sanctionsState,
+  profile,
+  isInitializing,
+  initializingRole,
+}) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
   const [courtType, setCourtType] = useState(DEFAULT_GAME_CONFIG.courtType);
@@ -32,6 +50,12 @@ const SetupHub = ({ onStart, error, sanctionsState, isInitializing, initializing
   const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
   const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
+  const sanctionsLabel = sanctionsState
+    ? `Tier ${sanctionsState.level} — ${formatSanctionsLabel(sanctionsState.state)}`
+    : 'Tier unknown';
+  const pdActive =
+    Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const disbarred = Boolean(profile?.sanctions?.disbarred);
 
   useEffect(() => {
     persistApiKey(apiKey, rememberKey);
@@ -65,6 +89,27 @@ const SetupHub = ({ onStart, error, sanctionsState, isInitializing, initializing
           </p>
         </div>
       )}
+      <div className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          Status Summary
+        </p>
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-slate-500">Sanctions tier</span>
+            <span className="text-slate-700">{sanctionsLabel}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-slate-500">Public Defender</span>
+            <span className="text-slate-700">{pdActive ? 'Active' : 'Inactive'}</span>
+          </div>
+          {disbarred && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-500">Disbarred</span>
+              <span className="text-slate-700">Yes</span>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="w-full max-w-md mb-8 space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
           <div>
