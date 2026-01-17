@@ -71,9 +71,17 @@ export const guardDisposition = (current, next) =>
 
 export const deriveDispositionFromMotion = (motion) => {
   const ruling = motion?.ruling?.ruling?.toLowerCase().replace(/_/g, ' ').trim();
-  if (!ruling || !['granted', 'partially granted'].includes(ruling)) return null;
+  if (!ruling || ruling !== 'granted') return null;
   const outcomeText = motion?.ruling?.outcome_text?.trim();
   if (!outcomeText) return null;
+  const normalizedOutcome = outcomeText.toLowerCase();
+  if (
+    normalizedOutcome.includes('partial') ||
+    normalizedOutcome.includes('in part') ||
+    normalizedOutcome.includes('some counts')
+  ) {
+    return null;
+  }
   const type = normalizeDispositionText(outcomeText);
   if (!type) return null;
 
