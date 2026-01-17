@@ -1,3 +1,4 @@
+import React from 'react';
 import { Home, RefreshCw, Scale } from 'lucide-react';
 import { SANCTION_STATES } from '../../lib/constants';
 
@@ -10,6 +11,29 @@ const SANCTIONS_LABELS = Object.freeze({
 });
 
 const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
+
+const buildSnapshotRows = (snapshot, profile) => {
+  if (!snapshot) {
+    return [
+      { label: 'Sanctions tier', value: 'Unknown' },
+      { label: 'Public Defender', value: 'Unknown' },
+    ];
+  }
+
+  const pdActive =
+    Boolean(profile?.pdStatus) || snapshot.state === SANCTION_STATES.PUBLIC_DEFENDER;
+
+  return [
+    {
+      label: 'Sanctions tier',
+      value: `Tier ${snapshot.level} — ${formatSanctionsLabel(snapshot.state)}`,
+    },
+    {
+      label: 'Public Defender',
+      value: pdActive ? 'Active' : 'Inactive',
+    },
+  ];
+};
 
 const buildStatusItems = (before, after) => {
   const items = [];
@@ -47,14 +71,18 @@ const buildStatusItems = (before, after) => {
  *
  * @param {object} props - Component props.
  * @param {object | null} props.outcome - Terminal run outcome payload.
+ * @param {object | null} props.sanctionsState - Current sanctions state.
+ * @param {import('../../lib/types').PlayerProfile | null} props.profile - Persisted player profile snapshot.
  * @param {() => void} props.onNewCase - Handler to start a new case.
  * @param {() => void} props.onMainMenu - Handler to return to the main menu.
  * @returns {JSX.Element} Post-run summary layout.
  */
-const PostRun = ({ outcome, onNewCase, onMainMenu }) => {
+const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) => {
   const disposition = outcome?.disposition ?? null;
   const sanctionsBefore = outcome?.sanctions?.before ?? null;
-  const sanctionsAfter = outcome?.sanctions?.after ?? null;
+  const sanctionsAfter = outcome?.sanctions?.after ?? profile?.sanctions ?? sanctionsState ?? null;
+  const beforeRows = buildSnapshotRows(sanctionsBefore, null);
+  const afterRows = buildSnapshotRows(sanctionsAfter, profile);
   const statusItems = buildStatusItems(sanctionsBefore, sanctionsAfter);
   const summaryTitle = disposition?.summary ?? 'Case Closed';
   const summaryDetails =
@@ -83,7 +111,40 @@ const PostRun = ({ outcome, onNewCase, onMainMenu }) => {
             <pre className="whitespace-pre-wrap rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
               {disposition.details}
             </pre>
-          )}
+            )}
+        </div>
+        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Run Impact
+          </p>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                Before this run
+              </p>
+              <dl className="mt-3 space-y-2">
+                {beforeRows.map((row) => (
+                  <div key={row.label} className="flex items-center justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">{row.label}</dt>
+                    <dd className="text-slate-700">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+            <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                After this run
+              </p>
+              <dl className="mt-3 space-y-2">
+                {afterRows.map((row) => (
+                  <div key={row.label} className="flex items-center justify-between gap-3">
+                    <dt className="font-semibold text-slate-500">{row.label}</dt>
+                    <dd className="text-slate-700">{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          </div>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-3">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
