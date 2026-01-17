@@ -464,17 +464,22 @@ describe('useGameState transitions', () => {
     expect(motionRulingCall.systemPrompt).toContain('recentlyReinstatedUntil');
   });
 
-  it('surfaces errors and resets to start on generation failure', async () => {
+  it('surfaces errors and emits a start failure event', async () => {
     requestLlmJson.mockRejectedValueOnce(new Error('Network down'));
 
-    const { result } = renderHook(() => useGameState());
+    const onShellEvent = vi.fn();
+    const { result } = renderHook(() => useGameState({ onShellEvent }));
 
     await act(async () => {
       await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
     });
 
-    expect(result.current.gameState).toBe(GAME_STATES.START);
+    expect(result.current.gameState).toBe(GAME_STATES.INITIALIZING);
     expect(result.current.error).toBe('Docket creation failed. Please try again.');
+    expect(onShellEvent).toHaveBeenCalledWith({
+      type: 'start_failed',
+      message: 'Docket creation failed. Please try again.',
+    });
   });
 
   it('enforces defense/prosecution turn order during the motion exchange', async () => {
