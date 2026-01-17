@@ -84,7 +84,14 @@ const JurySection = ({
         {pool.map((j) => (
           <button
             key={j.id}
-            onClick={() => onStrike(j.id)}
+            onClick={() => {
+              console.debug('JurySection strike click', {
+                id: j.id,
+                idType: typeof j.id,
+                myStrikes,
+              });
+              onStrike(j.id);
+            }}
             className={`p-3 rounded border-2 text-left transition-all ${
               myStrikes.includes(j.id)
                 ? 'border-red-500 bg-red-50 relative'
@@ -92,7 +99,9 @@ const JurySection = ({
             }`}
           >
             {myStrikes.includes(j.id) && (
-              <div className="absolute top-1 right-1 text-red-600 font-black text-xs">X</div>
+              <div className="absolute top-1 right-1 text-red-600 font-black text-xs pointer-events-none">
+                X
+              </div>
             )}
             <div className="mb-2">{renderStatusBadge(j.status)}</div>
             <div className="font-bold text-slate-800 text-sm truncate">{j.name}</div>

@@ -884,6 +884,14 @@ const useGameState = () => {
   const toggleStrikeSelection = (id) => {
     setHistory((prev) => {
       const current = prev.jury?.myStrikes || [];
+      console.debug('toggleStrikeSelection', {
+        id,
+        idType: typeof id,
+        myStrikes: current,
+      });
+      if (typeof id !== 'number' || Number.isNaN(id)) {
+        return prev;
+      }
       if (current.includes(id)) {
         return { ...prev, jury: { ...prev.jury, myStrikes: current.filter((x) => x !== id) } };
       }
