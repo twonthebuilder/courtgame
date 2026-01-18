@@ -931,7 +931,13 @@ const useGameState = (options = {}) => {
    */
   const toggleStrikeSelection = (id) => {
     setHistory((prev) => {
-      const current = prev.jury?.myStrikes || [];
+      if (!prev.jury) {
+        logEvent('Jury strike selection ignored (jury state missing).');
+        return prev;
+      }
+      const current = (prev.jury?.myStrikes || [])
+        .map(normalizeJurorId)
+        .filter((strikeId) => strikeId !== null);
       const normalizedId = normalizeJurorId(id);
       if (debugEnabled()) {
         console.debug('toggleStrikeSelection', {
@@ -943,10 +949,6 @@ const useGameState = (options = {}) => {
       }
       if (normalizedId === null) {
         logEvent('Jury strike selection ignored (invalid id).', { verbose: true });
-        return prev;
-      }
-      if (!prev.jury) {
-        logEvent('Jury strike selection ignored (jury state missing).');
         return prev;
       }
       if (current.includes(normalizedId)) {
@@ -1086,21 +1088,21 @@ const useGameState = (options = {}) => {
     const startedAtMs = Date.parse(startedAt);
     setError(null);
     setLoadingMsg('Judge is ruling on strikes...');
-    const normalizedStrikes = Array.isArray(strikes)
-      ? strikes.map(normalizeJurorId).filter((id) => id !== null)
-      : [];
+    const normalizedStrikes = Array.isArray(strikes) ? strikes.map(normalizeJurorId) : [];
+    const hasInvalidStrikeIds = normalizedStrikes.some((id) => id === null);
+    const canonicalStrikes = normalizedStrikes.filter((id) => id !== null);
     setLastAction({
       name: 'submitJuryStrikes',
       startedAt,
       endedAt: null,
       durationMs: null,
-      payload: { selectedJurorIds: normalizedStrikes },
+      payload: { selectedJurorIds: canonicalStrikes },
       result: null,
       rejectReason: null,
       rawModelText: null,
       parsed: null,
     });
-    logEvent(`Jury strikes submit attempt: [${normalizedStrikes.join(', ')}]`);
+    logEvent(`Jury strikes submit attempt: [${canonicalStrikes.join(', ')}]`);
 
     if (debugEnabled()) {
       const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
@@ -1122,7 +1124,7 @@ const useGameState = (options = {}) => {
       });
       console.debug('submitStrikes pre-validation', {
         strikes,
-        normalizedStrikes,
+        normalizedStrikes: canonicalStrikes,
         strikeTypes,
         poolIds,
         docketIds,
@@ -1147,7 +1149,7 @@ const useGameState = (options = {}) => {
       return;
     }
 
-    if (!Array.isArray(strikes)) {
+    if (!Array.isArray(strikes) || hasInvalidStrikeIds) {
       finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
       logEvent('Jury strikes rejected: invalid_selection.');
       showDebugBanner('invalid_selection');
@@ -1159,7 +1161,7 @@ const useGameState = (options = {}) => {
     const poolJurorIds = new Set((history.jury.pool ?? []).map((juror) => juror.id));
     const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
     const allowedJurorIds = poolJurorIds.size ? poolJurorIds : docketJurorIds;
-    const strikeValidation = validateStrikeIds(strikes, [...allowedJurorIds]);
+    const strikeValidation = validateStrikeIds(canonicalStrikes, [...allowedJurorIds]);
 
     if (!strikeValidation.ok) {
       finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
@@ -1170,7 +1172,7 @@ const useGameState = (options = {}) => {
       return;
     }
 
-    if (!Array.isArray(strikes) || strikes.length !== 2) {
+    if (canonicalStrikes.length !== 2) {
       logEvent('Jury strikes submitted with a non-standard selection count.', {
         verbose: true,
       });
@@ -1181,7 +1183,7 @@ const useGameState = (options = {}) => {
       const debugFlags = getDebugState().flags;
       if (debugEnabled() && debugFlags.bypassJuryLlm) {
         const poolIds = history.jury.pool?.map((juror) => juror.id) ?? [];
-        const seatedIds = poolIds.filter((id) => !normalizedStrikes.includes(id));
+        const seatedIds = poolIds.filter((id) => !canonicalStrikes.includes(id));
         data = {
           opponent_strikes: [],
           seated_juror_ids: seatedIds,
@@ -1194,7 +1196,7 @@ const useGameState = (options = {}) => {
           userPrompt: 'Strike',
           systemPrompt: getJuryStrikePrompt(
             buildDocketPromptCase(history.case),
-            normalizedStrikes,
+            canonicalStrikes,
             config.role
           ),
           responseLabel: 'jury',
@@ -1250,7 +1252,7 @@ const useGameState = (options = {}) => {
           ...prev,
           jury: {
             ...prev.jury,
-            myStrikes: normalizedStrikes,
+            myStrikes: canonicalStrikes,
             invalidStrike: true,
           },
         }));
@@ -1263,7 +1265,7 @@ const useGameState = (options = {}) => {
       }
 
       setHistory((prev) => {
-        const playerStrikeIds = new Set(normalizedStrikes);
+        const playerStrikeIds = new Set(canonicalStrikes);
         const opponentStrikeIds = new Set(normalizedOpponentStrikes);
         const seatedIds = new Set(normalizedSeatedIds);
         const updatedPool =
@@ -1283,7 +1285,7 @@ const useGameState = (options = {}) => {
           ...prev,
           jury: {
             ...prev.jury,
-            myStrikes: normalizedStrikes,
+            myStrikes: canonicalStrikes,
             opponentStrikes: normalizedOpponentStrikes,
             seatedIds: normalizedSeatedIds,
             comment: data.judge_comment,
