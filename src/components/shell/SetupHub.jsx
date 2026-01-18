@@ -7,6 +7,7 @@ import {
   JURISDICTION_OPTIONS,
 } from '../../lib/config';
 import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
+import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 import InitializationScreen from '../screens/InitializationScreen';
 
@@ -65,6 +66,19 @@ const SetupHub = ({
 
   const handleStart = (role) => {
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
+    if (debugEnabled()) {
+      console.count('SetupHub start click');
+      console.info('[SetupHub] start click', {
+        timestamp: new Date().toISOString(),
+        appMode: difficulty,
+        role: effectiveRole,
+        configSnapshot: {
+          difficulty,
+          jurisdiction,
+          courtType: effectiveCourtType,
+        },
+      });
+    }
     onStart(effectiveRole, difficulty, jurisdiction, effectiveCourtType);
   };
 

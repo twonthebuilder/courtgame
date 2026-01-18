@@ -18,6 +18,7 @@ import DebugToast from './components/ui/DebugToast';
 import LoadingView from './components/ui/LoadingView';
 import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
 import { GAME_STATES } from './lib/constants';
+import { debugEnabled } from './lib/debugStore';
 import { loadPlayerProfile } from './lib/persistence';
 
 /** @typedef {import('./lib/types').HistoryState} HistoryState */
@@ -41,10 +42,12 @@ const RunShell = ({
   onDebugData,
   onRunInitialized,
 }) => {
+  const debugLogsEnabled = debugEnabled();
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
   const didStartRef = useRef(false);
   const startPayloadRef = useRef(startPayload);
+  const renderCountRef = useRef(0);
   const gameStateData = useGameState({ onShellEvent });
   const {
     gameState,
@@ -75,17 +78,57 @@ const RunShell = ({
   const beginRun = useCallback(async (payload) => {
     if (!payload || didStartRef.current) return;
     didStartRef.current = true;
+    if (debugLogsEnabled) {
+      console.count('RunShell generateCase');
+      console.info('[RunShell] generateCase start', {
+        timestamp: new Date().toISOString(),
+        appMode: payload.difficulty,
+        role: payload.role,
+        configSnapshot: {
+          difficulty: payload.difficulty,
+          jurisdiction: payload.jurisdiction,
+          courtType: payload.courtType,
+        },
+      });
+    }
     await generateCase(
       payload.role,
       payload.difficulty,
       payload.jurisdiction,
       payload.courtType
     );
-  }, [generateCase]);
+  }, [debugLogsEnabled, generateCase]);
 
   useEffect(() => {
     beginRun(startPayloadRef.current);
   }, [beginRun]);
+
+  useEffect(() => {
+    renderCountRef.current += 1;
+  });
+
+  useEffect(() => {
+    if (!debugLogsEnabled) return undefined;
+    console.info('[RunShell] mounted', { timestamp: new Date().toISOString() });
+    return () => {
+      console.info('[RunShell] unmounted', { timestamp: new Date().toISOString() });
+    };
+  }, [debugLogsEnabled]);
+
+  useEffect(() => {
+    if (!debugLogsEnabled || !startPayload) return undefined;
+    renderCountRef.current = 0;
+    const intervalId = setInterval(() => {
+      const renderCount = renderCountRef.current;
+      renderCountRef.current = 0;
+      console.info('[RunShell] renders/sec', {
+        timestamp: new Date().toISOString(),
+        count: renderCount,
+        role: startPayload?.role ?? null,
+      });
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [debugLogsEnabled, startPayload]);
 
   useEffect(() => {
     if (gameState === GAME_STATES.PLAYING && !notifiedInitRef.current) {
@@ -298,6 +341,8 @@ const RunShell = ({
  * @returns {JSX.Element} The app shell with game state routing.
  */
 export default function PocketCourt() {
+  const debugLogsEnabled = debugEnabled();
+  const renderCountRef = useRef(0);
   const [shellState, setShellState] = useState(appShellState.MainMenu);
   const [setupError, setSetupError] = useState(null);
   const [sanctionsSnapshot, setSanctionsSnapshot] = useState(() => {
@@ -364,6 +409,25 @@ export default function PocketCourt() {
     setRunOutcome(null);
     transitionShell(appShellState.MainMenu);
   }, [transitionShell]);
+
+  useEffect(() => {
+    renderCountRef.current += 1;
+  });
+
+  useEffect(() => {
+    if (!debugLogsEnabled || shellState !== appShellState.Run) return undefined;
+    renderCountRef.current = 0;
+    const intervalId = setInterval(() => {
+      const renderCount = renderCountRef.current;
+      renderCountRef.current = 0;
+      console.info('[App] renders/sec', {
+        timestamp: new Date().toISOString(),
+        count: renderCount,
+        role: startPayload?.role ?? null,
+      });
+    }, 1000);
+    return () => clearInterval(intervalId);
+  }, [debugLogsEnabled, shellState, startPayload?.role]);
 
   let shellView = null;
 
