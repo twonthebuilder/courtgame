@@ -952,11 +952,18 @@ const useGameState = (options = {}) => {
   const toggleStrikeSelection = (id) => {
     setHistory((prev) => {
       const current = prev.jury?.myStrikes || [];
-      console.debug('toggleStrikeSelection', {
-        id,
-        idType: typeof id,
-        myStrikes: current,
-      });
+      if (debugEnabled()) {
+        const normalizedId =
+          typeof id === 'string' && id.trim() !== '' && !Number.isNaN(Number(id))
+            ? Number(id)
+            : id;
+        console.debug('toggleStrikeSelection', {
+          id,
+          idType: typeof id,
+          normalizedId,
+          myStrikes: current,
+        });
+      }
       if (typeof id !== 'number' || Number.isNaN(id)) {
         logEvent('Jury strike selection ignored (invalid id).', { verbose: true });
         return prev;
@@ -1115,6 +1122,33 @@ const useGameState = (options = {}) => {
     });
     logEvent(`Jury strikes submit attempt: [${strikes.join(', ')}]`);
 
+    if (debugEnabled()) {
+      const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
+      const docketIds = (history.case?.jurors ?? []).map((juror) => juror.id);
+      const strikeTypes = Array.isArray(strikes) ? strikes.map((id) => typeof id) : [];
+      const normalizationMap = {
+        stringToNumber: {},
+        numberToString: {},
+      };
+      [...(Array.isArray(strikes) ? strikes : []), ...poolIds, ...docketIds].forEach((id) => {
+        if (typeof id === 'string') {
+          const numeric = Number(id);
+          if (!Number.isNaN(numeric)) {
+            normalizationMap.stringToNumber[id] = numeric;
+          }
+        } else if (typeof id === 'number' && !Number.isNaN(id)) {
+          normalizationMap.numberToString[id] = String(id);
+        }
+      });
+      console.debug('submitStrikes pre-validation', {
+        strikes,
+        strikeTypes,
+        poolIds,
+        docketIds,
+        normalizationMap,
+      });
+    }
+
     const finalizeAction = (details) => {
       const endedAt = new Date().toISOString();
       setLastAction({
@@ -1200,6 +1234,17 @@ const useGameState = (options = {}) => {
           setLoadingMsg(null);
           return;
         }
+      }
+
+      if (debugEnabled()) {
+        const opponentStrikeTypes = (data.opponent_strikes ?? []).map((id) => typeof id);
+        const seatedStrikeTypes = (data.seated_juror_ids ?? []).map((id) => typeof id);
+        console.debug('jury strike parsed response', {
+          opponentStrikes: data.opponent_strikes,
+          opponentStrikeTypes,
+          seatedJurorIds: data.seated_juror_ids,
+          seatedJurorTypes: seatedStrikeTypes,
+        });
       }
 
       setLastAction({ parsed: data });
