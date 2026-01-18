@@ -42,6 +42,8 @@ const RunShell = ({
 }) => {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
+  const didStartRef = useRef(false);
+  const startPayloadRef = useRef(startPayload);
   const gameStateData = useGameState({ onShellEvent });
   const {
     gameState,
@@ -68,21 +70,20 @@ const RunShell = ({
     onExitToMenu();
   };
 
+  const beginRun = useCallback(async (payload) => {
+    if (!payload || didStartRef.current) return;
+    didStartRef.current = true;
+    await generateCase(
+      payload.role,
+      payload.difficulty,
+      payload.jurisdiction,
+      payload.courtType
+    );
+  }, [generateCase]);
+
   useEffect(() => {
-    if (!startPayload) return;
-    const startRun = async () => {
-      await generateCase(
-        startPayload.role,
-        startPayload.difficulty,
-        startPayload.jurisdiction,
-        startPayload.courtType
-      );
-    };
-    startRun();
-  }, [
-    generateCase,
-    startPayload,
-  ]);
+    beginRun(startPayloadRef.current);
+  }, [beginRun]);
 
   useEffect(() => {
     if (!onDebugData) return;

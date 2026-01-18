@@ -95,6 +95,26 @@ const MISCONDUCT_PATTERNS = {
   procedural: /\bprocedural\b/i,
 };
 
+const capRunHistoryEntries = (runs) => runs.slice(-RUN_HISTORY_LIMIT);
+
+/**
+ * Build the initial motion exchange state for the pre-trial phase.
+ *
+ * The exchange always follows defense motion -> prosecution rebuttal -> judge ruling.
+ * Player role only determines whether the player or AI submits each step.
+ *
+ * @returns {HistoryState['motion']} Initialized motion state payload.
+ */
+const createMotionState = () => ({
+  motionText: '',
+  motionBy: 'defense',
+  rebuttalText: '',
+  rebuttalBy: 'prosecution',
+  ruling: null,
+  motionPhase: 'motion_submission',
+  locked: false,
+});
+
 const toTimestampMs = (isoString) => {
   if (!isoString) return null;
   const parsed = Date.parse(isoString);
@@ -829,16 +849,14 @@ const useGameState = (options = {}) => {
     });
   };
 
-  const capRunHistoryEntries = (runs) => runs.slice(-RUN_HISTORY_LIMIT);
-
-  const recordRunHistoryEntry = (entry) => {
+  const recordRunHistoryEntry = useCallback((entry) => {
     const historySnapshot = loadRunHistory();
     const runs = historySnapshot.runs ?? [];
     saveRunHistory({
       ...historySnapshot,
       runs: capRunHistoryEntries([...runs, entry]),
     });
-  };
+  }, []);
 
   const finalizeRunHistoryEntry = (verdict, disposition, achievementId) => {
     if (!runMeta || runMeta.endedAt) return;
@@ -889,24 +907,6 @@ const useGameState = (options = {}) => {
     return () => window.clearTimeout(timeoutId);
   }, [sanctionsState.expiresAt, sanctionsState.recentlyReinstatedUntil, sanctionsState.state]);
 
-  /**
-   * Build the initial motion exchange state for the pre-trial phase.
-   *
-   * The exchange always follows defense motion -> prosecution rebuttal -> judge ruling.
-   * Player role only determines whether the player or AI submits each step.
-   *
-   * @returns {HistoryState['motion']} Initialized motion state payload.
-   */
-  const createMotionState = () => ({
-    motionText: '',
-    motionBy: 'defense',
-    rebuttalText: '',
-    rebuttalBy: 'prosecution',
-    ruling: null,
-    motionPhase: 'motion_submission',
-    locked: false,
-  });
-
   const showDebugBanner = (reason) => {
     if (!debugEnabled()) return;
     const message = `Strikes not applied: ${reason}`;
@@ -919,7 +919,7 @@ const useGameState = (options = {}) => {
     }, 4000);
   };
 
-  const resetRunState = () => {
+  const resetRunState = useCallback(() => {
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
@@ -932,7 +932,7 @@ const useGameState = (options = {}) => {
     }
     setHistory({ counselNotes: '', disposition: null });
     setRunMeta(null);
-  };
+  }, []);
 
   /**
    * End the current run and surface the outcome to the app shell.
@@ -986,7 +986,7 @@ const useGameState = (options = {}) => {
    * @param {string} courtType - Selected court type.
    * @returns {Promise<boolean>} Resolves with true when the case is generated successfully.
    */
-  const generateCase = async (role, difficulty, jurisdiction, courtType) => {
+  const generateCase = useCallback(async (role, difficulty, jurisdiction, courtType) => {
     resetRunState();
     setGameState(GAME_STATES.INITIALIZING);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
@@ -1025,10 +1025,10 @@ const useGameState = (options = {}) => {
           lockedCourtType,
           lockedRole,
           {
-          ...buildSanctionPromptContext(sanctionsState, {
-            caseType: lockedCaseType,
-            lockedJurisdiction,
-          }),
+            ...buildSanctionPromptContext(sanctionsState, {
+              caseType: lockedCaseType,
+              lockedJurisdiction,
+            }),
           }
         ),
         responseLabel: 'case',
@@ -1089,7 +1089,7 @@ const useGameState = (options = {}) => {
       emitShellEvent({ type: 'start_failed', message });
       return false;
     }
-  };
+  }, [emitShellEvent, recordRunHistoryEntry, resetRunState, sanctionsState]);
 
   /**
    * Submit jury strikes and lock in the seated jurors.
