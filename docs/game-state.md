@@ -65,6 +65,8 @@ are not stored by default; only high-level run metadata and sanctions summaries 
   - `pool`, `myStrikes`, `opponentStrikes`, `seatedIds`, `comment`, `locked` when jury is active.
   - `pool` jurors retain a stable `status` (`eligible`, `struck_by_player`, `struck_by_opponent`,
     `seated`) with optional `status_history` to record transitions.
+- Juror IDs are canonicalized to sequential numeric IDs at case creation and remain stable for the
+  duration of the run.
 - `history.motion`: `text`, `ruling`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
 - `history.sanctions`: list of explicit, docketed judicial acknowledgments with a visibility flag for in-world rendering.

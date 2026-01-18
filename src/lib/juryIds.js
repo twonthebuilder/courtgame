@@ -16,6 +16,32 @@ export const normalizeJurorId = (id) => {
 };
 
 /**
+ * Normalize a list of juror IDs to canonical numeric values, filtering invalid entries.
+ *
+ * @param {unknown} ids - Array of juror identifiers.
+ * @returns {number[]} Canonical juror IDs.
+ */
+export const normalizeStrikeIds = (ids) => {
+  if (!Array.isArray(ids)) return [];
+  return ids.map(normalizeJurorId).filter((id) => id !== null);
+};
+
+/**
+ * Ensure juror IDs are canonical and deterministic for the run.
+ * IDs are assigned sequentially based on the original array order.
+ *
+ * @param {unknown} jurors - Array of juror objects.
+ * @returns {Array<object>} Jurors with canonical numeric IDs.
+ */
+export const canonicalizeJurorPool = (jurors) => {
+  if (!Array.isArray(jurors)) return [];
+  return jurors.map((juror, index) => ({
+    ...juror,
+    id: index + 1,
+  }));
+};
+
+/**
  * Validate strike IDs against an allowed pool.
  *
  * @param {unknown} strikes - Array of IDs to validate.

@@ -36,11 +36,11 @@ const buildSanctionContextBlock = (sanctionContext = {}) => {
     lines.push('The court has issued a formal warning for counsel conduct.');
   }
   if (state === SANCTION_STATES.SANCTIONED) {
-    lines.push(`Counsel\'s license is suspended until ${expiresAt || 'further order'}.`);
+    lines.push(`Counsel's license is suspended until ${expiresAt || 'further order'}.`);
   }
   if (state === SANCTION_STATES.PUBLIC_DEFENDER) {
     lines.push(
-      `Counsel\'s license is restricted; assignment to the public defender docket lasts until ${
+      `Counsel's license is restricted; assignment to the public defender docket lasts until ${
         expiresAt || 'further order'
       }.`
     );
@@ -177,8 +177,10 @@ export const getGeneratorPrompt = (
  */
 export const getJuryStrikePrompt = (caseData, playerStrikes, playerRole) => {
   const opponentRole = playerRole === 'defense' ? 'Prosecutor' : 'Defense Attorney';
+  const jurorList = JSON.stringify(caseData.jurors ?? []);
   return `
     Phase: VOIR DIRE. Case: ${caseData.title}.
+    Jurors (use these exact IDs): ${jurorList}.
     Player (${playerRole}) struck IDs: ${JSON.stringify(playerStrikes)}.
     
     As AI ${opponentRole}, strike 2 jurors who hurt YOUR case.
