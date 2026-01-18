@@ -200,7 +200,7 @@ describe('useGameState transitions', () => {
     expect(result.current.history.jury.myStrikes).toEqual([]);
 
     act(() => {
-      result.current.toggleStrikeSelection(1);
+      result.current.toggleStrikeSelection('1');
     });
     expect(result.current.history.jury.myStrikes).toEqual([1]);
 
@@ -760,6 +760,36 @@ describe('useGameState transitions', () => {
     expect(result.current.error).toBe(
       'Strike results referenced jurors outside the docket. Please retry.'
     );
+  });
+
+  it('normalizes strike ids before building the jury strike prompt', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(juryCasePayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          opponent_strikes: [3],
+          seated_juror_ids: [1],
+          judge_comment: 'Seated.',
+        })
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase(
+        'defense',
+        'normal',
+        JURISDICTIONS.USA,
+        COURT_TYPES.STANDARD
+      );
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes(['2']);
+    });
+
+    const strikeCall = requestLlmJson.mock.calls[1][0];
+    expect(strikeCall.systemPrompt).toContain('Player (defense) struck IDs: [2]');
   });
 
   it('rejects jury strikes that are outside the current pool', async () => {
