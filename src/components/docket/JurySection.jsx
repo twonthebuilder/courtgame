@@ -10,6 +10,7 @@
  * @param {number[]} props.myStrikes - Player strike IDs.
  * @param {boolean} props.isLocked - Whether jury selection is finalized.
  * @param {string} props.judgeComment - Judge comment after selection.
+ * @param {'defense' | 'prosecution'} props.playerRole - Player role for labeling.
  * @returns {JSX.Element} The jury selection UI.
  */
 const JurySection = ({
@@ -19,7 +20,11 @@ const JurySection = ({
   myStrikes,
   isLocked,
   judgeComment,
+  playerRole,
 }) => {
+  const isDefense = playerRole !== 'prosecution';
+  const myStrikeLabel = isDefense ? 'Defense Strikes' : 'Prosecution Strikes';
+  const opponentStrikeLabel = isDefense ? 'Prosecution Strikes' : 'Defense Strikes';
   const statusLabels = {
     eligible: 'Eligible',
     struck_by_player: 'Struck (You)',
@@ -68,8 +73,8 @@ const JurySection = ({
           ))}
         </div>
         <div className="mt-4 pt-4 border-t border-slate-100 text-xs text-slate-400 flex gap-4">
-          <span>Defense Strikes: {myStrikes.length}</span>
-          <span>Prosecution Strikes: {opponentStrikes.length}</span>
+          <span>{myStrikeLabel}: {myStrikes.length}</span>
+          <span>{opponentStrikeLabel}: {opponentStrikes.length}</span>
         </div>
       </div>
     );
