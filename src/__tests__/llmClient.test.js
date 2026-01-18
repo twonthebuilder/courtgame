@@ -1,7 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fetchWithRetry } from '../lib/api';
 import { getActiveApiKey } from '../lib/runtimeConfig';
-import { LlmClientError, getLlmClientErrorMessage, requestLlmJson } from '../lib/llmClient';
+import {
+  LlmClientError,
+  getLlmClientErrorMessage,
+  parseCaseResponse,
+  requestLlmJson,
+} from '../lib/llmClient';
 
 vi.mock('../lib/runtimeConfig', () => ({
   getActiveApiKey: vi.fn(() => 'test-key'),
@@ -21,7 +26,7 @@ describe('llm client wrappers', () => {
     vi.restoreAllMocks();
   });
 
-  it('returns parsed JSON from the response payload', async () => {
+  it('returns parsed JSON and raw text from the response payload', async () => {
     fetchWithRetry.mockResolvedValue({
       candidates: [{ content: { parts: [{ text: '{"decision":"ok"}' }] } }],
     });
@@ -36,7 +41,10 @@ describe('llm client wrappers', () => {
       expect.stringContaining('generativelanguage.googleapis.com'),
       expect.objectContaining({ method: 'POST' })
     );
-    expect(result).toEqual({ decision: 'ok' });
+    expect(result).toEqual({
+      parsed: { decision: 'ok' },
+      rawText: '{"decision":"ok"}',
+    });
   });
 
   it('prefers user-friendly messages from LlmClientError', () => {
@@ -60,5 +68,34 @@ describe('llm client wrappers', () => {
     ).rejects.toMatchObject({
       userMessage: 'LLM API key is missing. Please check configuration.',
     });
+  });
+
+  it('rejects duplicate juror ids in case responses', () => {
+    const payload = {
+      title: 'Case',
+      facts: ['Fact'],
+      is_jury_trial: true,
+      judge: { name: 'Judge' },
+      jurors: [
+        { id: 1, name: 'A' },
+        { id: 1, name: 'B' },
+      ],
+      opposing_counsel: { name: 'Opposing' },
+    };
+
+    expect(() => parseCaseResponse(payload)).toThrow('Duplicate juror id');
+  });
+
+  it('rejects non-numeric juror ids in case responses', () => {
+    const payload = {
+      title: 'Case',
+      facts: ['Fact'],
+      is_jury_trial: true,
+      judge: { name: 'Judge' },
+      jurors: [{ id: 'one', name: 'A' }],
+      opposing_counsel: { name: 'Opposing' },
+    };
+
+    expect(() => parseCaseResponse(payload)).toThrow('jurors[0].id');
   });
 });

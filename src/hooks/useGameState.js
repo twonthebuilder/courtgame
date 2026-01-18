@@ -1,6 +1,27 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { copyToClipboard } from '../lib/clipboard';
-import { DEFAULT_GAME_CONFIG, normalizeDifficulty } from '../lib/config';
+import { DEFAULT_GAME_CONFIG, normalizeCourtType, normalizeDifficulty } from '../lib/config';
+import {
+  CASE_TYPES,
+  COURT_TYPES,
+  GAME_STATES,
+  JURISDICTIONS,
+  SANCTION_ENTRY_STATES,
+  SANCTION_LEVELS,
+  SANCTION_REASON_CODES,
+  SANCTION_STATES,
+  SANCTIONS_TIMERS_MS,
+  normalizeCaseType,
+  normalizeJurisdiction,
+  normalizeSanctionState,
+} from '../lib/constants';
+import {
+  deriveDispositionFromMotion,
+  deriveDispositionFromVerdict,
+  guardDisposition,
+  isMeritReleaseDisposition,
+  isTerminalDisposition,
+} from '../lib/disposition';
 import {
   getLlmClientErrorMessage,
   parseCaseResponse,
@@ -11,12 +32,30 @@ import {
   requestLlmJson,
 } from '../lib/llmClient';
 import {
+  loadPlayerProfile,
+  loadRunHistory,
+  savePlayerProfile,
+  saveRunHistory,
+} from '../lib/persistence';
+import {
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
   getMotionPrompt,
   getOpposingCounselPrompt,
 } from '../lib/prompts';
+import {
+  canonicalizeJurorPool,
+  normalizeJurorId,
+  normalizeStrikeIds,
+  validateStrikeIds,
+} from '../lib/juryIds';
+import {
+  debugEnabled,
+  getDebugState,
+  logEvent,
+  setLastAction,
+} from '../lib/debugStore';
 
 /** @typedef {import('../lib/types').CaseData} CaseData */
 /** @typedef {import('../lib/types').HistoryState} HistoryState */
@@ -39,6 +78,370 @@ const normalizeReferenceEntity = (entity) => {
   return 'rulings';
 };
 
+// Real-time windows to allow recidivism escalation and cooldown resets across sessions.
+const RECIDIVISM_WINDOW_MS = SANCTIONS_TIMERS_MS.RECIDIVISM_WINDOW;
+const COOLDOWN_RESET_MS = SANCTIONS_TIMERS_MS.COOLDOWN_RESET;
+const WARNING_DURATION_MS = SANCTIONS_TIMERS_MS.WARNING_DURATION;
+const SANCTION_DURATION_MS = SANCTIONS_TIMERS_MS.SANCTION_DURATION;
+const PUBLIC_DEFENDER_DURATION_MS = SANCTIONS_TIMERS_MS.PUBLIC_DEFENDER_DURATION;
+const REINSTATEMENT_GRACE_MS = SANCTIONS_TIMERS_MS.REINSTATEMENT_GRACE;
+const RUN_HISTORY_LIMIT = 20;
+
+const NON_TRIGGER_PATTERNS = [
+  /losing on the merits/i,
+  /loss on the merits/i,
+  /poor reasoning/i,
+  /silly but admissible/i,
+];
+
+const MISCONDUCT_PATTERNS = {
+  mistrial: /\bmistrial\b/i,
+  dismissal: /\bdismiss(?:ed|al)?\b/i,
+  misconduct: /\bmisconduct\b/i,
+  procedural: /\bprocedural\b/i,
+};
+
+const capRunHistoryEntries = (runs) => runs.slice(-RUN_HISTORY_LIMIT);
+
+/**
+ * Build the initial motion exchange state for the pre-trial phase.
+ *
+ * The exchange always follows defense motion -> prosecution rebuttal -> judge ruling.
+ * Player role only determines whether the player or AI submits each step.
+ *
+ * @returns {HistoryState['motion']} Initialized motion state payload.
+ */
+const createMotionState = () => ({
+  motionText: '',
+  motionBy: 'defense',
+  rebuttalText: '',
+  rebuttalBy: 'prosecution',
+  ruling: null,
+  motionPhase: 'motion_submission',
+  locked: false,
+});
+
+const toTimestampMs = (isoString) => {
+  if (!isoString) return null;
+  const parsed = Date.parse(isoString);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const buildDefaultSanctionsState = (nowMs = Date.now()) => ({
+  state: SANCTION_STATES.CLEAN,
+  level: SANCTION_LEVELS[SANCTION_STATES.CLEAN],
+  startedAt: new Date(nowMs).toISOString(),
+  expiresAt: null,
+  lastMisconductAt: null,
+  recidivismCount: 0,
+  recentlyReinstatedUntil: null,
+});
+
+const buildPdStatusSnapshot = (sanctionsState) => {
+  if (!sanctionsState || sanctionsState.state !== SANCTION_STATES.PUBLIC_DEFENDER) return null;
+  return {
+    startedAt: sanctionsState.startedAt,
+    expiresAt: sanctionsState.expiresAt,
+  };
+};
+
+const buildReinstatementSnapshot = (sanctionsState) => {
+  if (!sanctionsState?.recentlyReinstatedUntil) return null;
+  return { until: sanctionsState.recentlyReinstatedUntil };
+};
+
+const updatePlayerProfile = (updater) => {
+  const currentProfile = loadPlayerProfile();
+  const nextProfile = updater(currentProfile);
+  return savePlayerProfile(nextProfile);
+};
+
+const buildDefaultStats = () => ({
+  runsCompleted: 0,
+  verdictsFinalized: 0,
+});
+
+const persistSanctionsState = (state) => {
+  updatePlayerProfile((profile) => ({
+    ...profile,
+    sanctions: state,
+    pdStatus: buildPdStatusSnapshot(state),
+    reinstatement: buildReinstatementSnapshot(state),
+  }));
+};
+
+const isJudicialAcknowledgment = (entry) =>
+  Boolean(entry?.docket_text?.trim()) && Boolean(entry?.timestamp);
+
+const isNonTriggerDocketText = (text) =>
+  NON_TRIGGER_PATTERNS.some((pattern) => pattern.test(text ?? ''));
+
+const parseSanctionLevelFromText = (text) => {
+  const match = text?.match(/\b(?:level|tier)\s*(\d+)\b/i);
+  if (!match) return null;
+  const level = Number(match[1]);
+  return Number.isNaN(level) ? null : level;
+};
+
+const isProceduralViolation = (entry) => {
+  if (!entry) return false;
+  const proceduralTriggers = new Set([
+    SANCTION_REASON_CODES.DEADLINE_VIOLATION,
+    SANCTION_REASON_CODES.DISCOVERY_VIOLATION,
+    SANCTION_REASON_CODES.EVIDENCE_VIOLATION,
+  ]);
+  if (proceduralTriggers.has(entry.trigger)) return true;
+  return MISCONDUCT_PATTERNS.procedural.test(entry.docket_text ?? '');
+};
+
+const getEntryTimestampMs = (entry) => toTimestampMs(entry?.timestamp);
+
+const evaluateConductTrigger = (entry, entries, recidivismWindowMs) => {
+  if (!isJudicialAcknowledgment(entry)) {
+    return { triggered: false, severe: false, timestampMs: null };
+  }
+  if (isNonTriggerDocketText(entry.docket_text)) {
+    return { triggered: false, severe: false, timestampMs: getEntryTimestampMs(entry) };
+  }
+  const timestampMs = getEntryTimestampMs(entry);
+  if (timestampMs === null) {
+    return { triggered: false, severe: false, timestampMs: null };
+  }
+
+  const docketText = entry.docket_text ?? '';
+  const hasMisconductMistrial =
+    MISCONDUCT_PATTERNS.mistrial.test(docketText) && MISCONDUCT_PATTERNS.misconduct.test(docketText);
+  const hasMisconductDismissal =
+    MISCONDUCT_PATTERNS.dismissal.test(docketText) &&
+    MISCONDUCT_PATTERNS.misconduct.test(docketText);
+  const sanctionLevel = parseSanctionLevelFromText(docketText);
+  const hasJudgeSanctionLevel = sanctionLevel !== null && sanctionLevel >= 2;
+  const proceduralViolationsInWindow = entries.filter((logEntry) => {
+    if (!isProceduralViolation(logEntry)) return false;
+    const entryMs = getEntryTimestampMs(logEntry);
+    if (entryMs === null) return false;
+    return Math.abs(timestampMs - entryMs) <= recidivismWindowMs;
+  });
+  const hasRepeatedProceduralViolations =
+    isProceduralViolation(entry) && proceduralViolationsInWindow.length >= 2;
+  const severeTrigger =
+    hasMisconductMistrial ||
+    hasMisconductDismissal ||
+    hasJudgeSanctionLevel ||
+    hasRepeatedProceduralViolations;
+  const triggered =
+    entry.state === SANCTION_ENTRY_STATES.WARNED ||
+    entry.state === SANCTION_ENTRY_STATES.SANCTIONED ||
+    entry.state === SANCTION_ENTRY_STATES.NOTICED;
+
+  return {
+    triggered,
+    severe: severeTrigger,
+    timestampMs,
+  };
+};
+
+const isSanctionsStateEqual = (left, right) => {
+  if (!left || !right) return false;
+  return (
+    left.state === right.state &&
+    left.level === right.level &&
+    left.startedAt === right.startedAt &&
+    left.expiresAt === right.expiresAt &&
+    left.lastMisconductAt === right.lastMisconductAt &&
+    left.recidivismCount === right.recidivismCount &&
+    left.recentlyReinstatedUntil === right.recentlyReinstatedUntil
+  );
+};
+
+const getStateExpiryMs = (state, nowMs) => {
+  if (state === SANCTION_STATES.WARNED) return nowMs + WARNING_DURATION_MS;
+  if (state === SANCTION_STATES.SANCTIONED) return nowMs + SANCTION_DURATION_MS;
+  if (state === SANCTION_STATES.PUBLIC_DEFENDER) return nowMs + PUBLIC_DEFENDER_DURATION_MS;
+  if (state === SANCTION_STATES.RECENTLY_REINSTATED) return nowMs + REINSTATEMENT_GRACE_MS;
+  return null;
+};
+
+const buildSanctionsState = (state, nowMs, overrides = {}) => {
+  const normalizedState = normalizeSanctionState(state);
+  return {
+    ...overrides,
+    state: normalizedState,
+    level: SANCTION_LEVELS[normalizedState] ?? 0,
+    startedAt: new Date(nowMs).toISOString(),
+    expiresAt:
+      normalizedState === SANCTION_STATES.CLEAN
+        ? null
+        : new Date(getStateExpiryMs(normalizedState, nowMs)).toISOString(),
+    recentlyReinstatedUntil:
+      normalizedState === SANCTION_STATES.RECENTLY_REINSTATED
+        ? new Date(nowMs + REINSTATEMENT_GRACE_MS).toISOString()
+        : null,
+  };
+};
+
+const cloneSanctionsSnapshot = (state) => (state ? { ...state } : null);
+
+const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
+  const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
+  if (!reinstatedUntilMs || nowMs >= reinstatedUntilMs) return {};
+  return { recentlyReinstatedUntil: sanctionsState.recentlyReinstatedUntil };
+};
+
+export const normalizeSanctionsState = (state, nowMs) => {
+  if (!state) return buildDefaultSanctionsState(nowMs);
+
+  const hydratedState = {
+    ...buildDefaultSanctionsState(nowMs),
+    ...state,
+  };
+  hydratedState.state = normalizeSanctionState(hydratedState.state);
+
+  const expiresAtMs = toTimestampMs(hydratedState.expiresAt);
+  const reinstatedUntilMs = toTimestampMs(hydratedState.recentlyReinstatedUntil);
+  const lastMisconductMs = toTimestampMs(hydratedState.lastMisconductAt);
+  const shouldResetCooldown =
+    lastMisconductMs !== null && nowMs - lastMisconductMs > COOLDOWN_RESET_MS;
+
+  if (
+    hydratedState.state === SANCTION_STATES.PUBLIC_DEFENDER &&
+    expiresAtMs &&
+    nowMs >= expiresAtMs
+  ) {
+    return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
+      lastMisconductAt: hydratedState.lastMisconductAt,
+      recidivismCount: hydratedState.recidivismCount,
+    });
+  }
+
+  if (
+    hydratedState.state === SANCTION_STATES.RECENTLY_REINSTATED &&
+    reinstatedUntilMs &&
+    nowMs >= reinstatedUntilMs
+  ) {
+    return buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
+      lastMisconductAt: hydratedState.lastMisconductAt,
+      recidivismCount: 0,
+    });
+  }
+
+  if (
+    (hydratedState.state === SANCTION_STATES.WARNED ||
+      hydratedState.state === SANCTION_STATES.SANCTIONED) &&
+    expiresAtMs &&
+    nowMs >= expiresAtMs
+  ) {
+    return buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
+      lastMisconductAt: hydratedState.lastMisconductAt,
+      recidivismCount: 0,
+    });
+  }
+
+  if (shouldResetCooldown) {
+    return {
+      ...hydratedState,
+      recidivismCount: 0,
+    };
+  }
+
+  return hydratedState;
+};
+
+const buildSanctionPromptContext = (sanctionsState, overrides = {}) => ({
+  state: sanctionsState?.state,
+  caseType: overrides.caseType,
+  lockedJurisdiction: overrides.lockedJurisdiction,
+  expiresAt: sanctionsState?.expiresAt,
+  recentlyReinstatedUntil: sanctionsState?.recentlyReinstatedUntil,
+});
+
+const getNextSanctionsState = ({ currentState, entryState, recidivismCount, severe }) => {
+  if (currentState === SANCTION_STATES.RECENTLY_REINSTATED) {
+    return SANCTION_STATES.PUBLIC_DEFENDER;
+  }
+  if (currentState === SANCTION_STATES.CLEAN) {
+    return entryState === SANCTION_ENTRY_STATES.SANCTIONED
+      ? SANCTION_STATES.SANCTIONED
+      : SANCTION_STATES.WARNED;
+  }
+  if (currentState === SANCTION_STATES.WARNED) {
+    if (entryState === SANCTION_ENTRY_STATES.SANCTIONED || severe || recidivismCount > 1) {
+      return SANCTION_STATES.SANCTIONED;
+    }
+    return SANCTION_STATES.WARNED;
+  }
+  if (currentState === SANCTION_STATES.SANCTIONED) {
+    if (severe || recidivismCount > 1) {
+      return SANCTION_STATES.PUBLIC_DEFENDER;
+    }
+    return SANCTION_STATES.SANCTIONED;
+  }
+  return SANCTION_STATES.PUBLIC_DEFENDER;
+};
+
+const deriveSanctionsState = (prevState, sanctionsLog = [], nowMs = Date.now()) => {
+  let nextState = normalizeSanctionsState(prevState, nowMs);
+  const lastMisconductMs = toTimestampMs(nextState.lastMisconductAt);
+
+  const docketedEntries = (sanctionsLog ?? [])
+    .filter(isJudicialAcknowledgment)
+    .map((entry) => ({
+      ...entry,
+      timestampMs: getEntryTimestampMs(entry),
+    }))
+    .filter((entry) => entry.timestampMs !== null)
+    .sort((a, b) => a.timestampMs - b.timestampMs);
+
+  const newEntries = docketedEntries.filter((entry) =>
+    lastMisconductMs ? entry.timestampMs > lastMisconductMs : true
+  );
+
+  let currentState = nextState;
+  for (const entry of newEntries) {
+    const evaluation = evaluateConductTrigger(entry, docketedEntries, RECIDIVISM_WINDOW_MS);
+    if (!evaluation.triggered) continue;
+
+    const entryTimeMs = evaluation.timestampMs ?? nowMs;
+    const recidivismCount =
+      currentState.lastMisconductAt &&
+      entryTimeMs - toTimestampMs(currentState.lastMisconductAt) <= RECIDIVISM_WINDOW_MS
+        ? currentState.recidivismCount + 1
+        : 1;
+
+    const nextSanctionsState = getNextSanctionsState({
+      currentState: currentState.state,
+      entryState: entry.state,
+      recidivismCount,
+      severe: evaluation.severe,
+    });
+
+    if (nextSanctionsState !== currentState.state) {
+      currentState = buildSanctionsState(nextSanctionsState, entryTimeMs, {
+        lastMisconductAt: new Date(entryTimeMs).toISOString(),
+        recidivismCount,
+      });
+    } else {
+      currentState = {
+        ...currentState,
+        lastMisconductAt: new Date(entryTimeMs).toISOString(),
+        recidivismCount,
+        expiresAt:
+          currentState.state === SANCTION_STATES.CLEAN
+            ? null
+            : new Date(getStateExpiryMs(currentState.state, entryTimeMs)).toISOString(),
+      };
+    }
+  }
+
+  if (isSanctionsStateEqual(prevState, currentState)) {
+    return prevState;
+  }
+  return currentState;
+};
+
+const getCanonicalJurorIds = (jurors) =>
+  normalizeStrikeIds((jurors ?? []).map((juror) => juror?.id));
+
 const buildDocketRegistry = (historyState) => {
   const facts = new Map();
   (historyState.case?.facts ?? []).forEach((fact, index) => {
@@ -60,8 +463,8 @@ const buildDocketRegistry = (historyState) => {
   });
 
   const jurors = new Map();
-  (historyState.case?.jurors ?? []).forEach((juror) => {
-    if (typeof juror?.id === 'number') jurors.set(juror.id, true);
+  getCanonicalJurorIds(historyState.case?.jurors ?? []).forEach((id) => {
+    jurors.set(id, true);
   });
 
   const rulings = new Map();
@@ -298,27 +701,6 @@ const applyEvidenceStatusUpdates = (evidence, updates) => {
   });
 };
 
-const findDuplicateId = (ids) => {
-  const seen = new Set();
-  for (const id of ids) {
-    if (seen.has(id)) return id;
-    seen.add(id);
-  }
-  return null;
-};
-
-const validateJurorIdSubset = (docketJurorIds, ids) => {
-  const duplicateId = findDuplicateId(ids);
-  if (duplicateId !== null) {
-    return { valid: false, reason: 'duplicate', id: duplicateId };
-  }
-  const invalidId = ids.find((id) => !docketJurorIds.has(id));
-  if (invalidId !== undefined) {
-    return { valid: false, reason: 'unknown', id: invalidId };
-  }
-  return { valid: true };
-};
-
 const buildInitialJurorPool = (jurors) =>
   jurors.map((juror) => {
     const baseStatus = juror.status ?? 'eligible';
@@ -341,62 +723,213 @@ const updateJurorStatus = (juror, nextStatus) => {
   };
 };
 
+const createRunId = () =>
+  `run-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
 /**
  * Manage the Pocket Court game state and actions in one place.
  *
+ * @param {object} [options] - Optional shell callbacks.
+ * @param {(event: {type: string, message?: string, payload?: object}) => void} [options.onShellEvent]
  * @returns {{
  *   gameState: string,
  *   history: HistoryState,
- *   config: {difficulty: string, jurisdiction: string, role: string},
+ *   config: {difficulty: string, jurisdiction: string, courtType: string, role: string, caseType: string},
  *   loadingMsg: string | null,
  *   error: string | null,
  *   copied: boolean,
- *   generateCase: (role: string, difficulty: string, jurisdiction: string) => Promise<void>,
+ *   runOutcome: {
+ *     disposition: import('../lib/types').DispositionRecord | null,
+ *     sanctions: { before: import('../lib/types').PlayerSanctionsState | null, after: import('../lib/types').PlayerSanctionsState | null },
+ *   } | null,
+ *   generateCase: (role: string, difficulty: string, jurisdiction: string, courtType: string) => Promise<boolean>,
  *   submitStrikes: (strikes: number[]) => Promise<void>,
  *   submitMotionStep: (text: string) => Promise<void>,
  *   triggerAiMotionSubmission: () => Promise<void>,
  *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
- *   handleCopyFull: () => void,
+ *   handleCopyFull: (docketNumber?: number) => void,
  *   resetGame: () => void,
  *   toggleStrikeSelection: (id: number) => void,
  * }} Game state values and action handlers.
  */
-const useGameState = () => {
-  const [gameState, setGameState] = useState('start');
+const useGameState = (options = {}) => {
+  const { onShellEvent } = options;
+  const [gameState, setGameState] = useState(GAME_STATES.START);
   const [loadingMsg, setLoadingMsg] = useState(null);
-  const [history, setHistory] = useState(/** @type {HistoryState} */ ({ counselNotes: '' }));
+  const [history, setHistory] = useState(
+    /** @type {HistoryState} */ ({ counselNotes: '', disposition: null })
+  );
   const [config, setConfig] = useState({ ...DEFAULT_GAME_CONFIG });
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
-
-  /**
-   * Build the initial motion exchange state for the pre-trial phase.
-   *
-   * The exchange always follows defense motion -> prosecution rebuttal -> judge ruling.
-   * Player role only determines whether the player or AI submits each step.
-   *
-   * @returns {HistoryState['motion']} Initialized motion state payload.
-   */
-  const createMotionState = () => ({
-    motionText: '',
-    motionBy: 'defense',
-    rebuttalText: '',
-    rebuttalBy: 'prosecution',
-    ruling: null,
-    motionPhase: 'motion_submission',
-    locked: false,
+  const [debugBanner, setDebugBanner] = useState(null);
+  const debugBannerTimeoutRef = useRef(null);
+  const runStartSanctionsRef = useRef(null);
+  const [sanctionsState, setSanctionsState] = useState(() => {
+    const storedState = loadPlayerProfile()?.sanctions ?? null;
+    return normalizeSanctionsState(
+      storedState ?? buildDefaultSanctionsState(),
+      Date.now()
+    );
   });
+  const [runMeta, setRunMeta] = useState(null);
+  const [runOutcome, setRunOutcome] = useState(null);
 
-  /**
-   * Return to the start screen and clear transient UI state.
-   */
-  const resetGame = () => {
-    setGameState('start');
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
+  }, [history.sanctions]);
+
+  const emitShellEvent = useCallback(
+    (event) => {
+      if (typeof onShellEvent === 'function') {
+        onShellEvent(event);
+      }
+    },
+    [onShellEvent]
+  );
+
+  const buildRunOutcome = useCallback(
+    (disposition, sanctionsAfter) => ({
+      disposition: disposition ?? null,
+      sanctions: {
+        before: runStartSanctionsRef.current ?? cloneSanctionsSnapshot(sanctionsState),
+        after: cloneSanctionsSnapshot(sanctionsAfter),
+      },
+    }),
+    [sanctionsState]
+  );
+
+  useEffect(() => {
+    persistSanctionsState(sanctionsState);
+    emitShellEvent({ type: 'sanctions_sync', payload: sanctionsState });
+  }, [emitShellEvent, sanctionsState]);
+
+  const appendAchievement = (title) => {
+    if (!title) return;
+    updatePlayerProfile((profile) => {
+      const achievements = Array.isArray(profile.achievements) ? profile.achievements : [];
+      return {
+        ...profile,
+        achievements: [
+          ...achievements,
+          {
+            title,
+            awardedAt: new Date().toISOString(),
+            runId: runMeta?.id ?? null,
+          },
+        ],
+      };
+    });
+  };
+
+  const updateRunStats = (hasVerdict) => {
+    updatePlayerProfile((profile) => {
+      const stats = profile.stats ?? buildDefaultStats();
+      return {
+        ...profile,
+        stats: {
+          runsCompleted: stats.runsCompleted + 1,
+          verdictsFinalized: stats.verdictsFinalized + (hasVerdict ? 1 : 0),
+        },
+      };
+    });
+  };
+
+  const recordRunHistoryEntry = useCallback((entry) => {
+    const historySnapshot = loadRunHistory();
+    const runs = historySnapshot.runs ?? [];
+    saveRunHistory({
+      ...historySnapshot,
+      runs: capRunHistoryEntries([...runs, entry]),
+    });
+  }, []);
+
+  const finalizeRunHistoryEntry = (verdict, disposition, achievementId) => {
+    if (!runMeta || runMeta.endedAt) return;
+    const endedAt = new Date().toISOString();
+    const runId = runMeta.id ?? createRunId();
+    const baseEntry = {
+      id: runId,
+      startedAt: runMeta.startedAt ?? endedAt,
+      jurisdiction: runMeta.jurisdiction ?? config.jurisdiction,
+      difficulty: runMeta.difficulty ?? config.difficulty,
+      courtType: runMeta.courtType ?? config.courtType,
+      playerRole: runMeta.playerRole ?? config.role,
+      caseTitle: runMeta.caseTitle ?? history.case?.title ?? null,
+      judgeName: runMeta.judgeName ?? history.case?.judge?.name ?? null,
+    };
+    const entry = {
+      ...baseEntry,
+      endedAt,
+      outcome: disposition?.type ?? null,
+      score:
+        typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
+      achievementId: achievementId ?? null,
+    };
+    const historySnapshot = loadRunHistory();
+    const runs = historySnapshot.runs ?? [];
+    const hasExisting = runs.some((run) => run.id === runId);
+    const updatedRuns = hasExisting
+      ? runs.map((run) => (run.id === runId ? { ...run, ...entry } : run))
+      : [...runs, entry];
+    saveRunHistory({
+      ...historySnapshot,
+      runs: capRunHistoryEntries(updatedRuns),
+    });
+    updateRunStats(Boolean(verdict));
+    setRunMeta({ ...runMeta, endedAt });
+  };
+
+  useEffect(() => {
+    const expiryCandidates = [
+      toTimestampMs(sanctionsState.expiresAt),
+      toTimestampMs(sanctionsState.recentlyReinstatedUntil),
+    ].filter((timestamp) => timestamp && timestamp > Date.now());
+    if (expiryCandidates.length === 0) return undefined;
+    const nextExpiryMs = Math.min(...expiryCandidates);
+    const timeoutId = window.setTimeout(() => {
+      setSanctionsState((prev) => normalizeSanctionsState(prev, Date.now()));
+    }, Math.max(nextExpiryMs - Date.now(), 0));
+    return () => window.clearTimeout(timeoutId);
+  }, [sanctionsState.expiresAt, sanctionsState.recentlyReinstatedUntil, sanctionsState.state]);
+
+  const showDebugBanner = (reason) => {
+    if (!debugEnabled()) return;
+    const message = `Strikes not applied: ${reason}`;
+    setDebugBanner(message);
+    if (debugBannerTimeoutRef.current) {
+      window.clearTimeout(debugBannerTimeoutRef.current);
+    }
+    debugBannerTimeoutRef.current = window.setTimeout(() => {
+      setDebugBanner(null);
+    }, 4000);
+  };
+
+  const resetRunState = useCallback(() => {
     setLoadingMsg(null);
     setError(null);
     setCopied(false);
-    setHistory({ counselNotes: '' });
+    setDebugBanner(null);
+    setRunOutcome(null);
+    runStartSanctionsRef.current = null;
+    if (debugBannerTimeoutRef.current) {
+      window.clearTimeout(debugBannerTimeoutRef.current);
+      debugBannerTimeoutRef.current = null;
+    }
+    setHistory({ counselNotes: '', disposition: null });
+    setRunMeta(null);
+  }, []);
+
+  /**
+   * End the current run and surface the outcome to the app shell.
+   */
+  const resetGame = () => {
+    const outcomePayload =
+      runOutcome ?? buildRunOutcome(history.disposition ?? null, sanctionsState);
+    emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+    resetRunState();
   };
 
   /**
@@ -406,12 +939,33 @@ const useGameState = () => {
    */
   const toggleStrikeSelection = (id) => {
     setHistory((prev) => {
-      const current = prev.jury?.myStrikes || [];
-      if (current.includes(id)) {
-        return { ...prev, jury: { ...prev.jury, myStrikes: current.filter((x) => x !== id) } };
+      if (!prev.jury) {
+        logEvent('Jury strike selection ignored (jury state missing).');
+        return prev;
+      }
+      const current = normalizeStrikeIds(prev.jury?.myStrikes || []);
+      const normalizedId = normalizeJurorId(id);
+      if (debugEnabled()) {
+        console.debug('toggleStrikeSelection', {
+          id,
+          idType: typeof id,
+          normalizedId,
+          myStrikes: current,
+        });
+      }
+      if (normalizedId === null) {
+        logEvent('Jury strike selection ignored (invalid id).', { verbose: true });
+        return prev;
+      }
+      if (current.includes(normalizedId)) {
+        const updated = current.filter((x) => x !== normalizedId);
+        logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
+        return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
       }
       if (current.length >= 2) return prev;
-      return { ...prev, jury: { ...prev.jury, myStrikes: [...current, id] } };
+      const updated = [...current, normalizedId];
+      logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
+      return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
     });
   };
 
@@ -421,44 +975,116 @@ const useGameState = () => {
    * @param {string} role - Player role (defense or prosecution).
    * @param {string} difficulty - Difficulty setting.
    * @param {string} jurisdiction - Selected jurisdiction.
-   * @returns {Promise<void>} Resolves once the case is generated.
+   * @param {string} courtType - Selected court type.
+   * @returns {Promise<boolean>} Resolves with true when the case is generated successfully.
    */
-  const generateCase = async (role, difficulty, jurisdiction) => {
-    setGameState('initializing');
-    setError(null);
+  const generateCase = useCallback(async (role, difficulty, jurisdiction, courtType) => {
+    resetRunState();
+    setGameState(GAME_STATES.INITIALIZING);
     const normalizedDifficulty = normalizeDifficulty(difficulty);
-    setConfig({ role, difficulty: normalizedDifficulty, jurisdiction });
+    const resolvedCaseType = normalizeCaseType(DEFAULT_GAME_CONFIG.caseType);
+    const resolvedJurisdiction = normalizeJurisdiction(
+      jurisdiction ?? DEFAULT_GAME_CONFIG.jurisdiction
+    );
+    const resolvedCourtType = normalizeCourtType(courtType ?? DEFAULT_GAME_CONFIG.courtType);
+    const isPublicDefenderMode = sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+    const legacyNightCourt =
+      resolvedJurisdiction === JURISDICTIONS.MUNICIPAL_NIGHT_COURT
+        ? COURT_TYPES.NIGHT_COURT
+        : null;
+    const lockedJurisdiction = resolvedJurisdiction;
+    const lockedCaseType = isPublicDefenderMode
+      ? CASE_TYPES.PUBLIC_DEFENDER
+      : resolvedCaseType;
+    const lockedCourtType = isPublicDefenderMode
+      ? COURT_TYPES.NIGHT_COURT
+      : legacyNightCourt ?? resolvedCourtType;
+    const lockedRole = isPublicDefenderMode ? 'defense' : role;
+    setConfig({
+      role: lockedRole,
+      difficulty: normalizedDifficulty,
+      jurisdiction: lockedJurisdiction,
+      courtType: lockedCourtType,
+      caseType: lockedCaseType,
+    });
 
     try {
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Generate',
-        systemPrompt: getGeneratorPrompt(normalizedDifficulty, jurisdiction, role),
+        systemPrompt: getGeneratorPrompt(
+          normalizedDifficulty,
+          lockedJurisdiction,
+          lockedCourtType,
+          lockedRole,
+          {
+            ...buildSanctionPromptContext(sanctionsState, {
+              caseType: lockedCaseType,
+              lockedJurisdiction,
+            }),
+          }
+        ),
         responseLabel: 'case',
       });
       /** @type {CaseData} */
-      const data = parseCaseResponse(payload);
+      const data = parseCaseResponse(parsed);
 
-      const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
+      const canonicalJurors = data.is_jury_trial
+        ? canonicalizeJurorPool(data.jurors ?? [])
+        : [];
+      const juryPool = data.is_jury_trial ? buildInitialJurorPool(canonicalJurors) : [];
       const evidenceDocket = normalizeEvidenceDocket(data.evidence);
 
+      const startedAt = new Date().toISOString();
+      const runId = createRunId();
+      runStartSanctionsRef.current = cloneSanctionsSnapshot(sanctionsState);
+      setRunOutcome(null);
       setHistory({
-        case: { ...data, evidence: evidenceDocket },
+        case: { ...data, evidence: evidenceDocket, jurors: canonicalJurors },
         jury: data.is_jury_trial
           ? { pool: juryPool, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
         motion: data.is_jury_trial ? { locked: false } : createMotionState(),
         counselNotes: '',
+        disposition: null,
         trial: { locked: false, rejectedVerdicts: [] },
+        sanctions: [],
         validationHistory: [],
       });
+      recordRunHistoryEntry({
+        id: runId,
+        startedAt,
+        endedAt: null,
+        jurisdiction: lockedJurisdiction,
+        difficulty: normalizedDifficulty,
+        courtType: lockedCourtType,
+        playerRole: lockedRole,
+        caseTitle: data.title,
+        judgeName: data.judge?.name ?? null,
+        outcome: null,
+        score: null,
+        achievementId: null,
+      });
+      setRunMeta({
+        id: runId,
+        startedAt,
+        playerRole: lockedRole,
+        difficulty: normalizedDifficulty,
+        jurisdiction: lockedJurisdiction,
+        courtType: lockedCourtType,
+        caseTitle: data.title,
+        judgeName: data.judge?.name ?? null,
+      });
 
-      setGameState('playing');
+      setGameState(GAME_STATES.PLAYING);
+      return true;
     } catch (err) {
       console.error(err);
-      setError(getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.'));
-      setGameState('start');
+      const message = getLlmClientErrorMessage(err, 'Docket creation failed. Please try again.');
+      setError(message);
+      emitShellEvent({ type: 'start_failed', message });
+      return false;
     }
-  };
+  }, [emitShellEvent, recordRunHistoryEntry, resetRunState, sanctionsState]);
 
   /**
    * Submit jury strikes and lock in the seated jurors.
@@ -467,41 +1093,195 @@ const useGameState = () => {
    * @returns {Promise<void>} Resolves once strikes are processed.
    */
   const submitStrikes = async (strikes) => {
+    const startedAt = new Date().toISOString();
+    const startedAtMs = Date.parse(startedAt);
+    setError(null);
     setLoadingMsg('Judge is ruling on strikes...');
-    try {
-      const payload = await requestLlmJson({
-        userPrompt: 'Strike',
-        systemPrompt: getJuryStrikePrompt(
-          buildDocketPromptCase(history.case),
-          strikes,
-          config.role
-        ),
-        responseLabel: 'jury',
-      });
-      const data = parseJuryResponse(payload);
-      // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
-      const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
-      const opponentValidation = validateJurorIdSubset(docketJurorIds, data.opponent_strikes);
-      const seatedValidation = validateJurorIdSubset(docketJurorIds, data.seated_juror_ids);
+    const canonicalStrikes = normalizeStrikeIds(strikes);
+    const hasInvalidStrikeIds =
+      Array.isArray(strikes) && canonicalStrikes.length !== strikes.length;
+    setLastAction({
+      name: 'submitJuryStrikes',
+      startedAt,
+      endedAt: null,
+      durationMs: null,
+      payload: { selectedJurorIds: canonicalStrikes },
+      result: null,
+      rejectReason: null,
+      rawModelText: null,
+      parsed: null,
+    });
+    logEvent(`Jury strikes submit attempt: [${canonicalStrikes.join(', ')}]`);
 
-      if (!opponentValidation.valid || !seatedValidation.valid) {
-        setHistory((prev) => ({
-          ...prev,
-          jury: {
-            ...prev.jury,
-            myStrikes: strikes,
-            invalidStrike: true,
+    if (debugEnabled()) {
+      const poolIds = getCanonicalJurorIds(history.jury?.pool ?? []);
+      const docketIds = getCanonicalJurorIds(history.case?.jurors ?? []);
+      const strikeTypes = Array.isArray(strikes) ? strikes.map((id) => typeof id) : [];
+      const normalizationMap = {
+        stringToNumber: {},
+        numberToString: {},
+      };
+      [...(Array.isArray(strikes) ? strikes : []), ...poolIds, ...docketIds].forEach((id) => {
+        if (typeof id === 'string') {
+          const numeric = Number(id);
+          if (!Number.isNaN(numeric)) {
+            normalizationMap.stringToNumber[id] = numeric;
+          }
+        } else if (typeof id === 'number' && !Number.isNaN(id)) {
+          normalizationMap.numberToString[id] = String(id);
+        }
+      });
+      console.debug('submitStrikes pre-validation', {
+        strikes,
+        normalizedStrikes: canonicalStrikes,
+        strikeTypes,
+        poolIds,
+        docketIds,
+        normalizationMap,
+      });
+    }
+
+    const finalizeAction = (details) => {
+      const endedAt = new Date().toISOString();
+      setLastAction({
+        endedAt,
+        durationMs: Date.parse(endedAt) - startedAtMs,
+        ...details,
+      });
+    };
+
+    if (!history.jury || history.jury.locked || history.jury.skipped) {
+      finalizeAction({ result: 'noop', rejectReason: 'jury_unavailable' });
+      logEvent('Jury strikes submit ignored (jury unavailable).');
+      showDebugBanner('jury_unavailable');
+      setLoadingMsg(null);
+      return;
+    }
+
+    if (!Array.isArray(strikes) || hasInvalidStrikeIds) {
+      finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
+      logEvent('Jury strikes rejected: invalid_selection.');
+      showDebugBanner('invalid_selection');
+      setError('Selected juror IDs are invalid. Please reselect from the current pool.');
+      setLoadingMsg(null);
+      return;
+    }
+
+    const poolJurorIds = new Set(getCanonicalJurorIds(history.jury.pool ?? []));
+    const docketJurorIds = new Set(getCanonicalJurorIds(history.case?.jurors ?? []));
+    const allowedJurorIds = poolJurorIds.size ? poolJurorIds : docketJurorIds;
+    const strikeValidation = validateStrikeIds(canonicalStrikes, [...allowedJurorIds]);
+
+    if (!strikeValidation.ok) {
+      finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
+      logEvent('Jury strikes rejected: invalid_selection.');
+      showDebugBanner('invalid_selection');
+      setError('Selected juror IDs are invalid. Please reselect from the current pool.');
+      setLoadingMsg(null);
+      return;
+    }
+
+    if (canonicalStrikes.length !== 2) {
+      logEvent('Jury strikes submitted with a non-standard selection count.', {
+        verbose: true,
+      });
+    }
+
+    try {
+      let data = null;
+      const debugFlags = getDebugState().flags;
+      if (debugEnabled() && debugFlags.bypassJuryLlm) {
+        const poolIds = getCanonicalJurorIds(history.jury.pool ?? []);
+        const seatedIds = poolIds.filter((id) => !canonicalStrikes.includes(id));
+        data = {
+          opponent_strikes: [],
+          seated_juror_ids: seatedIds,
+          judge_comment: 'Bypass LLM enabled: auto-approving strikes.',
+        };
+        logEvent('Bypass LLM enabled: auto-approving jury strikes.');
+      } else {
+        logEvent('Jury strikes request started.');
+        const { parsed, rawText } = await requestLlmJson({
+          userPrompt: 'Strike',
+          systemPrompt: getJuryStrikePrompt(
+            buildDocketPromptCase(history.case),
+            canonicalStrikes,
+            config.role
+          ),
+          responseLabel: 'jury',
+        });
+        setLastAction({ rawModelText: rawText });
+        logEvent('Jury strikes request finished.');
+        logEvent(`Jury strikes raw payload size: ${rawText.length}`, {
+          verbose: true,
+        });
+        try {
+          data = parseJuryResponse(parsed);
+          logEvent('Jury strikes parse success.');
+        } catch (parseError) {
+          finalizeAction({ result: 'parse_fail', rejectReason: 'parse_failed' });
+          logEvent('Jury strikes parse failed.');
+          showDebugBanner('parse_failed');
+          setError(getLlmClientErrorMessage(parseError, 'Strike failed.'));
+          setLoadingMsg(null);
+          return;
+        }
+      }
+
+      if (debugEnabled()) {
+        const opponentStrikeTypes = (data.opponent_strikes ?? []).map((id) => typeof id);
+        const seatedStrikeTypes = (data.seated_juror_ids ?? []).map((id) => typeof id);
+        console.debug('jury strike parsed response', {
+          opponentStrikes: data.opponent_strikes,
+          opponentStrikeTypes,
+          seatedJurorIds: data.seated_juror_ids,
+          seatedJurorTypes: seatedStrikeTypes,
+        });
+      }
+
+      setLastAction({ parsed: data });
+
+      // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
+      const docketJurorIds = new Set(getCanonicalJurorIds(history.case?.jurors ?? []));
+      const normalizedOpponentStrikes = normalizeStrikeIds(data.opponent_strikes);
+      const normalizedSeatedIds = normalizeStrikeIds(data.seated_juror_ids);
+      const opponentValidation = validateStrikeIds(data.opponent_strikes, [
+        ...docketJurorIds,
+      ]);
+      const seatedValidation = validateStrikeIds(data.seated_juror_ids, [
+        ...docketJurorIds,
+      ]);
+
+      if (!opponentValidation.ok || !seatedValidation.ok) {
+        const poolIds = getCanonicalJurorIds(history.jury?.pool ?? []);
+        const docketIds = [...docketJurorIds];
+        setLastAction({
+          payload: {
+            poolIds,
+            docketIds,
+            submittedIds: canonicalStrikes,
+            invalidIds: {
+              opponent: opponentValidation.invalidIds,
+              seated: seatedValidation.invalidIds,
+            },
+            responseIds: {
+              opponent: data.opponent_strikes ?? [],
+              seated: data.seated_juror_ids ?? [],
+            },
           },
-        }));
+        });
+        finalizeAction({ result: 'rejected', rejectReason: 'invalid_ids' });
+        logEvent('Jury strikes rejected: invalid_ids.');
+        showDebugBanner('invalid_ids');
         setError('Strike results referenced jurors outside the docket. Please retry.');
         setLoadingMsg(null);
         return;
       }
 
       setHistory((prev) => {
-        const playerStrikeIds = new Set(strikes);
-        const opponentStrikeIds = new Set(data.opponent_strikes);
-        const seatedIds = new Set(data.seated_juror_ids);
+        const playerStrikeIds = new Set(canonicalStrikes);
+        const opponentStrikeIds = new Set(normalizedOpponentStrikes);
+        const seatedIds = new Set(normalizedSeatedIds);
         const updatedPool =
           prev.jury?.pool?.map((juror) => {
             let nextStatus = /** @type {JurorStatus} */ ('eligible');
@@ -519,9 +1299,9 @@ const useGameState = () => {
           ...prev,
           jury: {
             ...prev.jury,
-            myStrikes: strikes,
-            opponentStrikes: data.opponent_strikes,
-            seatedIds: data.seated_juror_ids,
+            myStrikes: canonicalStrikes,
+            opponentStrikes: normalizedOpponentStrikes,
+            seatedIds: normalizedSeatedIds,
             comment: data.judge_comment,
             invalidStrike: false,
             pool: updatedPool,
@@ -531,9 +1311,14 @@ const useGameState = () => {
           counselNotes: deriveJuryCounselNotes(seatedJurors, config.role),
         };
       });
+      finalizeAction({ result: 'success' });
+      logEvent('Jury strikes applied successfully.');
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
+      finalizeAction({ result: 'error', rejectReason: 'request_failed' });
+      logEvent('Jury strikes request error.');
+      showDebugBanner('request_failed');
       setError(getLlmClientErrorMessage(err, 'Strike failed.'));
       setLoadingMsg(null);
     }
@@ -597,18 +1382,24 @@ const useGameState = () => {
         : 'Opposing counsel is drafting a rebuttal...'
     );
     try {
-      const payload = await requestLlmJson({
+      const visibilityContext = buildVisibilityContext(sanctionsState);
+      const { parsed } = await requestLlmJson({
         userPrompt: isMotionStep ? 'Draft motion' : 'Draft rebuttal',
         systemPrompt: getOpposingCounselPrompt(
           buildDocketPromptCase(history.case),
           config.difficulty,
           history.motion.motionPhase,
           expectedRole,
-          history.motion.motionText
+          history.motion.motionText,
+          visibilityContext,
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'motion_text',
       });
-      const data = parseMotionTextResponse(payload);
+      const data = parseMotionTextResponse(parsed);
 
       setHistory((prev) => ({
         ...prev,
@@ -761,6 +1552,7 @@ const useGameState = () => {
 
     setLoadingMsg('Judge is ruling on the motion...');
     try {
+      const visibilityContext = buildVisibilityContext(sanctionsState);
       const docketRegistry = buildDocketRegistry(history);
       const motionValidation = validateSubmissionReferences(
         history.motion.motionText,
@@ -778,7 +1570,7 @@ const useGameState = () => {
         history.motion.rebuttalText,
         rebuttalValidation
       );
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
           buildDocketPromptCase(history.case),
@@ -791,29 +1583,53 @@ const useGameState = () => {
           {
             motion: summarizeNonCompliance(motionValidation),
             rebuttal: summarizeNonCompliance(rebuttalValidation),
-          }
+          },
+          visibilityContext,
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'motion',
       });
       /** @type {MotionResult} */
-      const data = parseMotionResponse(payload);
+      const data = parseMotionResponse(parsed);
+      // Temporary instrumentation: remove after validating motion ruling payloads.
+      console.info('Motion ruling received', {
+        ruling: data?.ruling,
+        outcomeText: data?.outcome_text,
+      });
+      const nextDisposition = deriveDispositionFromMotion({
+        ...history.motion,
+        ruling: data,
+      });
 
-      setHistory((prev) => ({
-        ...prev,
-        motion: {
+      setHistory((prev) => {
+        const updatedMotion = {
           ...prev.motion,
           ruling: data,
           motionPhase: 'motion_ruling_locked',
           locked: true,
-        },
-        case: {
-          ...prev.case,
-          evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
-        },
-        counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
-        trial: { ...prev.trial, locked: false },
-      }));
+        };
+        return {
+          ...prev,
+          motion: updatedMotion,
+          disposition: guardDisposition(prev.disposition, nextDisposition),
+          case: {
+            ...prev.case,
+            evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
+          },
+          counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
+          trial: { ...prev.trial, locked: false },
+        };
+      });
       setLoadingMsg(null);
+      if (isTerminalDisposition(nextDisposition)) {
+        const outcomePayload = buildRunOutcome(nextDisposition, sanctionsState);
+        setRunOutcome(outcomePayload);
+        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+        finalizeRunHistoryEntry(null, nextDisposition, null);
+      }
     } catch (err) {
       console.error(err);
       setError(getLlmClientErrorMessage(err, 'Motion ruling failed.'));
@@ -828,6 +1644,10 @@ const useGameState = () => {
    * @returns {Promise<void>} Resolves once the verdict is stored.
    */
   const submitArgument = async (text) => {
+    if (isTerminalDisposition(history.disposition)) {
+      setError('This case has already reached a terminal disposition.');
+      return;
+    }
     setLoadingMsg('The Court is deliberating...');
     try {
       const docketRegistry = buildDocketRegistry(history);
@@ -846,7 +1666,7 @@ const useGameState = () => {
       const caseForVerdict = buildDocketPromptCase(history.case, {
         evidenceMode: 'admissible',
       });
-      const payload = await requestLlmJson({
+      const { parsed } = await requestLlmJson({
         userPrompt: 'Verdict',
         systemPrompt: getFinalVerdictPrompt(
           caseForVerdict,
@@ -854,16 +1674,21 @@ const useGameState = () => {
           seatedJurors,
           compliantArgument,
           config.difficulty,
-          summarizeNonCompliance(argumentRecord)
+          summarizeNonCompliance(argumentRecord),
+          buildSanctionPromptContext(sanctionsState, {
+            caseType: config.caseType,
+            lockedJurisdiction: config.jurisdiction,
+          })
         ),
         responseLabel: 'verdict',
       });
       /** @type {VerdictResult} */
-      const data = parseVerdictResponse(payload, {
+      const data = parseVerdictResponse(parsed, {
         isJuryTrial: history.case?.is_jury_trial,
         seatedJurorIds: seatedJurors.map((juror) => juror.id),
         docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
       });
+      const nextDisposition = deriveDispositionFromVerdict(data);
       const verdictText = [
         data.final_ruling,
         data.judge_opinion,
@@ -892,7 +1717,7 @@ const useGameState = () => {
               rejectedVerdicts: [
                 ...(prev.trial?.rejectedVerdicts ?? []),
                 {
-                  payload,
+                  payload: parsed,
                   reason: 'Verdict referenced off-docket or inadmissible material.',
                   validation: verdictRecord,
                   timestamp: new Date().toISOString(),
@@ -906,6 +1731,7 @@ const useGameState = () => {
         return {
           ...prev,
           trial: { text, verdict: data, locked: true },
+          disposition: guardDisposition(prev.disposition, nextDisposition),
           counselNotes: deriveVerdictCounselNotes(data, config.role),
           validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
         };
@@ -915,6 +1741,28 @@ const useGameState = () => {
         setLoadingMsg(null);
         return;
       }
+      const shouldReinstate =
+        isMeritReleaseDisposition(nextDisposition) &&
+        sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+      const nowMs = shouldReinstate ? Date.now() : null;
+      const nextSanctionsState = shouldReinstate
+        ? buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
+            lastMisconductAt: sanctionsState.lastMisconductAt,
+            recidivismCount: sanctionsState.recidivismCount,
+          })
+        : sanctionsState;
+      if (shouldReinstate) {
+        setSanctionsState(nextSanctionsState);
+      }
+      if (data.achievement_title) {
+        appendAchievement(data.achievement_title);
+      }
+      finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
+      if (isTerminalDisposition(nextDisposition)) {
+        const outcomePayload = buildRunOutcome(nextDisposition, nextSanctionsState);
+        setRunOutcome(outcomePayload);
+        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+      }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
@@ -923,50 +1771,138 @@ const useGameState = () => {
     }
   };
 
+  const formatJurorLabel = (id, pool = []) => {
+    const juror = pool.find((entry) => entry.id === id);
+    if (juror?.name) return `${juror.name} (#${juror.id})`;
+    return `Juror #${id}`;
+  };
+
+  const formatJurorList = (ids = [], pool = []) =>
+    ids.map((id) => formatJurorLabel(id, pool)).join(', ');
+
+  const buildSanctionsSection = (sanctions = []) => {
+    if (!sanctions.length) return null;
+    const lines = sanctions.map((entry) => {
+      const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
+      return `- ${state}: ${entry.docket_text}`;
+    });
+    return `SANCTIONS/STATUS FLAGS:\n${lines.join('\n')}`;
+  };
+
   /**
    * Copy the full docket history to the clipboard.
+   *
+   * @param {number} [docketNumber] - Optional docket number to include in the header.
    */
-  const handleCopyFull = () => {
-    let log = `DOCKET: ${history.case.title}\nJUDGE: ${history.case.judge.name}\n\n`;
-    log += `FACTS:\n${history.case.facts.join('\n')}\n\n`;
+  const handleCopyFull = (docketNumber) => {
+    const sections = [];
+    const headerLines = [`DOCKET: ${history.case.title}`, `JUDGE: ${history.case.judge.name}`];
+    if (typeof docketNumber === 'number') {
+      headerLines.push(`DOCKET #: ${docketNumber}`);
+    }
+    sections.push(headerLines.join('\n'));
+
+    if (history.case.facts?.length) {
+      sections.push(`FACTS:\n${history.case.facts.join('\n')}`);
+    }
 
     if (history.jury && !history.jury.skipped && history.jury.locked) {
       const seatedJurors = history.jury.pool.filter((juror) => juror.status === 'seated');
-      log += `JURY SEATED (${seatedJurors.length}):\n${history.jury.comment}\n\n`;
+      const juryLines = [];
+      if (seatedJurors.length) {
+        juryLines.push(`Seated Jurors: ${formatJurorList(history.jury.seatedIds, history.jury.pool)}`);
+      }
+      if (history.jury.comment) {
+        juryLines.push(history.jury.comment);
+      }
+      const strikeLines = [];
+      if (history.jury.myStrikes?.length) {
+        strikeLines.push(`Player Strikes: ${formatJurorList(history.jury.myStrikes, history.jury.pool)}`);
+      }
+      if (history.jury.opponentStrikes?.length) {
+        strikeLines.push(
+          `Opponent Strikes: ${formatJurorList(history.jury.opponentStrikes, history.jury.pool)}`
+        );
+      }
+      if (strikeLines.length) {
+        juryLines.push(strikeLines.join('\n'));
+      }
+      if (juryLines.length) {
+        sections.push(`JURY SEATED (${seatedJurors.length}):\n${juryLines.join('\n')}`);
+      }
     }
 
     if (history.motion) {
+      const motionLines = [];
       const motionLabel =
         history.motion.motionBy === 'prosecution' ? 'Prosecution Motion' : 'Defense Motion';
       const rebuttalLabel =
         history.motion.rebuttalBy === 'prosecution' ? 'Prosecution Rebuttal' : 'Defense Rebuttal';
       if (history.motion.motionText) {
-        log += `${motionLabel}:\n"${history.motion.motionText}"\n\n`;
+        motionLines.push(`${motionLabel}:\n"${history.motion.motionText}"`);
       }
       if (history.motion.rebuttalText) {
-        log += `${rebuttalLabel}:\n"${history.motion.rebuttalText}"\n\n`;
+        motionLines.push(`${rebuttalLabel}:\n"${history.motion.rebuttalText}"`);
       }
       if (history.motion.ruling) {
-        log += `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"\n\n`;
+        motionLines.push(
+          `RULING: ${history.motion.ruling.ruling} - "${history.motion.ruling.outcome_text}"`
+        );
+      }
+      if (motionLines.length) {
+        sections.push(`PRE-TRIAL MOTIONS:\n${motionLines.join('\n\n')}`);
       }
     }
 
     if (history.counselNotes?.trim()) {
-      log += `COUNSEL NOTES:\n${history.counselNotes.trim()}\n\n`;
+      sections.push(
+        `COUNSEL NOTES (NON-RECORD FLAVOR):\n${history.counselNotes.trim()}`
+      );
     }
 
-    if (history.trial && history.trial.locked) {
-      const roundedScore = Math.round(history.trial.verdict.final_weighted_score);
+    // Terminal motion outcomes (ex: dismissal) override later-phase export content.
+    const disposition = history.disposition;
+    const reachedTrial = Boolean(history.trial?.text?.trim());
+    const shouldStopAtDisposition =
+      disposition?.source === 'motion' && isTerminalDisposition(disposition);
+
+    if (reachedTrial && !shouldStopAtDisposition) {
+      sections.push(`TRIAL ARGUMENT:\n"${history.trial.text}"`);
+    }
+
+    if (disposition) {
+      const dispositionLines = [];
+      if (disposition.summary) {
+        dispositionLines.push(`OUTCOME: ${disposition.summary}`);
+      }
+      if (disposition.details) {
+        dispositionLines.push(disposition.details);
+      }
+      sections.push(`FINAL DISPOSITION:\n${dispositionLines.join('\n')}`);
+    }
+
+    if (!shouldStopAtDisposition && history.trial?.verdict) {
+      const verdict = history.trial.verdict;
+      const roundedScore = Math.round(verdict.final_weighted_score);
       const baseScore = Math.min(100, Math.max(0, roundedScore));
-      const overflowNote =
-        history.trial.verdict.final_weighted_score > 100
-          ? `\nOVERFLOW: ${history.trial.verdict.overflow_reason_code} - ${history.trial.verdict.overflow_explanation}`
-          : '';
-      log += `ARGUMENT:\n"${history.trial.text}"\n\nVERDICT: ${
-        history.trial.verdict.final_ruling
-      } (Base Score: ${baseScore})${overflowNote}\nOPINION: "${history.trial.verdict.judge_opinion}"`;
+      const scoreLines = [`BASE SCORE: ${baseScore}/100`];
+      if (verdict.final_weighted_score > 100) {
+        scoreLines.push(
+          `OVERFLOW: ${verdict.overflow_reason_code} - ${verdict.overflow_explanation} (${roundedScore}/100)`
+        );
+      }
+      if (verdict.achievement_title) {
+        scoreLines.push(`ACHIEVEMENT: ${verdict.achievement_title}`);
+      }
+      sections.push(`SCORE + ACHIEVEMENT:\n${scoreLines.join('\n')}`);
     }
 
+    const sanctionsSection = buildSanctionsSection(history.sanctions);
+    if (sanctionsSection) {
+      sections.push(sanctionsSection);
+    }
+
+    const log = sections.join('\n\n');
     copyToClipboard(log);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -979,6 +1915,9 @@ const useGameState = () => {
     loadingMsg,
     error,
     copied,
+    debugBanner,
+    runOutcome,
+    sanctionsState,
     generateCase,
     submitStrikes,
     submitMotionStep,
@@ -992,3 +1931,11 @@ const useGameState = () => {
 };
 
 export default useGameState;
+export const __testables = {
+  SANCTION_STATES,
+  buildDefaultSanctionsState,
+  deriveSanctionsState,
+  evaluateConductTrigger,
+  RECIDIVISM_WINDOW_MS,
+  SANCTION_DURATION_MS,
+};

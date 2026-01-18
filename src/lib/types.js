@@ -4,6 +4,17 @@
  */
 
 /**
+ * Canonical identifiers for game phases, case types, jurisdictions, and dispositions.
+ *
+ * @typedef {typeof import('./constants').GAME_PHASES[keyof typeof import('./constants').GAME_PHASES]} GamePhase
+ * @typedef {typeof import('./constants').CASE_TYPES[keyof typeof import('./constants').CASE_TYPES]} CaseType
+ * @typedef {typeof import('./constants').COURT_TYPES[keyof typeof import('./constants').COURT_TYPES]} CourtType
+ * @typedef {typeof import('./constants').JURISDICTIONS[keyof typeof import('./constants').JURISDICTIONS]} Jurisdiction
+ * @typedef {typeof import('./constants').FINAL_DISPOSITIONS[keyof typeof import('./constants').FINAL_DISPOSITIONS]} FinalDisposition
+ * @typedef {typeof import('./constants').SANCTION_STATES[keyof typeof import('./constants').SANCTION_STATES]} SanctionsState
+ */
+
+/**
  * A juror in the generated jury pool.
  *
  * @typedef {'eligible' | 'struck_by_player' | 'struck_by_opponent' | 'seated'} JurorStatus
@@ -153,20 +164,145 @@
  */
 
 /**
+ * Sanction visibility for how acknowledgments should render in-world.
+ *
+ * @typedef {typeof import('./constants').SANCTION_VISIBILITY[keyof typeof import('./constants').SANCTION_VISIBILITY]} SanctionVisibility
+ */
+
+/**
+ * Sanction trigger categories used for docketed acknowledgments.
+ *
+ * @typedef {typeof import('./constants').SANCTION_REASON_CODES[keyof typeof import('./constants').SANCTION_REASON_CODES]} SanctionTrigger
+ */
+
+/**
+ * Sanction state lifecycle for explicit docket entries.
+ *
+ * @typedef {typeof import('./constants').SANCTION_ENTRY_STATES[keyof typeof import('./constants').SANCTION_ENTRY_STATES]} SanctionState
+ */
+
+/**
+ * Sanction or conduct acknowledgment recorded in the living docket.
+ *
+ * @typedef {object} SanctionRecord
+ * @property {string} id - Unique identifier for the docket entry.
+ * @property {SanctionState} state - Current sanction state recorded by the court.
+ * @property {SanctionTrigger} trigger - Category of conduct that prompted the entry.
+ * @property {string} docket_text - Explicit judge acknowledgment recorded on the docket.
+ * @property {SanctionVisibility} visibility - How the acknowledgment is surfaced in-world.
+ * @property {string} timestamp - ISO timestamp for the entry.
+ */
+
+/**
  * Full living docket history state.
+ *
+ * @typedef {object} DispositionRecord
+ * @property {FinalDisposition} type - Canonical disposition identifier.
+ * @property {'motion' | 'verdict'} source - Lifecycle source of the disposition.
+ * @property {string} summary - Display-friendly summary of the disposition.
+ * @property {string} details - Display-friendly details for the disposition.
  *
  * @typedef {object} HistoryState
  * @property {CaseData} [case] - Current case metadata.
  * @property {JuryState} [jury] - Jury selection state.
  * @property {MotionState} [motion] - Motion phase data.
  * @property {string} [counselNotes] - Optional counsel notes captured during play.
+ * @property {DispositionRecord | null} [disposition] - Canonical final disposition record.
  * @property {{
  *   text?: string,
  *   verdict?: VerdictResult,
  *   rejectedVerdicts?: VerdictRejection[],
  *   locked?: boolean
  * }} [trial] - Trial phase data.
+ * @property {SanctionRecord[]} [sanctions] - Explicit docketed sanction acknowledgments.
  * @property {SubmissionValidation[]} [validationHistory] - Docket validation history.
+ */
+
+/**
+ * Persisted sanctions state snapshot for a player profile.
+ *
+ * @typedef {object} PlayerSanctionsState
+ * @property {SanctionsState} state - Canonical sanctions state identifier.
+ * @property {number} level - Numeric sanction level.
+ * @property {string} startedAt - ISO timestamp when the current sanctions state began.
+ * @property {string | null} expiresAt - ISO timestamp when the current sanctions state expires.
+ * @property {string | null} lastMisconductAt - ISO timestamp of the last misconduct entry.
+ * @property {number} recidivismCount - Count of recent misconduct events.
+ * @property {string | null} recentlyReinstatedUntil - ISO timestamp for the reinstatement grace period.
+ */
+
+/**
+ * Persisted public defender status snapshot.
+ *
+ * @typedef {object} PublicDefenderStatus
+ * @property {string} startedAt - ISO timestamp for the public defender assignment.
+ * @property {string | null} expiresAt - ISO timestamp for the public defender assignment end.
+ */
+
+/**
+ * Persisted reinstatement status snapshot.
+ *
+ * @typedef {object} ReinstatementStatus
+ * @property {string} until - ISO timestamp for the reinstatement grace period.
+ */
+
+/**
+ * Persisted player stats snapshot.
+ *
+ * @typedef {object} PlayerStats
+ * @property {number} runsCompleted - Total completed runs.
+ * @property {number} verdictsFinalized - Total finalized verdicts.
+ */
+
+/**
+ * Persisted achievement metadata.
+ *
+ * @typedef {object} PlayerAchievement
+ * @property {string} title - Achievement title.
+ * @property {string} awardedAt - ISO timestamp when the achievement was awarded.
+ * @property {string | null} runId - Associated run identifier, if available.
+ */
+
+/**
+ * Persisted player profile metadata (v1 schema).
+ *
+ * @typedef {object} PlayerProfile
+ * @property {number} schemaVersion - Profile schema version.
+ * @property {string} createdAt - ISO timestamp when the profile was created.
+ * @property {string} updatedAt - ISO timestamp when the profile was last updated.
+ * @property {PlayerSanctionsState | null} sanctions - Persisted sanctions state snapshot.
+ * @property {PublicDefenderStatus | null} pdStatus - Public defender assignment snapshot.
+ * @property {ReinstatementStatus | null} reinstatement - Reinstatement grace snapshot.
+ * @property {PlayerStats} stats - Aggregated player stats.
+ * @property {PlayerAchievement[]} achievements - Awarded achievements.
+ */
+
+/**
+ * Persisted run history entry (v1 schema).
+ *
+ * @typedef {object} RunHistoryEntry
+ * @property {string} id - Unique run identifier.
+ * @property {string} startedAt - ISO timestamp when the run started.
+ * @property {string | null} endedAt - ISO timestamp when the run ended.
+ * @property {string} jurisdiction - Jurisdiction selected for the run.
+ * @property {string} difficulty - Difficulty setting for the run.
+ * @property {string} courtType - Court type selected for the run.
+ * @property {string} playerRole - Player role for the run.
+ * @property {string | null} caseTitle - Case title for the run.
+ * @property {string | null} judgeName - Presiding judge for the run.
+ * @property {string | null} outcome - Final outcome type when available.
+ * @property {number | null} score - Final weighted score when a verdict is reached.
+ * @property {string | null} achievementId - Achievement identifier when awarded.
+ */
+
+/**
+ * Persisted run history metadata (v1 schema).
+ *
+ * @typedef {object} RunHistory
+ * @property {number} schemaVersion - Run history schema version.
+ * @property {string} createdAt - ISO timestamp when the history record was created.
+ * @property {string} updatedAt - ISO timestamp when the history record was last updated.
+ * @property {RunHistoryEntry[]} runs - Persisted run entries.
  */
 
 export {};

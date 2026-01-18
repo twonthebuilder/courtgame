@@ -93,6 +93,7 @@ courtgame/
 - [Gameplay flow](docs/gameplay-flow.md)
 - [LLM client notes](docs/llm-client.md)
 - [Game state](docs/game-state.md)
+- [App shell & run lifecycle](docs/app-shell.md)
 - [Configuration](docs/configuration.md)
 
 ---
@@ -126,15 +127,17 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 
 ## Roadmap
 
+> **Note for future developers:** keep this roadmap updated with every shipped change or merge so it always reflects current gameplay and docs.
+
 ### **v15 (Current - GitHub Launch)**
 - ✅ Living docket architecture
-- ✅ Jury strike mechanics
+- ✅ Jury strike mechanics with strike provenance (player/opponent status shown in the pool)
 - ✅ Pre-trial motion practice
-- ✅ Multi-phase scoring (pre-trial 20%, judge 45%, jury 35%)
+- ✅ Bench trials skip jury selection when applicable
+- ✅ Multi-phase scoring philosophy (pre-trial 20%, judge 45%, jury 35%; overflow reason codes)
 - ✅ Legendary achievements (100+ scores)
 
 ### **v16 (Planned)**
-- [ ] Judge/jury strike details (show who struck whom)
 - [ ] Granular motion rulings (✅/❌ breakdown with reasoning)
 - [ ] Markdown rendering in arguments (proper formatting)
 - [ ] Mobile optimization (responsive docket)

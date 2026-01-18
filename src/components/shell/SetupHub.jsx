@@ -1,38 +1,99 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
-import { DEFAULT_GAME_CONFIG, DIFFICULTY_OPTIONS, JURISDICTIONS } from '../../lib/config';
+import {
+  COURT_TYPE_OPTIONS,
+  DEFAULT_GAME_CONFIG,
+  DIFFICULTY_OPTIONS,
+  JURISDICTION_OPTIONS,
+} from '../../lib/config';
+import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
+import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
+import InitializationScreen from '../screens/InitializationScreen';
+
+const SANCTIONS_LABELS = Object.freeze({
+  [SANCTION_STATES.CLEAN]: 'Clean Record',
+  [SANCTION_STATES.WARNED]: 'Warning Issued',
+  [SANCTION_STATES.SANCTIONED]: 'Sanctioned',
+  [SANCTION_STATES.PUBLIC_DEFENDER]: 'Public Defender Assignment',
+  [SANCTION_STATES.RECENTLY_REINSTATED]: 'Reinstated (Grace Period)',
+});
+
+const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
 
 /**
- * Entry screen for selecting a game mode, jurisdiction, and side.
+ * Setup hub for selecting a game mode, jurisdiction, and side.
  *
  * @param {object} props - Component props.
- * @param {(role: string, difficulty: string, jurisdiction: string) => void} props.onStart - Callback to start the game.
+ * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
- * @returns {JSX.Element} The start screen layout.
+ * @param {object | null} props.sanctionsState - Current sanctions state.
+ * @param {import('../../lib/types').PlayerProfile | null} props.profile - Persisted player profile snapshot.
+ * @param {boolean} props.isInitializing - Whether setup is starting a run.
+ * @param {string | null} props.initializingRole - Role to display while initializing.
+ * @returns {JSX.Element} The setup hub layout.
  */
-const StartScreen = ({ onStart, error }) => {
+const SetupHub = ({
+  onStart,
+  error,
+  sanctionsState,
+  profile,
+  isInitializing,
+  initializingRole,
+}) => {
   const [difficulty, setDifficulty] = useState(DEFAULT_GAME_CONFIG.difficulty);
   const [jurisdiction, setJurisdiction] = useState(DEFAULT_GAME_CONFIG.jurisdiction);
+  const [courtType, setCourtType] = useState(DEFAULT_GAME_CONFIG.courtType);
+  const storedApiKey = loadStoredApiKey();
   const [provider, setProvider] = useState(AI_PROVIDERS[0]?.value ?? 'gemini');
-  const [apiKey, setApiKey] = useState('');
+  const [apiKey, setApiKey] = useState(storedApiKey ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [rememberKey, setRememberKey] = useState(false);
-  const [hasLoadedStoredKey, setHasLoadedStoredKey] = useState(false);
+  const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
+  const startGateRef = useRef(false);
+  const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
+  const sanctionsLabel = sanctionsState
+    ? `Tier ${sanctionsState.level} — ${formatSanctionsLabel(sanctionsState.state)}`
+    : 'Tier unknown';
+  const pdActive =
+    Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const disbarred = Boolean(profile?.sanctions?.disbarred);
+  const prosecutionDisabled = isPublicDefenderMode || isInitializing;
+  const defenseDisabled = isInitializing;
 
   useEffect(() => {
-    const storedKey = loadStoredApiKey();
-    if (storedKey) {
-      setApiKey(storedKey);
-      setRememberKey(true);
-    }
-    setHasLoadedStoredKey(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hasLoadedStoredKey) return;
     persistApiKey(apiKey, rememberKey);
-  }, [apiKey, rememberKey, hasLoadedStoredKey]);
+  }, [apiKey, rememberKey]);
+
+  useEffect(() => {
+    if (!isInitializing) {
+      startGateRef.current = false;
+    }
+  }, [isInitializing]);
+
+  const handleStart = (role) => {
+    if (startGateRef.current || isInitializing) return;
+    startGateRef.current = true;
+    const effectiveRole = isPublicDefenderMode ? 'defense' : role;
+    if (debugEnabled()) {
+      console.count('SetupHub start click');
+      console.info('[SetupHub] start click', {
+        timestamp: new Date().toISOString(),
+        appMode: difficulty,
+        role: effectiveRole,
+        configSnapshot: {
+          difficulty,
+          jurisdiction,
+          courtType: effectiveCourtType,
+        },
+      });
+    }
+    onStart(effectiveRole, difficulty, jurisdiction, effectiveCourtType);
+  };
+
+  if (isInitializing) {
+    return <InitializationScreen role={initializingRole} />;
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
@@ -53,6 +114,27 @@ const StartScreen = ({ onStart, error }) => {
           </p>
         </div>
       )}
+      <div className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+          Status Summary
+        </p>
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-slate-500">Sanctions tier</span>
+            <span className="text-slate-700">{sanctionsLabel}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-semibold text-slate-500">Public Defender</span>
+            <span className="text-slate-700">{pdActive ? 'Active' : 'Inactive'}</span>
+          </div>
+          {disbarred && (
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-slate-500">Disbarred</span>
+              <span className="text-slate-700">Yes</span>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="w-full max-w-md mb-8 space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
           <div>
@@ -137,7 +219,7 @@ const StartScreen = ({ onStart, error }) => {
               Jurisdiction
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {JURISDICTIONS.map((option) => (
+              {JURISDICTION_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setJurisdiction(option.value)}
@@ -152,24 +234,51 @@ const StartScreen = ({ onStart, error }) => {
               ))}
             </div>
           </div>
+          <div>
+            <label className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2 block">
+              Court Type
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {COURT_TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setCourtType(option.value)}
+                  disabled={isPublicDefenderMode}
+                  className={`p-2 rounded-lg text-sm font-bold transition-all border-2 ${
+                    effectiveCourtType === option.value
+                      ? 'bg-slate-800 text-white border-slate-800'
+                      : 'bg-slate-50 text-slate-500 border-transparent hover:border-slate-200'
+                  } ${isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
         <button
-          onClick={() => onStart('prosecution', difficulty, jurisdiction)}
-          className="p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95"
+          onClick={() => handleStart('prosecution')}
+          disabled={prosecutionDisabled}
+          className={`p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95 ${
+            prosecutionDisabled ? 'cursor-not-allowed opacity-60' : ''
+          }`}
         >
           <Gavel className="w-5 h-5" /> PROSECUTION
         </button>
         <button
-          onClick={() => onStart('defense', difficulty, jurisdiction)}
-          className="p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95"
+          onClick={() => handleStart('defense')}
+          disabled={defenseDisabled}
+          className={`p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95 ${
+            defenseDisabled ? 'cursor-not-allowed opacity-60' : ''
+          }`}
         >
-          <Shield className="w-5 h-5" /> DEFENSE
+          <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
       </div>
     </div>
   );
 };
 
-export default StartScreen;
+export default SetupHub;

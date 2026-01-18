@@ -233,7 +233,7 @@ const normalizeEvidenceItems = (value) => {
  * Request JSON from the Gemini API using a system prompt and user prompt string.
  *
  * @param {{systemPrompt: string, userPrompt: string, responseLabel?: string}} params - Prompt configuration.
- * @returns {Promise<object>} Parsed JSON payload.
+ * @returns {Promise<{parsed: object, rawText: string}>} Parsed JSON payload and raw response text.
  */
 export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel = 'response' }) => {
   const apiKey = getActiveApiKey();
@@ -257,7 +257,10 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
     });
 
     const responseText = extractResponseText(response, responseLabel);
-    return parseResponseJson(responseText, responseLabel);
+    return {
+      parsed: parseResponseJson(responseText, responseLabel),
+      rawText: responseText,
+    };
   } catch (error) {
     if (error instanceof LlmClientError) {
       throw error;
@@ -302,6 +305,19 @@ export const parseCaseResponse = (payload) => {
 
   if (payload.is_jury_trial) {
     assertArray(payload.jurors, 'jurors', 'case');
+    const seenJurorIds = new Set();
+    payload.jurors.forEach((juror, index) => {
+      const fieldLabel = `jurors[${index}].id`;
+      assertNumber(juror?.id, fieldLabel, 'case');
+      if (seenJurorIds.has(juror.id)) {
+        throw createLlmError(`Duplicate juror id at ${fieldLabel}.`, {
+          code: 'INVALID_RESPONSE',
+          userMessage: 'The AI returned an incomplete case. Please try again.',
+          context: { field: fieldLabel, responseLabel: 'case', value: juror.id },
+        });
+      }
+      seenJurorIds.add(juror.id);
+    });
   }
 
   const opposingCounselPayload = payload.opposing_counsel;
