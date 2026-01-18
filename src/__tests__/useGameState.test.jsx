@@ -754,9 +754,10 @@ describe('useGameState transitions', () => {
       await result.current.submitStrikes([2]);
     });
 
-    expect(result.current.history.jury.invalidStrike).toBe(true);
+    expect(result.current.history.jury.invalidStrike).toBe(false);
     expect(result.current.history.jury.locked).toBe(false);
     expect(result.current.history.jury.seatedIds).toBeUndefined();
+    expect(result.current.history.jury.myStrikes).toEqual([]);
     expect(result.current.error).toBe(
       'Strike results referenced jurors outside the docket. Please retry.'
     );
