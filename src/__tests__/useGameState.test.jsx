@@ -221,6 +221,31 @@ describe('useGameState transitions', () => {
     expect(result.current.history.jury.myStrikes).toEqual([2]);
   });
 
+  it('stores normalized strike IDs when toggling selections', async () => {
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase(
+        'defense',
+        'normal',
+        JURISDICTIONS.USA,
+        COURT_TYPES.STANDARD
+      );
+    });
+
+    act(() => {
+      result.current.toggleStrikeSelection('2');
+      result.current.toggleStrikeSelection('3');
+    });
+
+    expect(result.current.history.jury.myStrikes).toEqual([2, 3]);
+    expect(result.current.history.jury.myStrikes.every((id) => typeof id === 'number')).toBe(
+      true
+    );
+  });
+
   it('locks the config when public defender mode is active', async () => {
     const nowMs = Date.now();
     const storedState = {
@@ -793,6 +818,36 @@ describe('useGameState transitions', () => {
     expect(strikeCall.systemPrompt).toContain('Player (defense) struck IDs: [2]');
   });
 
+  it('rejects invalid strike submissions without mutating jury state', async () => {
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    const poolStatusSnapshot = result.current.history.jury.pool.map((juror) => juror.status);
+
+    await act(async () => {
+      await result.current.submitStrikes([2, 'bad-id']);
+    });
+
+    expect(result.current.error).toBe(
+      'Selected juror IDs are invalid. Please reselect from the current pool.'
+    );
+    expect(getDebugState().lastAction).toMatchObject({
+      result: 'rejected',
+      rejectReason: 'invalid_selection',
+    });
+    expect(result.current.history.jury.locked).toBe(false);
+    expect(result.current.history.jury.seatedIds).toBeUndefined();
+    expect(result.current.history.jury.myStrikes).toEqual([]);
+    expect(result.current.history.jury.pool.map((juror) => juror.status)).toEqual(
+      poolStatusSnapshot
+    );
+  });
+
   it('rejects jury strikes that are outside the current pool', async () => {
     requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
 
@@ -818,6 +873,73 @@ describe('useGameState transitions', () => {
       result: 'rejected',
       rejectReason: 'invalid_selection',
     });
+    expect(requestLlmJson).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts valid strike selections for defense and prosecution', async () => {
+    const roles = ['defense', 'prosecution'];
+
+    for (const role of roles) {
+      requestLlmJson.mockReset();
+      requestLlmJson
+        .mockResolvedValueOnce(buildLlmResponse(juryCasePayload))
+        .mockResolvedValueOnce(
+          buildLlmResponse({
+            opponent_strikes: [],
+            seated_juror_ids: [1],
+            judge_comment: 'Seated.',
+          })
+        );
+
+      const { result } = renderHook(() => useGameState());
+
+      await act(async () => {
+        await result.current.generateCase(role, 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+      });
+
+      await act(async () => {
+        await result.current.submitStrikes([2, 3]);
+      });
+
+      expect(result.current.history.jury.locked).toBe(true);
+      expect(result.current.history.jury.myStrikes).toEqual([2, 3]);
+      expect(result.current.history.jury.seatedIds).toEqual([1]);
+      expect(result.current.error).toBeNull();
+    }
+  });
+
+  it('rejects stale strike selections when the pool changes', async () => {
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(juryCasePayload));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.toggleStrikeSelection(2);
+    });
+
+    act(() => {
+      result.current.history.jury.pool = result.current.history.jury.pool.filter(
+        (juror) => juror.id !== 2
+      );
+    });
+
+    await act(async () => {
+      await result.current.submitStrikes([2]);
+    });
+
+    expect(result.current.error).toBe(
+      'Selected juror IDs are invalid. Please reselect from the current pool.'
+    );
+    expect(getDebugState().lastAction).toMatchObject({
+      result: 'rejected',
+      rejectReason: 'invalid_selection',
+    });
+    expect(result.current.history.jury.locked).toBe(false);
+    expect(result.current.history.jury.myStrikes).toEqual([2]);
     expect(requestLlmJson).toHaveBeenCalledTimes(1);
   });
 
