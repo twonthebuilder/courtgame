@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import SetupHub from '../components/shell/SetupHub';
 import { SANCTION_STATES } from '../lib/constants';
@@ -24,5 +24,26 @@ describe('SetupHub', () => {
     expect(screen.getByText('Public Defender')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Disbarred')).toBeInTheDocument();
+  });
+
+  it('gates rapid side clicks to a single start call', () => {
+    const onStart = vi.fn();
+
+    render(
+      <SetupHub
+        onStart={onStart}
+        error={null}
+        sanctionsState={null}
+        profile={null}
+        isInitializing={false}
+        initializingRole={null}
+      />
+    );
+
+    const defenseButton = screen.getByRole('button', { name: /defense/i });
+    fireEvent.click(defenseButton);
+    fireEvent.click(defenseButton);
+
+    expect(onStart).toHaveBeenCalledTimes(1);
   });
 });

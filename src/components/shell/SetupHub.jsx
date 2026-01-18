@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Gavel, Scale, Shield } from 'lucide-react';
 import {
   COURT_TYPE_OPTIONS,
@@ -49,6 +49,7 @@ const SetupHub = ({
   const [apiKey, setApiKey] = useState(storedApiKey ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
+  const startGateRef = useRef(false);
   const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
   const sanctionsLabel = sanctionsState
@@ -64,7 +65,15 @@ const SetupHub = ({
     persistApiKey(apiKey, rememberKey);
   }, [apiKey, rememberKey]);
 
+  useEffect(() => {
+    if (!isInitializing) {
+      startGateRef.current = false;
+    }
+  }, [isInitializing]);
+
   const handleStart = (role) => {
+    if (startGateRef.current || isInitializing) return;
+    startGateRef.current = true;
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
     if (debugEnabled()) {
       console.count('SetupHub start click');
