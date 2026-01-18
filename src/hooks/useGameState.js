@@ -1248,14 +1248,33 @@ const useGameState = (options = {}) => {
       ]);
 
       if (!opponentValidation.ok || !seatedValidation.ok) {
-        setHistory((prev) => ({
-          ...prev,
-          jury: {
-            ...prev.jury,
-            myStrikes: canonicalStrikes,
-            invalidStrike: true,
+        const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
+        const docketIds = [...docketJurorIds];
+        setLastAction({
+          payload: {
+            selectedJurorIds: canonicalStrikes,
+            invalidIds: {
+              opponent: opponentValidation.invalidIds,
+              seated: seatedValidation.invalidIds,
+            },
+            poolIds,
+            docketIds,
+            responseIds: {
+              opponent: data.opponent_strikes ?? [],
+              seated: data.seated_juror_ids ?? [],
+            },
+            normalizationDetails: {
+              opponentStrikes: {
+                raw: data.opponent_strikes ?? [],
+                normalized: normalizedOpponentStrikes,
+              },
+              seatedJurorIds: {
+                raw: data.seated_juror_ids ?? [],
+                normalized: normalizedSeatedIds,
+              },
+            },
           },
-        }));
+        });
         finalizeAction({ result: 'rejected', rejectReason: 'invalid_ids' });
         logEvent('Jury strikes rejected: invalid_ids.');
         showDebugBanner('invalid_ids');
