@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Component, useCallback, useEffect, useRef, useState } from 'react';
 import { BookOpen, Check, ClipboardCopy, FileText, Gavel, RefreshCw, Scale, Users } from 'lucide-react';
 import ArgumentSection from './components/docket/ArgumentSection';
 import CaseHeader from './components/docket/CaseHeader';
@@ -34,6 +34,28 @@ const appShellState = Object.freeze({
   Run: 'Run',
   PostRun: 'PostRun',
 });
+
+class DebugOverlayErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    if (debugEnabled()) {
+      console.error('[DebugOverlay] crashed', error);
+    }
+  }
+
+  render() {
+    if (this.state.hasError) return null;
+    return this.props.children;
+  }
+}
 
 const RunShell = ({
   startPayload,
@@ -353,10 +375,12 @@ export default function PocketCourt() {
   const [runStartInProgress, setRunStartInProgress] = useState(false);
   const [runOutcome, setRunOutcome] = useState(null);
   const [debugPayload, setDebugPayload] = useState(null);
+  const [debugOverlayMounted, setDebugOverlayMounted] = useState(false);
 
   const transitionShell = useCallback((nextState) => {
     if (nextState !== appShellState.Run) {
       setDebugPayload(null);
+      setDebugOverlayMounted(false);
     }
     setShellState(nextState);
   }, []);
@@ -372,6 +396,10 @@ export default function PocketCourt() {
 
   const handleRunInitialized = useCallback(() => {
     setRunStartInProgress(false);
+  }, []);
+
+  const handleDebugOverlayMounted = useCallback(() => {
+    setDebugOverlayMounted(true);
   }, []);
 
   const handleShellEvent = useCallback(
@@ -477,13 +505,21 @@ export default function PocketCourt() {
   return (
     <>
       {shellView}
+      {import.meta.env.DEV && shellState === appShellState.Run && debugOverlayMounted && (
+        <div className="fixed bottom-2 left-2 z-[90] rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-widest text-white shadow">
+          debug mounted
+        </div>
+      )}
       {shellState === appShellState.Run && (
-        <DebugOverlay
-          gameState={debugPayload?.gameState}
-          config={debugPayload?.config}
-          history={debugPayload?.history}
-          sanctionsState={debugPayload?.sanctionsState}
-        />
+        <DebugOverlayErrorBoundary>
+          <DebugOverlay
+            gameState={debugPayload?.gameState}
+            config={debugPayload?.config}
+            history={debugPayload?.history}
+            sanctionsState={debugPayload?.sanctionsState}
+            onMounted={handleDebugOverlayMounted}
+          />
+        </DebugOverlayErrorBoundary>
       )}
     </>
   );

@@ -20,6 +20,7 @@ const failedSnapshot = Object.freeze({
 });
 
 let hasStoreFailure = false;
+const visibilitySubscribers = new Set();
 
 const markStoreFailure = () => {
   hasStoreFailure = true;
@@ -76,19 +77,46 @@ const truncateText = (value, limit = 400) => {
   return text.length > limit ? `${text.slice(0, limit)}…` : text;
 };
 
-export default function DebugOverlay({ gameState, config, history, sanctionsState }) {
+// Keep a single keydown listener active even if the overlay remounts rapidly.
+const handleOverlayKeydown = (event) => {
+  if (event.code !== 'F3') return;
+  event.preventDefault();
+  visibilitySubscribers.forEach((toggleVisibility) => toggleVisibility());
+};
+
+const subscribeOverlayKeydown = (toggleVisibility) => {
+  visibilitySubscribers.add(toggleVisibility);
+  if (visibilitySubscribers.size === 1) {
+    window.addEventListener('keydown', handleOverlayKeydown);
+  }
+  return () => {
+    visibilitySubscribers.delete(toggleVisibility);
+    if (visibilitySubscribers.size === 0) {
+      window.removeEventListener('keydown', handleOverlayKeydown);
+    }
+  };
+};
+
+export default function DebugOverlay({
+  gameState,
+  config,
+  history,
+  sanctionsState,
+  onMounted,
+}) {
   const [visible, setVisible] = useState(false);
   const { debugState, storeAvailable } = useDebugStore();
+  const toggleVisibility = useCallback(() => {
+    setVisible((prev) => !prev);
+  }, []);
 
   useEffect(() => {
-    const handleKeydown = (event) => {
-      if (event.code !== 'F3') return;
-      event.preventDefault();
-      setVisible((prev) => !prev);
-    };
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
-  }, []);
+    return subscribeOverlayKeydown(toggleVisibility);
+  }, [toggleVisibility]);
+
+  useEffect(() => {
+    onMounted?.();
+  }, [onMounted]);
 
   const juryState = history?.jury ?? {};
   const juryPool = juryState.pool ?? [];
