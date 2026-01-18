@@ -779,6 +779,14 @@ describe('useGameState transitions', () => {
       await result.current.submitStrikes([2]);
     });
 
+    expect(getDebugState().lastAction?.payload).toMatchObject({
+      submittedIds: [2],
+      poolIds: [1, 2, 3],
+      invalidIds: {
+        opponent: [99],
+        seated: [1],
+      },
+    });
     expect(result.current.history.jury.invalidStrike).toBe(false);
     expect(result.current.history.jury.locked).toBe(false);
     expect(result.current.history.jury.seatedIds).toBeUndefined();
@@ -816,6 +824,55 @@ describe('useGameState transitions', () => {
 
     const strikeCall = requestLlmJson.mock.calls[1][0];
     expect(strikeCall.systemPrompt).toContain('Player (defense) struck IDs: [2]');
+  });
+
+  it('stores canonical juror ids and preserves them through submission', async () => {
+    const nonCanonicalPayload = {
+      ...juryCasePayload,
+      jurors: [
+        { id: 10, name: 'J1', age: 35, job: 'Teacher', bias_hint: 'Skeptical.' },
+        { id: 20, name: 'J2', age: 52, job: 'Engineer', bias_hint: 'Trusts experts.' },
+        { id: 30, name: 'J3', age: 44, job: 'Nurse', bias_hint: 'Favors rules.' },
+      ],
+    };
+
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(nonCanonicalPayload))
+      .mockResolvedValueOnce(
+        buildLlmResponse({
+          opponent_strikes: [],
+          seated_juror_ids: [3],
+          judge_comment: 'Seated.',
+        })
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase(
+        'defense',
+        'normal',
+        JURISDICTIONS.USA,
+        COURT_TYPES.STANDARD
+      );
+    });
+
+    expect(result.current.history.case.jurors.map((juror) => juror.id)).toEqual([1, 2, 3]);
+    expect(result.current.history.jury.pool.map((juror) => juror.id)).toEqual([1, 2, 3]);
+
+    act(() => {
+      result.current.toggleStrikeSelection(1);
+      result.current.toggleStrikeSelection(2);
+    });
+
+    expect(result.current.history.jury.myStrikes).toEqual([1, 2]);
+
+    await act(async () => {
+      await result.current.submitStrikes(result.current.history.jury.myStrikes);
+    });
+
+    const strikeCall = requestLlmJson.mock.calls[1][0];
+    expect(strikeCall.systemPrompt).toContain('Player (defense) struck IDs: [1,2]');
   });
 
   it('rejects invalid strike submissions without mutating jury state', async () => {

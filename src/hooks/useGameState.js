@@ -44,7 +44,12 @@ import {
   getMotionPrompt,
   getOpposingCounselPrompt,
 } from '../lib/prompts';
-import { normalizeJurorId, validateStrikeIds } from '../lib/juryIds';
+import {
+  canonicalizeJurorPool,
+  normalizeJurorId,
+  normalizeStrikeIds,
+  validateStrikeIds,
+} from '../lib/juryIds';
 import {
   debugEnabled,
   getDebugState,
@@ -434,6 +439,9 @@ const deriveSanctionsState = (prevState, sanctionsLog = [], nowMs = Date.now()) 
   return currentState;
 };
 
+const getCanonicalJurorIds = (jurors) =>
+  normalizeStrikeIds((jurors ?? []).map((juror) => juror?.id));
+
 const buildDocketRegistry = (historyState) => {
   const facts = new Map();
   (historyState.case?.facts ?? []).forEach((fact, index) => {
@@ -455,8 +463,8 @@ const buildDocketRegistry = (historyState) => {
   });
 
   const jurors = new Map();
-  (historyState.case?.jurors ?? []).forEach((juror) => {
-    if (typeof juror?.id === 'number') jurors.set(juror.id, true);
+  getCanonicalJurorIds(historyState.case?.jurors ?? []).forEach((id) => {
+    jurors.set(id, true);
   });
 
   const rulings = new Map();
@@ -935,9 +943,7 @@ const useGameState = (options = {}) => {
         logEvent('Jury strike selection ignored (jury state missing).');
         return prev;
       }
-      const current = (prev.jury?.myStrikes || [])
-        .map(normalizeJurorId)
-        .filter((strikeId) => strikeId !== null);
+      const current = normalizeStrikeIds(prev.jury?.myStrikes || []);
       const normalizedId = normalizeJurorId(id);
       if (debugEnabled()) {
         console.debug('toggleStrikeSelection', {
@@ -1022,7 +1028,10 @@ const useGameState = (options = {}) => {
       /** @type {CaseData} */
       const data = parseCaseResponse(parsed);
 
-      const juryPool = data.is_jury_trial ? buildInitialJurorPool(data.jurors ?? []) : [];
+      const canonicalJurors = data.is_jury_trial
+        ? canonicalizeJurorPool(data.jurors ?? [])
+        : [];
+      const juryPool = data.is_jury_trial ? buildInitialJurorPool(canonicalJurors) : [];
       const evidenceDocket = normalizeEvidenceDocket(data.evidence);
 
       const startedAt = new Date().toISOString();
@@ -1030,7 +1039,7 @@ const useGameState = (options = {}) => {
       runStartSanctionsRef.current = cloneSanctionsSnapshot(sanctionsState);
       setRunOutcome(null);
       setHistory({
-        case: { ...data, evidence: evidenceDocket },
+        case: { ...data, evidence: evidenceDocket, jurors: canonicalJurors },
         jury: data.is_jury_trial
           ? { pool: juryPool, myStrikes: [], locked: false, invalidStrike: false }
           : { skipped: true },
@@ -1088,9 +1097,9 @@ const useGameState = (options = {}) => {
     const startedAtMs = Date.parse(startedAt);
     setError(null);
     setLoadingMsg('Judge is ruling on strikes...');
-    const normalizedStrikes = Array.isArray(strikes) ? strikes.map(normalizeJurorId) : [];
-    const hasInvalidStrikeIds = normalizedStrikes.some((id) => id === null);
-    const canonicalStrikes = normalizedStrikes.filter((id) => id !== null);
+    const canonicalStrikes = normalizeStrikeIds(strikes);
+    const hasInvalidStrikeIds =
+      Array.isArray(strikes) && canonicalStrikes.length !== strikes.length;
     setLastAction({
       name: 'submitJuryStrikes',
       startedAt,
@@ -1105,8 +1114,8 @@ const useGameState = (options = {}) => {
     logEvent(`Jury strikes submit attempt: [${canonicalStrikes.join(', ')}]`);
 
     if (debugEnabled()) {
-      const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
-      const docketIds = (history.case?.jurors ?? []).map((juror) => juror.id);
+      const poolIds = getCanonicalJurorIds(history.jury?.pool ?? []);
+      const docketIds = getCanonicalJurorIds(history.case?.jurors ?? []);
       const strikeTypes = Array.isArray(strikes) ? strikes.map((id) => typeof id) : [];
       const normalizationMap = {
         stringToNumber: {},
@@ -1158,8 +1167,8 @@ const useGameState = (options = {}) => {
       return;
     }
 
-    const poolJurorIds = new Set((history.jury.pool ?? []).map((juror) => juror.id));
-    const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
+    const poolJurorIds = new Set(getCanonicalJurorIds(history.jury.pool ?? []));
+    const docketJurorIds = new Set(getCanonicalJurorIds(history.case?.jurors ?? []));
     const allowedJurorIds = poolJurorIds.size ? poolJurorIds : docketJurorIds;
     const strikeValidation = validateStrikeIds(canonicalStrikes, [...allowedJurorIds]);
 
@@ -1182,7 +1191,7 @@ const useGameState = (options = {}) => {
       let data = null;
       const debugFlags = getDebugState().flags;
       if (debugEnabled() && debugFlags.bypassJuryLlm) {
-        const poolIds = history.jury.pool?.map((juror) => juror.id) ?? [];
+        const poolIds = getCanonicalJurorIds(history.jury.pool ?? []);
         const seatedIds = poolIds.filter((id) => !canonicalStrikes.includes(id));
         data = {
           opponent_strikes: [],
@@ -1233,13 +1242,9 @@ const useGameState = (options = {}) => {
       setLastAction({ parsed: data });
 
       // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
-      const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
-      const normalizedOpponentStrikes = (data.opponent_strikes ?? [])
-        .map(normalizeJurorId)
-        .filter((id) => id !== null);
-      const normalizedSeatedIds = (data.seated_juror_ids ?? [])
-        .map(normalizeJurorId)
-        .filter((id) => id !== null);
+      const docketJurorIds = new Set(getCanonicalJurorIds(history.case?.jurors ?? []));
+      const normalizedOpponentStrikes = normalizeStrikeIds(data.opponent_strikes);
+      const normalizedSeatedIds = normalizeStrikeIds(data.seated_juror_ids);
       const opponentValidation = validateStrikeIds(data.opponent_strikes, [
         ...docketJurorIds,
       ]);
@@ -1248,30 +1253,20 @@ const useGameState = (options = {}) => {
       ]);
 
       if (!opponentValidation.ok || !seatedValidation.ok) {
-        const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
+        const poolIds = getCanonicalJurorIds(history.jury?.pool ?? []);
         const docketIds = [...docketJurorIds];
         setLastAction({
           payload: {
-            selectedJurorIds: canonicalStrikes,
+            poolIds,
+            docketIds,
+            submittedIds: canonicalStrikes,
             invalidIds: {
               opponent: opponentValidation.invalidIds,
               seated: seatedValidation.invalidIds,
             },
-            poolIds,
-            docketIds,
             responseIds: {
               opponent: data.opponent_strikes ?? [],
               seated: data.seated_juror_ids ?? [],
-            },
-            normalizationDetails: {
-              opponentStrikes: {
-                raw: data.opponent_strikes ?? [],
-                normalized: normalizedOpponentStrikes,
-              },
-              seatedJurorIds: {
-                raw: data.seated_juror_ids ?? [],
-                normalized: normalizedSeatedIds,
-              },
             },
           },
         });
