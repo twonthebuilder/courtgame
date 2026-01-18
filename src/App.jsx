@@ -39,6 +39,7 @@ const RunShell = ({
   onExitToMenu,
   onShellEvent,
   onDebugData,
+  onRunInitialized,
 }) => {
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
@@ -64,6 +65,7 @@ const RunShell = ({
   } = gameStateData;
   /** @type {HistoryState} */
   const history = gameStateData.history;
+  const notifiedInitRef = useRef(false);
 
   const handleReset = () => {
     resetGame();
@@ -84,6 +86,13 @@ const RunShell = ({
   useEffect(() => {
     beginRun(startPayloadRef.current);
   }, [beginRun]);
+
+  useEffect(() => {
+    if (gameState === GAME_STATES.PLAYING && !notifiedInitRef.current) {
+      notifiedInitRef.current = true;
+      onRunInitialized?.();
+    }
+  }, [gameState, onRunInitialized]);
 
   useEffect(() => {
     if (!onDebugData) return;
@@ -296,6 +305,7 @@ export default function PocketCourt() {
     return stored ? normalizeSanctionsState(stored, Date.now()) : null;
   });
   const [startPayload, setStartPayload] = useState(null);
+  const [runStartInProgress, setRunStartInProgress] = useState(false);
   const [runOutcome, setRunOutcome] = useState(null);
   const [debugPayload, setDebugPayload] = useState(null);
 
@@ -310,9 +320,14 @@ export default function PocketCourt() {
 
   const handleStart = (role, difficulty, jurisdiction, courtType) => {
     setSetupError(null);
+    setRunStartInProgress(true);
     setStartPayload({ role, difficulty, jurisdiction, courtType });
     transitionShell(appShellState.Run);
   };
+
+  const handleRunInitialized = useCallback(() => {
+    setRunStartInProgress(false);
+  }, []);
 
   const handleShellEvent = useCallback(
     (event) => {
@@ -321,6 +336,7 @@ export default function PocketCourt() {
       }
       if (event?.type === 'start_failed') {
         setSetupError(event.message ?? 'Unable to start the case.');
+        setRunStartInProgress(false);
         setStartPayload(null);
         transitionShell(appShellState.SetupHub);
       }
@@ -364,8 +380,8 @@ export default function PocketCourt() {
           error={setupError}
           sanctionsState={sanctionsSnapshot}
           profile={profileSnapshot}
-          isInitializing={false}
-          initializingRole={null}
+          isInitializing={runStartInProgress}
+          initializingRole={startPayload?.role ?? null}
         />
       );
       break;
@@ -388,6 +404,7 @@ export default function PocketCourt() {
           onExitToMenu={exitToMenu}
           onShellEvent={handleShellEvent}
           onDebugData={setDebugPayload}
+          onRunInitialized={handleRunInitialized}
         />
       );
       break;

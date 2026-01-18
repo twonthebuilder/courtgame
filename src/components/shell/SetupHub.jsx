@@ -56,6 +56,8 @@ const SetupHub = ({
   const pdActive =
     Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const disbarred = Boolean(profile?.sanctions?.disbarred);
+  const prosecutionDisabled = isPublicDefenderMode || isInitializing;
+  const defenseDisabled = isInitializing;
 
   useEffect(() => {
     persistApiKey(apiKey, rememberKey);
@@ -235,16 +237,19 @@ const SetupHub = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-md">
         <button
           onClick={() => handleStart('prosecution')}
-          disabled={isPublicDefenderMode}
+          disabled={prosecutionDisabled}
           className={`p-4 bg-red-100 hover:bg-red-200 border-2 border-red-300 rounded-xl font-bold text-red-900 flex items-center justify-center gap-2 transition-transform active:scale-95 ${
-            isPublicDefenderMode ? 'cursor-not-allowed opacity-60' : ''
+            prosecutionDisabled ? 'cursor-not-allowed opacity-60' : ''
           }`}
         >
           <Gavel className="w-5 h-5" /> PROSECUTION
         </button>
         <button
           onClick={() => handleStart('defense')}
-          className="p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95"
+          disabled={defenseDisabled}
+          className={`p-4 bg-blue-100 hover:bg-blue-200 border-2 border-blue-300 rounded-xl font-bold text-blue-900 flex items-center justify-center gap-2 transition-transform active:scale-95 ${
+            defenseDisabled ? 'cursor-not-allowed opacity-60' : ''
+          }`}
         >
           <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
