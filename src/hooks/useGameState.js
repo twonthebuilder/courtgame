@@ -44,6 +44,7 @@ import {
   getMotionPrompt,
   getOpposingCounselPrompt,
 } from '../lib/prompts';
+import { normalizeJurorId, validateStrikeIds } from '../lib/juryIds';
 import {
   debugEnabled,
   getDebugState,
@@ -692,27 +693,6 @@ const applyEvidenceStatusUpdates = (evidence, updates) => {
   });
 };
 
-const findDuplicateId = (ids) => {
-  const seen = new Set();
-  for (const id of ids) {
-    if (seen.has(id)) return id;
-    seen.add(id);
-  }
-  return null;
-};
-
-const validateJurorIdSubset = (docketJurorIds, ids) => {
-  const duplicateId = findDuplicateId(ids);
-  if (duplicateId !== null) {
-    return { valid: false, reason: 'duplicate', id: duplicateId };
-  }
-  const invalidId = ids.find((id) => !docketJurorIds.has(id));
-  if (invalidId !== undefined) {
-    return { valid: false, reason: 'unknown', id: invalidId };
-  }
-  return { valid: true };
-};
-
 const buildInitialJurorPool = (jurors) =>
   jurors.map((juror) => {
     const baseStatus = juror.status ?? 'eligible';
@@ -952,11 +932,8 @@ const useGameState = (options = {}) => {
   const toggleStrikeSelection = (id) => {
     setHistory((prev) => {
       const current = prev.jury?.myStrikes || [];
+      const normalizedId = normalizeJurorId(id);
       if (debugEnabled()) {
-        const normalizedId =
-          typeof id === 'string' && id.trim() !== '' && !Number.isNaN(Number(id))
-            ? Number(id)
-            : id;
         console.debug('toggleStrikeSelection', {
           id,
           idType: typeof id,
@@ -964,7 +941,7 @@ const useGameState = (options = {}) => {
           myStrikes: current,
         });
       }
-      if (typeof id !== 'number' || Number.isNaN(id)) {
+      if (normalizedId === null) {
         logEvent('Jury strike selection ignored (invalid id).', { verbose: true });
         return prev;
       }
@@ -972,13 +949,13 @@ const useGameState = (options = {}) => {
         logEvent('Jury strike selection ignored (jury state missing).');
         return prev;
       }
-      if (current.includes(id)) {
-        const updated = current.filter((x) => x !== id);
+      if (current.includes(normalizedId)) {
+        const updated = current.filter((x) => x !== normalizedId);
         logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
         return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
       }
       if (current.length >= 2) return prev;
-      const updated = [...current, id];
+      const updated = [...current, normalizedId];
       logEvent(`Jury strike selection updated: [${updated.join(', ')}]`);
       return { ...prev, jury: { ...prev.jury, myStrikes: updated } };
     });
@@ -1109,18 +1086,21 @@ const useGameState = (options = {}) => {
     const startedAtMs = Date.parse(startedAt);
     setError(null);
     setLoadingMsg('Judge is ruling on strikes...');
+    const normalizedStrikes = Array.isArray(strikes)
+      ? strikes.map(normalizeJurorId).filter((id) => id !== null)
+      : [];
     setLastAction({
       name: 'submitJuryStrikes',
       startedAt,
       endedAt: null,
       durationMs: null,
-      payload: { selectedJurorIds: strikes },
+      payload: { selectedJurorIds: normalizedStrikes },
       result: null,
       rejectReason: null,
       rawModelText: null,
       parsed: null,
     });
-    logEvent(`Jury strikes submit attempt: [${strikes.join(', ')}]`);
+    logEvent(`Jury strikes submit attempt: [${normalizedStrikes.join(', ')}]`);
 
     if (debugEnabled()) {
       const poolIds = (history.jury?.pool ?? []).map((juror) => juror.id);
@@ -1142,6 +1122,7 @@ const useGameState = (options = {}) => {
       });
       console.debug('submitStrikes pre-validation', {
         strikes,
+        normalizedStrikes,
         strikeTypes,
         poolIds,
         docketIds,
@@ -1178,9 +1159,9 @@ const useGameState = (options = {}) => {
     const poolJurorIds = new Set((history.jury.pool ?? []).map((juror) => juror.id));
     const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
     const allowedJurorIds = poolJurorIds.size ? poolJurorIds : docketJurorIds;
-    const strikeValidation = validateJurorIdSubset(allowedJurorIds, strikes);
+    const strikeValidation = validateStrikeIds(strikes, [...allowedJurorIds]);
 
-    if (!strikeValidation.valid) {
+    if (!strikeValidation.ok) {
       finalizeAction({ result: 'rejected', rejectReason: 'invalid_selection' });
       logEvent('Jury strikes rejected: invalid_selection.');
       showDebugBanner('invalid_selection');
@@ -1200,7 +1181,7 @@ const useGameState = (options = {}) => {
       const debugFlags = getDebugState().flags;
       if (debugEnabled() && debugFlags.bypassJuryLlm) {
         const poolIds = history.jury.pool?.map((juror) => juror.id) ?? [];
-        const seatedIds = poolIds.filter((id) => !strikes.includes(id));
+        const seatedIds = poolIds.filter((id) => !normalizedStrikes.includes(id));
         data = {
           opponent_strikes: [],
           seated_juror_ids: seatedIds,
@@ -1213,7 +1194,7 @@ const useGameState = (options = {}) => {
           userPrompt: 'Strike',
           systemPrompt: getJuryStrikePrompt(
             buildDocketPromptCase(history.case),
-            strikes,
+            normalizedStrikes,
             config.role
           ),
           responseLabel: 'jury',
@@ -1251,15 +1232,25 @@ const useGameState = (options = {}) => {
 
       // The docket is the single source of truth for juror IDs; reject unknown or duplicate IDs.
       const docketJurorIds = new Set((history.case?.jurors ?? []).map((juror) => juror.id));
-      const opponentValidation = validateJurorIdSubset(docketJurorIds, data.opponent_strikes);
-      const seatedValidation = validateJurorIdSubset(docketJurorIds, data.seated_juror_ids);
+      const normalizedOpponentStrikes = (data.opponent_strikes ?? [])
+        .map(normalizeJurorId)
+        .filter((id) => id !== null);
+      const normalizedSeatedIds = (data.seated_juror_ids ?? [])
+        .map(normalizeJurorId)
+        .filter((id) => id !== null);
+      const opponentValidation = validateStrikeIds(data.opponent_strikes, [
+        ...docketJurorIds,
+      ]);
+      const seatedValidation = validateStrikeIds(data.seated_juror_ids, [
+        ...docketJurorIds,
+      ]);
 
-      if (!opponentValidation.valid || !seatedValidation.valid) {
+      if (!opponentValidation.ok || !seatedValidation.ok) {
         setHistory((prev) => ({
           ...prev,
           jury: {
             ...prev.jury,
-            myStrikes: strikes,
+            myStrikes: normalizedStrikes,
             invalidStrike: true,
           },
         }));
@@ -1272,9 +1263,9 @@ const useGameState = (options = {}) => {
       }
 
       setHistory((prev) => {
-        const playerStrikeIds = new Set(strikes);
-        const opponentStrikeIds = new Set(data.opponent_strikes);
-        const seatedIds = new Set(data.seated_juror_ids);
+        const playerStrikeIds = new Set(normalizedStrikes);
+        const opponentStrikeIds = new Set(normalizedOpponentStrikes);
+        const seatedIds = new Set(normalizedSeatedIds);
         const updatedPool =
           prev.jury?.pool?.map((juror) => {
             let nextStatus = /** @type {JurorStatus} */ ('eligible');
@@ -1292,9 +1283,9 @@ const useGameState = (options = {}) => {
           ...prev,
           jury: {
             ...prev.jury,
-            myStrikes: strikes,
-            opponentStrikes: data.opponent_strikes,
-            seatedIds: data.seated_juror_ids,
+            myStrikes: normalizedStrikes,
+            opponentStrikes: normalizedOpponentStrikes,
+            seatedIds: normalizedSeatedIds,
             comment: data.judge_comment,
             invalidStrike: false,
             pool: updatedPool,
