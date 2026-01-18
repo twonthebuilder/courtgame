@@ -277,6 +277,7 @@ const RunShell = ({
                 opponentStrikes={history.jury.opponentStrikes || []}
                 judgeComment={history.jury.comment}
                 onStrike={toggleStrikeSelection}
+                playerRole={config.role}
               />
               {!history.jury.locked && (
                 <ActionFooter>
