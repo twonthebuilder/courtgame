@@ -79,6 +79,27 @@ const normalizeReferenceEntity = (entity) => {
   return 'rulings';
 };
 
+const stripMarkdown = (text = '') => {
+  if (!text) return '';
+  let output = text.replace(/\r\n/g, '\n');
+
+  output = output.replace(/```[\s\S]*?```/g, (block) =>
+    block.replace(/```[^\n]*\n?/g, '').replace(/```/g, '')
+  );
+  output = output.replace(/`([^`]+)`/g, '$1');
+  output = output.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
+  output = output.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+  output = output.replace(/^\s{0,3}>\s?/gm, '');
+  output = output.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  output = output.replace(/^\s*([-*+])\s+/gm, '');
+  output = output.replace(/^\s*\d+\.\s+/gm, '');
+  output = output.replace(/(\*\*|__)(.*?)\1/g, '$2');
+  output = output.replace(/(\*|_)(.*?)\1/g, '$2');
+  output = output.replace(/~~(.*?)~~/g, '$1');
+
+  return output;
+};
+
 // Real-time windows to allow recidivism escalation and cooldown resets across sessions.
 const RECIDIVISM_WINDOW_MS = SANCTIONS_TIMERS_MS.RECIDIVISM_WINDOW;
 const COOLDOWN_RESET_MS = SANCTIONS_TIMERS_MS.COOLDOWN_RESET;
@@ -2015,10 +2036,10 @@ const useGameState = (options = {}) => {
       const rebuttalLabel =
         history.motion.rebuttalBy === 'prosecution' ? 'Prosecution Rebuttal' : 'Defense Rebuttal';
       if (history.motion.motionText) {
-        motionLines.push(`${motionLabel}:\n"${history.motion.motionText}"`);
+        motionLines.push(`${motionLabel}:\n"${stripMarkdown(history.motion.motionText)}"`);
       }
       if (history.motion.rebuttalText) {
-        motionLines.push(`${rebuttalLabel}:\n"${history.motion.rebuttalText}"`);
+        motionLines.push(`${rebuttalLabel}:\n"${stripMarkdown(history.motion.rebuttalText)}"`);
       }
       if (history.motion.ruling) {
         motionLines.push(
@@ -2043,7 +2064,7 @@ const useGameState = (options = {}) => {
       disposition?.source === 'motion' && isTerminalDisposition(disposition);
 
     if (reachedTrial && !shouldStopAtDisposition) {
-      sections.push(`TRIAL ARGUMENT:\n"${history.trial.text}"`);
+      sections.push(`TRIAL ARGUMENT:\n"${stripMarkdown(history.trial.text)}"`);
     }
 
     if (disposition) {
