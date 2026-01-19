@@ -1,3 +1,5 @@
+const stripHtml = (text = '') => text.replace(/<[^>]*>/g, '');
+
 const parseMarkdown = (text = '') => {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const blocks = [];
@@ -139,11 +141,21 @@ const headingClasses = {
 };
 
 const MarkdownText = ({ text = '', className = '' }) => {
-  const blocks = parseMarkdown(text);
+  let blocks = [];
+  let sanitizedText = text;
+
+  try {
+    if (typeof text === 'string') {
+      sanitizedText = stripHtml(text);
+    }
+    blocks = parseMarkdown(sanitizedText);
+  } catch {
+    return <span className={className}>{String(text ?? '')}</span>;
+  }
   const containerClassName = ['space-y-3', className].filter(Boolean).join(' ');
 
   if (blocks.length === 0) {
-    return <span className={className}>{text}</span>;
+    return <span className={className}>{sanitizedText}</span>;
   }
 
   return (
@@ -157,7 +169,7 @@ const MarkdownText = ({ text = '', className = '' }) => {
 
           return (
             <HeadingTag key={key} className={headingClass}>
-              {renderInline(block.text, key)}
+              {renderInline(stripHtml(block.text), key)}
             </HeadingTag>
           );
         }
@@ -172,7 +184,9 @@ const MarkdownText = ({ text = '', className = '' }) => {
           return (
             <ListTag key={key} className={listClassName}>
               {block.items.map((item, itemIndex) => (
-                <li key={`${key}-item-${itemIndex}`}>{renderInline(item, key)}</li>
+                <li key={`${key}-item-${itemIndex}`}>
+                  {renderInline(stripHtml(item), key)}
+                </li>
               ))}
             </ListTag>
           );
@@ -191,7 +205,7 @@ const MarkdownText = ({ text = '', className = '' }) => {
 
         return (
           <p key={key} className="whitespace-pre-wrap">
-            {renderInline(block.text, key)}
+            {renderInline(stripHtml(block.text), key)}
           </p>
         );
       })}

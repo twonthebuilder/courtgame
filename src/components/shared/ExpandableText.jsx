@@ -31,6 +31,7 @@ const ExpandableText = ({
     const measuredOverflow = element.scrollHeight > element.clientHeight + 1;
     const estimatedOverflow = text.length > previewLines * 120;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsOverflowing(hasLayout ? measuredOverflow : estimatedOverflow);
   }, [isExpanded, previewLines, text]);
 
