@@ -67,7 +67,7 @@ are not stored by default; only high-level run metadata and sanctions summaries 
     `seated`) with optional `status_history` to record transitions.
 - Juror IDs are canonicalized to sequential numeric IDs at case creation and remain stable for the
   duration of the run.
-- `history.motion`: `text`, `ruling`, `locked`.
+- `history.motion`: `motionText`, `rebuttalText`, `motionBy`, `rebuttalBy`, `ruling`, `motionPhase`, `locked`.
 - `history.trial`: `text`, `verdict`, `locked`.
 - `history.sanctions`: list of explicit, docketed judicial acknowledgments with a visibility flag for in-world rendering.
 - **Invariant:** Only juror IDs recorded in the docket may be referenced.
@@ -116,6 +116,10 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 - **Ruling updates evidence**
   - Trigger: `requestMotionRuling()`.
   - Transition: `history.case.evidence` statuses update based on the ruling payload.
+  - Mapping: `history.motion.ruling.evidence_status_updates` is applied to the docketed evidence list.
+  - Mapping: `history.motion.ruling.breakdown` (when present) is stored for per-issue UI rendering.
+  - Mapping: `history.motion.ruling.breakdown.docket_entries` (when present) can be appended as
+    additional docket lines in the motion section.
 
 ### Trial / Verdict
 
