@@ -72,12 +72,55 @@ describe('llmClient response parsers', () => {
 
   it('accepts a valid motion response', () => {
     const payload = {
+      ruling: 'DENIED',
+      outcome_text: 'Insufficient basis.',
+      score: 55,
+      evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      breakdown: {
+        issues: [
+          {
+            id: 'issue-1',
+            label: 'Standing',
+            disposition: 'DENIED',
+            reasoning: 'The defense lacked standing.',
+            affectedEvidenceIds: [1],
+          },
+        ],
+        docket_entries: ['Motion denied on standing grounds.'],
+      },
+    };
+    expect(parseMotionResponse(payload)).toEqual(payload);
+  });
+
+  it('rejects a motion response missing a breakdown', () => {
+    const payload = {
       ruling: 'Denied',
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],
     };
-    expect(parseMotionResponse(payload)).toEqual(payload);
+    expect(() => parseMotionResponse(payload)).toThrow(LlmClientError);
+  });
+
+  it('rejects a motion response with invalid breakdown dispositions', () => {
+    const payload = {
+      ruling: 'Denied',
+      outcome_text: 'Insufficient basis.',
+      score: 55,
+      evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      breakdown: {
+        issues: [
+          {
+            id: 'issue-1',
+            label: 'Standing',
+            disposition: 'MIXED',
+            reasoning: 'Incorrect label.',
+          },
+        ],
+        docket_entries: ['Entry.'],
+      },
+    };
+    expect(() => parseMotionResponse(payload)).toThrow(LlmClientError);
   });
 
   it('accepts a valid motion text response', () => {

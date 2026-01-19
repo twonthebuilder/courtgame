@@ -1605,9 +1605,10 @@ const useGameState = (options = {}) => {
       });
 
       setHistory((prev) => {
+        const nextRuling = { ...(prev.motion?.ruling ?? {}), ...data };
         const updatedMotion = {
           ...prev.motion,
-          ruling: data,
+          ruling: nextRuling,
           motionPhase: 'motion_ruling_locked',
           locked: true,
         };
