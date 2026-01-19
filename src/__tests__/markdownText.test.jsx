@@ -39,4 +39,17 @@ describe('MarkdownText', () => {
     const codeText = screen.getByText('const value = 42;');
     expect(codeText.tagName).toBe('CODE');
   });
+
+  it('does not render raw HTML tags', () => {
+    const { container } = render(<MarkdownText text="<strong>Not allowed</strong>" />);
+
+    expect(screen.getByText('Not allowed')).toBeInTheDocument();
+    expect(container.querySelector('strong')).toBeNull();
+  });
+
+  it('falls back to plain text when parsing fails', () => {
+    render(<MarkdownText text={{}} />);
+
+    expect(screen.getByText('[object Object]')).toBeInTheDocument();
+  });
 });

@@ -50,6 +50,7 @@ const MotionSection = ({
       : 'The prosecution rebuts the motion by...';
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setText('');
   }, [motionPhase, isPhaseLocked]);
 
