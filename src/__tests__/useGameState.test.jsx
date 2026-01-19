@@ -1807,6 +1807,53 @@ describe('useGameState transitions', () => {
     expect(copiedText).not.toContain('...');
   });
 
+  it('strips markdown from motion and trial text when copying full docket', async () => {
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    const motionMarkdown = '## Motion heading\n**Bold** point\n- Item one\n- Item two';
+    const trialMarkdown = 'Argument with `code` and [link](https://example.com).';
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: motionMarkdown,
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Motion denied.',
+          score: 50,
+          evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+      result.current.history.trial = {
+        locked: false,
+        text: trialMarkdown,
+      };
+    });
+
+    act(() => {
+      result.current.handleCopyFull();
+    });
+
+    const copiedText = copyToClipboard.mock.calls[0][0];
+    expect(copiedText).toContain('Motion heading\nBold point\nItem one');
+    expect(copiedText).toContain('Argument with code and link.');
+    expect(copiedText).not.toContain('**');
+    expect(copiedText).not.toContain('```');
+    expect(copiedText).not.toContain('[link]');
+    expect(copiedText).not.toContain('- Item one');
+  });
+
   it('keeps the section order stable', async () => {
     requestLlmJson.mockResolvedValueOnce(
       buildLlmResponse({
