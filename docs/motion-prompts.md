@@ -18,4 +18,33 @@ Pocket Court keeps motion-related LLM instructions centralized in `src/lib/promp
 - Which role the player is currently taking.
 - The current evidence docket (IDs, descriptions, and admissibility status).
 
-The ruling prompt still returns a structured JSON payload with the ruling, explanation, score, and required `evidence_status_updates` entries so admissibility decisions flow into the docket and the trial phase.
+The ruling prompt returns a structured JSON payload with the ruling, explanation, score, and required
+`evidence_status_updates` entries so admissibility decisions flow into the docket and the trial phase.
+
+## Motion Ruling Payload Schema
+
+Required fields:
+
+- `ruling`: `"GRANTED" | "DENIED" | "PARTIALLY GRANTED"`.
+- `outcome_text`: judge explanation.
+- `score`: number (0-100).
+- `evidence_status_updates`: array of `{ id, status }` entries covering **every** evidence ID in the docket.
+  - `id` must reference an evidence entry in the docket.
+  - `status` is `"admissible" | "suppressed"`.
+
+Optional fields:
+
+- `breakdown`: `MotionRulingBreakdown` object with `issues` and optional `docket_entries`.
+
+### MotionRulingBreakdown
+
+`breakdown.issues` is required when a breakdown is supplied:
+
+- `id`: stable issue identifier (unique within the ruling).
+- `label`: short issue label for headings.
+- `disposition`: `"GRANTED" | "DENIED" | "PARTIALLY GRANTED"`.
+- `reasoning`: concise reasoning grounded in docket facts.
+- `affectedEvidenceIds?`: optional array of evidence IDs impacted by the issue (must exist in the docket).
+
+`breakdown.docket_entries?` is optional. When present, each entry is treated as docket-ready text to
+append to the motion ruling section alongside the primary ruling summary.
