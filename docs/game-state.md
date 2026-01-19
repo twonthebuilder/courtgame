@@ -118,8 +118,11 @@ are not stored by default; only high-level run metadata and sanctions summaries 
   - Transition: `history.case.evidence` statuses update based on the ruling payload.
   - Mapping: `history.motion.ruling.evidence_status_updates` is applied to the docketed evidence list.
   - Mapping: `history.motion.ruling.breakdown` (when present) is stored for per-issue UI rendering.
-  - Mapping: `history.motion.ruling.breakdown.docket_entries` (when present) can be appended as
-    additional docket lines in the motion section.
+  - Mapping: `history.motion.ruling.breakdown.docket_entries` is appended to the motion section, along
+    with an auto-generated summary line (`RULING: <DISPOSITION> - "<outcome_text>"`).
+  - Validation: `evidence_status_updates` must include every evidence ID in the docket, and all
+    evidence IDs referenced by `evidence_status_updates` or `breakdown.issues[].affectedEvidenceIds`
+    must exist in the docket or the ruling is rejected.
 
 ### Trial / Verdict
 

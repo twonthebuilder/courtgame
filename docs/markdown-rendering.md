@@ -13,6 +13,14 @@ Only the following syntax is recognized:
 
 All other Markdown syntax is treated as plain text.
 
+## Rendering Constraints
+
+- Inline styling is limited to emphasis tokens (`*`, `**`); links, images, tables, blockquotes,
+  task lists, and inline code are not parsed.
+- Nesting is shallow by design; lists do not support embedded headings or mixed ordered/unordered
+  blocks inside the same list.
+- Markdown is parsed line-by-line; any unsupported tokens remain visible as literal text.
+
 ## Sanitization & Safety
 
 - The renderer **does not** parse raw HTML.
