@@ -632,6 +632,154 @@ describe('useGameState transitions', () => {
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
   });
 
+  it('updates evidence statuses from valid motion breakdown updates', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI rebuttal.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'DENIED',
+            outcome_text: 'Denied',
+            evidence_status_updates: [
+              { id: 1, status: 'suppressed' },
+              { id: 2, status: 'admissible' },
+            ],
+            breakdown: buildMotionBreakdown({
+              issues: [
+                {
+                  id: 'issue-1',
+                  label: 'Suppression',
+                  disposition: 'DENIED',
+                  reasoning: 'The evidence remains admissible.',
+                  affectedEvidenceIds: [1],
+                },
+              ],
+            }),
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress the evidence.');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const evidenceStatuses = result.current.history.case.evidence.map((item) => item.status);
+    expect(evidenceStatuses).toEqual(['suppressed', 'admissible']);
+  });
+
+  it('rejects motion rulings with invalid evidence ids without mutating history', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI rebuttal.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'DENIED',
+            outcome_text: 'Denied',
+            evidence_status_updates: [{ id: 99, status: 'suppressed' }],
+            breakdown: buildMotionBreakdown({
+              issues: [
+                {
+                  id: 'issue-99',
+                  label: 'Invalid Evidence',
+                  disposition: 'DENIED',
+                  reasoning: 'Referenced evidence does not exist.',
+                  affectedEvidenceIds: [99],
+                },
+              ],
+            }),
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress the evidence.');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.motion.ruling).toBeNull();
+    expect(result.current.history.motion.motionPhase).toBe('rebuttal_submission');
+    expect(result.current.history.motion.locked).toBe(false);
+    expect(result.current.history.case.evidence.map((item) => item.status)).toEqual([
+      'admissible',
+      'admissible',
+    ]);
+    expect(result.current.error).toBe(
+      'Motion ruling referenced evidence outside the docket. Please retry.'
+    );
+    expect(getDebugState().lastAction?.payload).toMatchObject({
+      missingEvidenceIds: [99],
+    });
+  });
+
+  it('does not end the run on partially granted motion rulings', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'AI rebuttal.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'PARTIALLY GRANTED',
+            outcome_text: 'Partially granted.',
+            evidence_status_updates: [
+              { id: 1, status: 'suppressed' },
+              { id: 2, status: 'admissible' },
+            ],
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress the evidence.');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.history.motion.motionPhase).toBe('motion_ruling_locked');
+    expect(result.current.history.disposition).toBeNull();
+    expect(result.current.runOutcome).toBeNull();
+  });
+
   it('records stats, run history, and achievements on verdict finalization', async () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))

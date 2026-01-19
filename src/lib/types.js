@@ -102,6 +102,7 @@
  * @property {number} score - Required motion score used in final weighting.
  * @property {EvidenceStatusUpdate[]} evidence_status_updates - Required updates for every evidence ID in the docket.
  * @property {MotionRulingBreakdown} breakdown - Required per-issue breakdown for the ruling.
+ * @property {string[]} [docket_entries] - Normalized docket entries for docket summaries.
  */
 
 /**
