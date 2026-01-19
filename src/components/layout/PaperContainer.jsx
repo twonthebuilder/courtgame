@@ -6,7 +6,7 @@
  * @returns {JSX.Element} The paper container wrapper.
  */
 const PaperContainer = ({ children }) => (
-  <div className="bg-white shadow-xl min-h-[80vh] p-8 md:p-12 relative animate-in fade-in slide-in-from-bottom-8 duration-700">
+  <div className="bg-white shadow-xl min-h-0 sm:min-h-[80vh] p-8 md:p-12 relative animate-in fade-in slide-in-from-bottom-8 duration-700">
     {children}
   </div>
 );
