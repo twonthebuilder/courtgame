@@ -24,6 +24,7 @@ import {
 } from '../lib/disposition';
 import {
   getLlmClientErrorMessage,
+  LlmClientError,
   parseCaseResponse,
   parseJuryResponse,
   parseMotionResponse,
@@ -699,6 +700,139 @@ const applyEvidenceStatusUpdates = (evidence, updates) => {
     if (item.status === nextStatus) return item;
     return { ...item, status: nextStatus };
   });
+};
+
+const buildEvidenceIdSet = (evidence) => {
+  const evidenceIds = new Set();
+  (evidence ?? []).forEach((item, index) => {
+    const id = typeof item?.id === 'number' ? item.id : index + 1;
+    evidenceIds.add(id);
+  });
+  return evidenceIds;
+};
+
+const createMotionRulingError = (message, { userMessage, context } = {}) =>
+  new LlmClientError(message, {
+    code: 'INVALID_MOTION_RULING',
+    userMessage: userMessage ?? 'Motion ruling could not be applied. Please retry.',
+    context,
+  });
+
+const normalizeEvidenceStatusUpdates = (updates) => {
+  if (!Array.isArray(updates)) {
+    throw createMotionRulingError('Motion ruling evidence updates are missing.', {
+      userMessage: 'Motion ruling is missing evidence updates. Please retry.',
+      context: { updates },
+    });
+  }
+  const normalized = updates.map((update, index) => {
+    if (!update || typeof update !== 'object') {
+      throw createMotionRulingError('Motion ruling evidence update is invalid.', {
+        userMessage: 'Motion ruling includes invalid evidence updates. Please retry.',
+        context: { update, index },
+      });
+    }
+    if (typeof update.id !== 'number') {
+      throw createMotionRulingError('Motion ruling evidence update missing id.', {
+        userMessage: 'Motion ruling includes invalid evidence updates. Please retry.',
+        context: { update, index },
+      });
+    }
+    if (update.status !== 'admissible' && update.status !== 'suppressed') {
+      throw createMotionRulingError('Motion ruling evidence update has invalid status.', {
+        userMessage: 'Motion ruling includes invalid evidence updates. Please retry.',
+        context: { update, index },
+      });
+    }
+    return { ...update, index };
+  });
+  return normalized
+    .slice()
+    .sort((a, b) => a.id - b.id || a.index - b.index)
+    .map(({ id, status }) => ({ id, status }));
+};
+
+const buildMotionDocketEntries = (ruling) => {
+  const breakdownEntries = ruling?.breakdown?.docket_entries;
+  if (!Array.isArray(breakdownEntries)) {
+    throw createMotionRulingError('Motion ruling is missing docket entries.', {
+      userMessage: 'Motion ruling is missing docket entries. Please retry.',
+      context: { docketEntries: breakdownEntries },
+    });
+  }
+  const normalizedEntries = breakdownEntries
+    .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+    .filter(Boolean);
+  const outcomeText =
+    typeof ruling?.outcome_text === 'string' ? ruling.outcome_text.trim() : '';
+  const rulingLabel =
+    typeof ruling?.ruling === 'string' ? ruling.ruling.trim() : '';
+  const summaryEntry =
+    outcomeText && rulingLabel ? `RULING: ${rulingLabel} - "${outcomeText}"` : null;
+  const docketEntries = summaryEntry ? [summaryEntry, ...normalizedEntries] : normalizedEntries;
+  if (docketEntries.length === 0) {
+    throw createMotionRulingError('Motion ruling docket entries are empty.', {
+      userMessage: 'Motion ruling is missing docket entries. Please retry.',
+      context: { docketEntries: breakdownEntries },
+    });
+  }
+  return docketEntries;
+};
+
+const applyMotionRulingDiff = (historyState, ruling) => {
+  const evidence = historyState?.case?.evidence;
+  if (!Array.isArray(evidence)) {
+    throw createMotionRulingError('Motion ruling missing case evidence.', {
+      userMessage: 'Motion ruling is missing evidence context. Please retry.',
+      context: { evidence },
+    });
+  }
+  if (!ruling || typeof ruling !== 'object') {
+    throw createMotionRulingError('Motion ruling payload is missing.', {
+      userMessage: 'Motion ruling is missing required fields. Please retry.',
+      context: { ruling },
+    });
+  }
+  if (!Array.isArray(ruling.breakdown?.issues)) {
+    throw createMotionRulingError('Motion ruling breakdown is missing issues.', {
+      userMessage: 'Motion ruling is missing required fields. Please retry.',
+      context: { breakdown: ruling.breakdown },
+    });
+  }
+  const normalizedUpdates = normalizeEvidenceStatusUpdates(ruling.evidence_status_updates);
+  const docketEntries = buildMotionDocketEntries(ruling);
+  const evidenceIds = buildEvidenceIdSet(evidence);
+  const referencedIds = new Set();
+  normalizedUpdates.forEach((update) => referencedIds.add(update.id));
+  ruling.breakdown.issues.forEach((issue, index) => {
+    if (issue?.affectedEvidenceIds) {
+      issue.affectedEvidenceIds.forEach((id) => {
+        if (typeof id !== 'number') {
+          throw createMotionRulingError('Motion ruling issue has invalid evidence id.', {
+            userMessage: 'Motion ruling includes invalid evidence references. Please retry.',
+            context: { issue, index, id },
+          });
+        }
+        referencedIds.add(id);
+      });
+    }
+  });
+  const missingEvidenceIds = [...referencedIds].filter((id) => !evidenceIds.has(id));
+  if (missingEvidenceIds.length) {
+    throw createMotionRulingError('Motion ruling referenced unknown evidence ids.', {
+      userMessage: 'Motion ruling referenced evidence outside the docket. Please retry.',
+      context: {
+        missingEvidenceIds,
+        referencedIds: [...referencedIds],
+        docketEvidenceIds: [...evidenceIds],
+      },
+    });
+  }
+  return {
+    evidence: applyEvidenceStatusUpdates(evidence, normalizedUpdates),
+    docketEntries,
+    normalizedUpdates,
+  };
 };
 
 const buildInitialJurorPool = (jurors) =>
@@ -1550,6 +1684,23 @@ const useGameState = (options = {}) => {
     if (history.motion.motionPhase === 'motion_ruling_locked') return;
     setError(null);
 
+    const startedAt = new Date().toISOString();
+    const startedAtMs = Date.parse(startedAt);
+    setLastAction({
+      name: 'requestMotionRuling',
+      startedAt,
+      endedAt: null,
+      durationMs: null,
+      payload: {
+        motionPhase: history.motion.motionPhase,
+        motionBy: history.motion.motionBy,
+        rebuttalBy: history.motion.rebuttalBy,
+      },
+      result: null,
+      rejectReason: null,
+      rawModelText: null,
+      parsed: null,
+    });
     setLoadingMsg('Judge is ruling on the motion...');
     try {
       const visibilityContext = buildVisibilityContext(sanctionsState);
@@ -1570,7 +1721,7 @@ const useGameState = (options = {}) => {
         history.motion.rebuttalText,
         rebuttalValidation
       );
-      const { parsed } = await requestLlmJson({
+      const { parsed, rawText } = await requestLlmJson({
         userPrompt: 'Motion ruling',
         systemPrompt: getMotionPrompt(
           buildDocketPromptCase(history.case),
@@ -1592,20 +1743,27 @@ const useGameState = (options = {}) => {
         ),
         responseLabel: 'motion',
       });
+      setLastAction({ rawModelText: rawText });
       /** @type {MotionResult} */
       const data = parseMotionResponse(parsed);
+      setLastAction({ parsed: data });
       // Temporary instrumentation: remove after validating motion ruling payloads.
       console.info('Motion ruling received', {
         ruling: data?.ruling,
         outcomeText: data?.outcome_text,
       });
+      const rulingDiff = applyMotionRulingDiff(history, data);
       const nextDisposition = deriveDispositionFromMotion({
         ...history.motion,
         ruling: data,
       });
 
       setHistory((prev) => {
-        const nextRuling = { ...(prev.motion?.ruling ?? {}), ...data };
+        const nextRuling = {
+          ...(prev.motion?.ruling ?? {}),
+          ...data,
+          docket_entries: rulingDiff.docketEntries,
+        };
         const updatedMotion = {
           ...prev.motion,
           ruling: nextRuling,
@@ -1618,11 +1776,17 @@ const useGameState = (options = {}) => {
           disposition: guardDisposition(prev.disposition, nextDisposition),
           case: {
             ...prev.case,
-            evidence: applyEvidenceStatusUpdates(prev.case?.evidence, data.evidence_status_updates),
+            evidence: rulingDiff.evidence,
           },
           counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
           trial: { ...prev.trial, locked: false },
         };
+      });
+      const endedAt = new Date().toISOString();
+      setLastAction({
+        endedAt,
+        durationMs: Date.parse(endedAt) - startedAtMs,
+        result: 'success',
       });
       setLoadingMsg(null);
       if (isTerminalDisposition(nextDisposition)) {
@@ -1633,6 +1797,17 @@ const useGameState = (options = {}) => {
       }
     } catch (err) {
       console.error(err);
+      const endedAt = new Date().toISOString();
+      setLastAction({
+        endedAt,
+        durationMs: Date.parse(endedAt) - startedAtMs,
+        result: 'error',
+        rejectReason: 'validation_failed',
+        payload:
+          err instanceof LlmClientError
+            ? err.context ?? { message: err.message }
+            : { message: err?.message ?? 'Unknown error', error: err },
+      });
       setError(getLlmClientErrorMessage(err, 'Motion ruling failed.'));
       setLoadingMsg(null);
     }
