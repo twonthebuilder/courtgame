@@ -15,6 +15,7 @@ import PostRun from './components/shell/PostRun';
 import SetupHub from './components/shell/SetupHub';
 import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoadingView from './components/ui/LoadingView';
 import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
 import { GAME_STATES } from './lib/constants';
@@ -504,24 +505,26 @@ export default function PocketCourt() {
   }
 
   return (
-    <>
-      {shellView}
-      {import.meta.env.DEV && shellState === appShellState.Run && debugOverlayMounted && (
-        <div className="fixed bottom-2 left-2 z-[90] rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-widest text-white shadow">
-          debug mounted
-        </div>
-      )}
-      {shellState === appShellState.Run && (
-        <DebugOverlayErrorBoundary>
-          <DebugOverlay
-            gameState={debugPayload?.gameState}
-            config={debugPayload?.config}
-            history={debugPayload?.history}
-            sanctionsState={debugPayload?.sanctionsState}
-            onMounted={handleDebugOverlayMounted}
-          />
-        </DebugOverlayErrorBoundary>
-      )}
-    </>
+    <ErrorBoundary>
+      <>
+        {shellView}
+        {import.meta.env.DEV && shellState === appShellState.Run && debugOverlayMounted && (
+          <div className="fixed bottom-2 left-2 z-[90] rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-widest text-white shadow">
+            debug mounted
+          </div>
+        )}
+        {shellState === appShellState.Run && (
+          <DebugOverlayErrorBoundary>
+            <DebugOverlay
+              gameState={debugPayload?.gameState}
+              config={debugPayload?.config}
+              history={debugPayload?.history}
+              sanctionsState={debugPayload?.sanctionsState}
+              onMounted={handleDebugOverlayMounted}
+            />
+          </DebugOverlayErrorBoundary>
+        )}
+      </>
+    </ErrorBoundary>
   );
 }
