@@ -90,6 +90,27 @@ const buildVerdict = (overrides = {}) => ({
   achievement_title: null,
   ...overrides,
 });
+const buildMotionBreakdown = (overrides = {}) => ({
+  issues: [
+    {
+      id: 'issue-1',
+      label: 'Threshold issue',
+      disposition: 'DENIED',
+      reasoning: 'The motion does not satisfy the required legal threshold.',
+      affectedEvidenceIds: [],
+    },
+  ],
+  docket_entries: ['The court issues a preliminary ruling on the motion.'],
+  ...overrides,
+});
+const buildMotionRuling = (overrides = {}) => ({
+  ruling: 'DENIED',
+  outcome_text: 'Denied',
+  score: 50,
+  evidence_status_updates: [],
+  breakdown: buildMotionBreakdown(),
+  ...overrides,
+});
 const buildLlmResponse = (payload, rawText = JSON.stringify(payload)) => ({
   parsed: payload,
   rawText,
@@ -292,15 +313,14 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 50,
-          evidence_status_updates: [
-            { id: 1, status: 'admissible' },
-            { id: 2, status: 'suppressed' },
-          ],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [
+              { id: 1, status: 'admissible' },
+              { id: 2, status: 'suppressed' },
+            ],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -372,15 +392,14 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 50,
-          evidence_status_updates: [
-            { id: 1, status: 'admissible' },
-            { id: 2, status: 'suppressed' },
-          ],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [
+              { id: 1, status: 'admissible' },
+              { id: 2, status: 'suppressed' },
+            ],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -422,15 +441,14 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 50,
-          evidence_status_updates: [
-            { id: 1, status: 'admissible' },
-            { id: 2, status: 'suppressed' },
-          ],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [
+              { id: 1, status: 'admissible' },
+              { id: 2, status: 'suppressed' },
+            ],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -490,12 +508,12 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'AI drafted motion.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 45,
-          evidence_status_updates: [{ id: 1, status: 'admissible' }],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            score: 45,
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
       );
 
     const { result } = renderHook(() => useGameState());
@@ -577,12 +595,12 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'AI rebuttal.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 45,
-          evidence_status_updates: [{ id: 1, status: 'admissible' }],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            score: 45,
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
       );
 
     const { result } = renderHook(() => useGameState());
@@ -619,12 +637,11 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 50,
-          evidence_status_updates: [{ id: 1, status: 'admissible' }],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -683,12 +700,13 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'GRANTED',
-          outcome_text: 'Dismissed with prejudice',
-          score: 50,
-          evidence_status_updates: [{ id: 1, status: 'admissible' }],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            outcome_text: 'Dismissed with prejudice',
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
       );
 
     const { result } = renderHook(() => useGameState());
@@ -1033,12 +1051,13 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'GRANTED',
-          outcome_text: 'Granted',
-          score: 50,
-          evidence_status_updates: [{ id: 1, status: 'suppressed' }],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            outcome_text: 'Granted',
+            evidence_status_updates: [{ id: 1, status: 'suppressed' }],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -1081,15 +1100,14 @@ describe('useGameState transitions', () => {
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Denied',
-          score: 50,
-          evidence_status_updates: [
-            { id: 1, status: 'admissible' },
-            { id: 2, status: 'suppressed' },
-          ],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [
+              { id: 1, status: 'admissible' },
+              { id: 2, status: 'suppressed' },
+            ],
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -1201,6 +1219,18 @@ describe('useGameState transitions', () => {
           outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
           score: 90,
           evidence_status_updates: [],
+          breakdown: buildMotionBreakdown({
+            issues: [
+              {
+                id: 'dismissal-1',
+                label: 'Dismissal',
+                disposition: 'GRANTED',
+                reasoning: 'The record supports dismissal.',
+                affectedEvidenceIds: [],
+              },
+            ],
+            docket_entries: ['Dismissal entered.'],
+          }),
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,
@@ -1233,12 +1263,13 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'GRANTED',
-          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
-          score: 90,
-          evidence_status_updates: [],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+            score: 90,
+          })
+        )
       );
 
     const { result } = renderHook(() => useGameState());
@@ -1273,12 +1304,13 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'GRANTED',
-          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
-          score: 90,
-          evidence_status_updates: [],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+            score: 90,
+          })
+        )
       );
 
     const onShellEvent = vi.fn();
@@ -1331,12 +1363,13 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'GRANTED',
-          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
-          score: 90,
-          evidence_status_updates: [],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+            score: 90,
+          })
+        )
       );
 
     const onShellEvent = vi.fn();
@@ -1389,12 +1422,12 @@ describe('useGameState transitions', () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(
-        buildLlmResponse({
-          ruling: 'DENIED',
-          outcome_text: 'Motion denied; case not dismissed.',
-          score: 45,
-          evidence_status_updates: [],
-        })
+        buildLlmResponse(
+          buildMotionRuling({
+            outcome_text: 'Motion denied; case not dismissed.',
+            score: 45,
+          })
+        )
       )
       .mockResolvedValueOnce(
         buildLlmResponse({
@@ -1459,6 +1492,7 @@ describe('useGameState transitions', () => {
           outcome_text: 'Denied.',
           score: 45,
           evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,
@@ -1523,6 +1557,7 @@ describe('useGameState transitions', () => {
           outcome_text: 'Denied.',
           score: 45,
           evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,
@@ -1604,6 +1639,7 @@ describe('useGameState transitions', () => {
           outcome_text: 'Motion denied.',
           score: 50,
           evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,
@@ -1658,6 +1694,7 @@ describe('useGameState transitions', () => {
           outcome_text: 'Motion denied.',
           score: 50,
           evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
         },
         motionPhase: 'motion_ruling_locked',
         locked: true,

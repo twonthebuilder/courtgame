@@ -94,14 +94,14 @@
  *
  * @typedef {object} MotionRulingBreakdown
  * @property {MotionRulingIssue[]} issues - Required list of issues ruled on.
- * @property {string[]} [docket_entries] - Optional docket-ready notes to append to the motion record.
+ * @property {string[]} docket_entries - Required docket-ready notes to append to the motion record.
  *
  * @typedef {object} MotionResult
  * @property {'GRANTED' | 'DENIED' | 'PARTIALLY GRANTED'} ruling - Required ruling enum.
  * @property {string} outcome_text - Required judge explanation.
  * @property {number} score - Required motion score used in final weighting.
  * @property {EvidenceStatusUpdate[]} evidence_status_updates - Required updates for every evidence ID in the docket.
- * @property {MotionRulingBreakdown} [breakdown] - Optional per-issue breakdown for the ruling.
+ * @property {MotionRulingBreakdown} breakdown - Required per-issue breakdown for the ruling.
  */
 
 /**
