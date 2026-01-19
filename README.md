@@ -138,6 +138,7 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 - ✅ Legendary achievements (100+ scores)
 
 ### **v16 (Planned)**
+_Keep the items below scoped to v16 until they are verified end-to-end in the full run flow._
 - [ ] Granular motion rulings (✅/❌ breakdown with reasoning)
 - [ ] Markdown rendering in arguments (proper formatting)
 - [ ] Mobile optimization (responsive docket)
