@@ -241,12 +241,13 @@ const RunShell = ({
       {/* Navbar */}
       <header className={headerClassName}>
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={handleReset}>
-            <Scale className="w-6 h-6 text-amber-500" />
-            <span className="font-bold tracking-tight">
-              POCKET<span className="text-amber-500">COURT</span>
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="text-xs font-bold uppercase tracking-widest text-amber-200 hover:text-amber-100 transition-colors"
+          >
+            Main Menu
+          </button>
           <div className="flex gap-2">
             <button
               onClick={() => handleCopyFull(docketNumber)}

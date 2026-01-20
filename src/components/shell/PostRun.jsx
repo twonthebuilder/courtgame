@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, RefreshCw, Scale } from 'lucide-react';
+import { Home, RefreshCw } from 'lucide-react';
 import { SANCTION_STATES } from '../../lib/constants';
 
 const SANCTIONS_LABELS = Object.freeze({
@@ -90,9 +90,6 @@ const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) =>
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
-      <div className="bg-slate-800 p-6 rounded-full mb-6 shadow-xl border-4 border-amber-500">
-        <Scale className="w-16 h-16 text-amber-500" />
-      </div>
       <h1 className="text-4xl md:text-5xl font-black text-slate-800 mb-2 tracking-tighter">
         {summaryTitle}
       </h1>
