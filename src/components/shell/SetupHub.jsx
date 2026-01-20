@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Gavel, Scale, Shield } from 'lucide-react';
+import { Gavel, Shield } from 'lucide-react';
 import {
   COURT_TYPE_OPTIONS,
   DEFAULT_GAME_CONFIG,
@@ -97,13 +97,6 @@ const SetupHub = ({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
-      <div className="bg-slate-800 p-6 rounded-full mb-6 shadow-xl border-4 border-amber-500">
-        <Scale className="w-16 h-16 text-amber-500" />
-      </div>
-      <h1 className="text-4xl md:text-6xl font-black text-slate-800 mb-2 tracking-tighter">
-        POCKET<span className="text-amber-600">COURT</span>
-      </h1>
-      <p className="text-slate-500 mb-8 text-lg font-medium max-w-md">v15.0: GitHub Ready Edition</p>
       {error && (
         <div className="w-full max-w-md mb-8 rounded-xl border border-red-200 bg-red-50 p-4 text-left text-sm text-red-700 shadow-sm">
           <p className="text-xs font-bold uppercase tracking-widest text-red-600">Startup error</p>
