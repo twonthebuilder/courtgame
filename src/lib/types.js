@@ -85,11 +85,24 @@
  * @property {number} id - Evidence identifier referenced by the ruling.
  * @property {EvidenceStatus} status - Updated admissibility status.
  *
+ * @typedef {object} MotionRulingIssue
+ * @property {string} id - Stable issue identifier (unique within the ruling).
+ * @property {string} label - Short issue label for UI headings.
+ * @property {'GRANTED' | 'DENIED' | 'PARTIALLY GRANTED'} disposition - Issue disposition enum.
+ * @property {string} reasoning - Concise reasoning grounded in docket facts.
+ * @property {number[]} [affectedEvidenceIds] - Evidence IDs impacted by the issue (must exist in the docket).
+ *
+ * @typedef {object} MotionRulingBreakdown
+ * @property {MotionRulingIssue[]} issues - Required list of issues ruled on.
+ * @property {string[]} docket_entries - Required docket-ready notes to append to the motion record.
+ *
  * @typedef {object} MotionResult
- * @property {string} ruling - GRANTED, DENIED, or PARTIALLY GRANTED.
- * @property {string} outcome_text - Judge's explanation.
- * @property {number} score - Motion score used in final weighting.
- * @property {EvidenceStatusUpdate[]} evidence_status_updates - Evidence admissibility updates.
+ * @property {'GRANTED' | 'DENIED' | 'PARTIALLY GRANTED'} ruling - Required ruling enum.
+ * @property {string} outcome_text - Required judge explanation.
+ * @property {number} score - Required motion score used in final weighting.
+ * @property {EvidenceStatusUpdate[]} evidence_status_updates - Required updates for every evidence ID in the docket.
+ * @property {MotionRulingBreakdown} breakdown - Required per-issue breakdown for the ruling.
+ * @property {string[]} [docket_entries] - Normalized docket entries for docket summaries.
  */
 
 /**

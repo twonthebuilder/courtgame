@@ -53,3 +53,12 @@ The app shell is the sole owner of screen transitions between MainMenu, SetupHub
 - The app shell owns the Debug Overlay mount point and only renders it during the **Run** state.
 - The Debug Overlay must fail closed: if debug mode is disabled or the debug store is unavailable, it renders nothing and should not block gameplay.
 - Debug UI state is cleared on shell transitions away from **Run**.
+
+## Mobile Layout Constraints & Shell Expectations
+
+- The shell should keep the **Run** experience in a single-column layout on small screens.
+- Primary action controls must remain reachable without horizontal scrolling; avoid fixed widths that
+  exceed the viewport.
+- Docket sections should remain vertically scrollable while preserving the action footer visibility.
+- Shell-level navigation (MainMenu, SetupHub, PostRun) must avoid dense multi-column layouts and keep
+  critical actions within thumb reach.

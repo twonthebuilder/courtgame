@@ -15,6 +15,7 @@ import PostRun from './components/shell/PostRun';
 import SetupHub from './components/shell/SetupHub';
 import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoadingView from './components/ui/LoadingView';
 import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
 import { GAME_STATES } from './lib/constants';
@@ -64,6 +65,16 @@ const RunShell = ({
   onDebugData,
   onRunInitialized,
 }) => {
+  const layoutDebugLevel = (() => {
+    if (typeof window === 'undefined') return 0;
+    const params = new URLSearchParams(window.location.search);
+    const rawValue = params.get('layoutDebug');
+    const parsedValue = Number.parseInt(rawValue ?? '', 10);
+    return Number.isNaN(parsedValue) ? 0 : parsedValue;
+  })();
+  const disablePaperContainer = layoutDebugLevel === 1;
+  const disableMainWrapper = layoutDebugLevel === 2;
+  const disableStickyHeader = layoutDebugLevel === 3;
   const debugLogsEnabled = debugEnabled();
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
   const scrollRef = useRef(null);
@@ -218,17 +229,25 @@ const RunShell = ({
 
   // --- MAIN RENDER ---
 
+  const mainWrapperClassName = disableMainWrapper
+    ? 'w-full p-4 md:p-8'
+    : 'w-full max-w-3xl md:max-w-4xl xl:max-w-5xl mx-auto p-4 md:p-8';
+  const headerClassName = disableStickyHeader
+    ? 'bg-slate-900 text-white p-4 shadow-md'
+    : 'bg-slate-900 text-white p-4 shadow-md sticky top-0 z-50';
+
   const runView = (
     <div className="min-h-screen bg-neutral-100 text-slate-900 font-sans pb-24">
       {/* Navbar */}
-      <header className="bg-slate-900 text-white p-4 shadow-md sticky top-0 z-50">
+      <header className={headerClassName}>
         <div className="max-w-3xl mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={handleReset}>
-            <Scale className="w-6 h-6 text-amber-500" />
-            <span className="font-bold tracking-tight">
-              POCKET<span className="text-amber-500">COURT</span>
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={handleReset}
+            className="text-xs font-bold uppercase tracking-widest text-amber-200 hover:text-amber-100 transition-colors"
+          >
+            Main Menu
+          </button>
           <div className="flex gap-2">
             <button
               onClick={() => handleCopyFull(docketNumber)}
@@ -246,110 +265,215 @@ const RunShell = ({
       </header>
 
       {/* THE LIVING DOCKET */}
-      <main className="w-full max-w-3xl md:max-w-4xl xl:max-w-5xl mx-auto p-4 md:p-8">
+      <main className={mainWrapperClassName}>
         {/* Paper Container */}
-        <PaperContainer>
-          {/* Paper Header */}
-          <DocketHeader
-            title={history.case.title}
-            jurisdiction={config.jurisdiction}
-            docketNumber={docketNumber}
-          />
-          {error && (
-            <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-widest text-red-600">Action error</p>
-              <p className="mt-2">{error}</p>
-            </div>
-          )}
+        {disablePaperContainer ? (
+          <>
+            {/* Paper Header */}
+            <DocketHeader
+              title={history.case.title}
+              jurisdiction={config.jurisdiction}
+              docketNumber={docketNumber}
+            />
+            {error && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-red-600">Action error</p>
+                <p className="mt-2">{error}</p>
+              </div>
+            )}
 
-          {/* 1. Case Info */}
-          <PhaseSection title="Case Information" icon={BookOpen}>
-            <CaseHeader data={history.case} counselNotes={history.counselNotes} />
-          </PhaseSection>
+            {/* 1. Case Info */}
+            <PhaseSection title="Case Information" icon={BookOpen}>
+              <CaseHeader data={history.case} counselNotes={history.counselNotes} />
+            </PhaseSection>
 
-          {/* 2. Jury Section (If Applicable) */}
-          {!history.jury.skipped && (
-            <PhaseSection title="Jury Selection" icon={Users}>
-              <JurySection
-                pool={history.jury.pool}
-                isLocked={history.jury.locked}
-                myStrikes={history.jury.myStrikes || []}
-                opponentStrikes={history.jury.opponentStrikes || []}
-                judgeComment={history.jury.comment}
-                onStrike={toggleStrikeSelection}
-                playerRole={config.role}
-              />
-              {!history.jury.locked && (
-                <ActionFooter>
+            {/* 2. Jury Section (If Applicable) */}
+            {!history.jury.skipped && (
+              <PhaseSection title="Jury Selection" icon={Users}>
+                <JurySection
+                  pool={history.jury.pool}
+                  isLocked={history.jury.locked}
+                  myStrikes={history.jury.myStrikes || []}
+                  opponentStrikes={history.jury.opponentStrikes || []}
+                  judgeComment={history.jury.comment}
+                  onStrike={toggleStrikeSelection}
+                  playerRole={config.role}
+                />
+                {!history.jury.locked && (
+                  <ActionFooter>
+                    <button
+                      onClick={() => submitStrikes(history.jury.myStrikes)}
+                      disabled={!history.jury.myStrikes || history.jury.myStrikes.length !== 2}
+                      className="bg-amber-500 text-white font-bold py-2 px-6 rounded hover:bg-amber-600 disabled:opacity-50"
+                    >
+                      Confirm Strikes
+                    </button>
+                  </ActionFooter>
+                )}
+              </PhaseSection>
+            )}
+
+            {/* 3. Motions Section */}
+            {/* Appears if jury skipped OR jury locked */}
+            {(history.jury.skipped || history.jury.locked) && (
+              <PhaseSection title="Pre-Trial Motions" icon={FileText}>
+                <MotionSection
+                  isLocked={history.motion.locked}
+                  motionPhase={history.motion.motionPhase}
+                  motionText={history.motion.motionText}
+                  motionBy={history.motion.motionBy}
+                  rebuttalText={history.motion.rebuttalText}
+                  rebuttalBy={history.motion.rebuttalBy}
+                  ruling={history.motion.ruling}
+                  playerRole={config.role}
+                  isLoading={Boolean(loadingMsg)}
+                  onSubmitStep={submitMotionStep}
+                />
+              </PhaseSection>
+            )}
+
+            {/* 4. Trial Section */}
+            {/* Appears if motion locked */}
+            {history.motion && history.motion.locked && (
+              <PhaseSection title="Trial Phase" icon={Gavel}>
+                <ArgumentSection
+                  isLocked={history.trial.locked}
+                  isJuryTrial={history.case.is_jury_trial}
+                  onSubmit={submitArgument}
+                  submittedText={history.trial.text}
+                />
+              </PhaseSection>
+            )}
+
+            {/* 5. Verdict Section */}
+            {history.trial && history.trial.locked && (
+              <PhaseSection title="Final Judgment" icon={Scale} className="border-none mb-0 pb-0">
+                <VerdictSection result={history.trial.verdict} />
+                <ActionFooter className="mt-12 justify-center pt-8 border-t border-slate-100">
                   <button
-                    onClick={() => submitStrikes(history.jury.myStrikes)}
-                    disabled={!history.jury.myStrikes || history.jury.myStrikes.length !== 2}
-                    className="bg-amber-500 text-white font-bold py-2 px-6 rounded hover:bg-amber-600 disabled:opacity-50"
+                    onClick={handleReset}
+                    className="text-slate-400 hover:text-slate-800 font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-2 mx-auto"
                   >
-                    Confirm Strikes
+                    <RefreshCw className="w-4 h-4" /> Start New Case
                   </button>
                 </ActionFooter>
-              )}
+              </PhaseSection>
+            )}
+
+            {/* Loading Indicator */}
+            {loadingMsg && (
+              <div ref={scrollRef}>
+                <LoadingView message={loadingMsg} />
+              </div>
+            )}
+
+            {/* Invisible div for auto-scrolling */}
+            <div ref={scrollRef} />
+          </>
+        ) : (
+          <PaperContainer>
+            {/* Paper Header */}
+            <DocketHeader
+              title={history.case.title}
+              jurisdiction={config.jurisdiction}
+              docketNumber={docketNumber}
+            />
+            {error && (
+              <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-widest text-red-600">Action error</p>
+                <p className="mt-2">{error}</p>
+              </div>
+            )}
+
+            {/* 1. Case Info */}
+            <PhaseSection title="Case Information" icon={BookOpen}>
+              <CaseHeader data={history.case} counselNotes={history.counselNotes} />
             </PhaseSection>
-          )}
 
-          {/* 3. Motions Section */}
-          {/* Appears if jury skipped OR jury locked */}
-          {(history.jury.skipped || history.jury.locked) && (
-            <PhaseSection title="Pre-Trial Motions" icon={FileText}>
-              <MotionSection
-                isLocked={history.motion.locked}
-                motionPhase={history.motion.motionPhase}
-                motionText={history.motion.motionText}
-                motionBy={history.motion.motionBy}
-                rebuttalText={history.motion.rebuttalText}
-                rebuttalBy={history.motion.rebuttalBy}
-                ruling={history.motion.ruling}
-                playerRole={config.role}
-                isLoading={Boolean(loadingMsg)}
-                onSubmitStep={submitMotionStep}
-              />
-            </PhaseSection>
-          )}
+            {/* 2. Jury Section (If Applicable) */}
+            {!history.jury.skipped && (
+              <PhaseSection title="Jury Selection" icon={Users}>
+                <JurySection
+                  pool={history.jury.pool}
+                  isLocked={history.jury.locked}
+                  myStrikes={history.jury.myStrikes || []}
+                  opponentStrikes={history.jury.opponentStrikes || []}
+                  judgeComment={history.jury.comment}
+                  onStrike={toggleStrikeSelection}
+                  playerRole={config.role}
+                />
+                {!history.jury.locked && (
+                  <ActionFooter>
+                    <button
+                      onClick={() => submitStrikes(history.jury.myStrikes)}
+                      disabled={!history.jury.myStrikes || history.jury.myStrikes.length !== 2}
+                      className="bg-amber-500 text-white font-bold py-2 px-6 rounded hover:bg-amber-600 disabled:opacity-50"
+                    >
+                      Confirm Strikes
+                    </button>
+                  </ActionFooter>
+                )}
+              </PhaseSection>
+            )}
 
-          {/* 4. Trial Section */}
-          {/* Appears if motion locked */}
-          {history.motion && history.motion.locked && (
-            <PhaseSection title="Trial Phase" icon={Gavel}>
-              <ArgumentSection
-                isLocked={history.trial.locked}
-                isJuryTrial={history.case.is_jury_trial}
-                onSubmit={submitArgument}
-                submittedText={history.trial.text}
-              />
-            </PhaseSection>
-          )}
+            {/* 3. Motions Section */}
+            {/* Appears if jury skipped OR jury locked */}
+            {(history.jury.skipped || history.jury.locked) && (
+              <PhaseSection title="Pre-Trial Motions" icon={FileText}>
+                <MotionSection
+                  isLocked={history.motion.locked}
+                  motionPhase={history.motion.motionPhase}
+                  motionText={history.motion.motionText}
+                  motionBy={history.motion.motionBy}
+                  rebuttalText={history.motion.rebuttalText}
+                  rebuttalBy={history.motion.rebuttalBy}
+                  ruling={history.motion.ruling}
+                  playerRole={config.role}
+                  isLoading={Boolean(loadingMsg)}
+                  onSubmitStep={submitMotionStep}
+                />
+              </PhaseSection>
+            )}
 
-          {/* 5. Verdict Section */}
-          {history.trial && history.trial.locked && (
-            <PhaseSection title="Final Judgment" icon={Scale} className="border-none mb-0 pb-0">
-              <VerdictSection result={history.trial.verdict} />
-              <ActionFooter className="mt-12 justify-center pt-8 border-t border-slate-100">
-                <button
-                  onClick={handleReset}
-                  className="text-slate-400 hover:text-slate-800 font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-2 mx-auto"
-                >
-                  <RefreshCw className="w-4 h-4" /> Start New Case
-                </button>
-              </ActionFooter>
-            </PhaseSection>
-          )}
+            {/* 4. Trial Section */}
+            {/* Appears if motion locked */}
+            {history.motion && history.motion.locked && (
+              <PhaseSection title="Trial Phase" icon={Gavel}>
+                <ArgumentSection
+                  isLocked={history.trial.locked}
+                  isJuryTrial={history.case.is_jury_trial}
+                  onSubmit={submitArgument}
+                  submittedText={history.trial.text}
+                />
+              </PhaseSection>
+            )}
 
-          {/* Loading Indicator */}
-          {loadingMsg && (
-            <div ref={scrollRef}>
-              <LoadingView message={loadingMsg} />
-            </div>
-          )}
+            {/* 5. Verdict Section */}
+            {history.trial && history.trial.locked && (
+              <PhaseSection title="Final Judgment" icon={Scale} className="border-none mb-0 pb-0">
+                <VerdictSection result={history.trial.verdict} />
+                <ActionFooter className="mt-12 justify-center pt-8 border-t border-slate-100">
+                  <button
+                    onClick={handleReset}
+                    className="text-slate-400 hover:text-slate-800 font-bold uppercase text-xs tracking-widest flex items-center justify-center gap-2 mx-auto"
+                  >
+                    <RefreshCw className="w-4 h-4" /> Start New Case
+                  </button>
+                </ActionFooter>
+              </PhaseSection>
+            )}
 
-          {/* Invisible div for auto-scrolling */}
-          <div ref={scrollRef} />
-        </PaperContainer>
+            {/* Loading Indicator */}
+            {loadingMsg && (
+              <div ref={scrollRef}>
+                <LoadingView message={loadingMsg} />
+              </div>
+            )}
+
+            {/* Invisible div for auto-scrolling */}
+            <div ref={scrollRef} />
+          </PaperContainer>
+        )}
       </main>
       <DebugToast message={debugBanner} />
     </div>
@@ -504,24 +628,26 @@ export default function PocketCourt() {
   }
 
   return (
-    <>
-      {shellView}
-      {import.meta.env.DEV && shellState === appShellState.Run && debugOverlayMounted && (
-        <div className="fixed bottom-2 left-2 z-[90] rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-widest text-white shadow">
-          debug mounted
-        </div>
-      )}
-      {shellState === appShellState.Run && (
-        <DebugOverlayErrorBoundary>
-          <DebugOverlay
-            gameState={debugPayload?.gameState}
-            config={debugPayload?.config}
-            history={debugPayload?.history}
-            sanctionsState={debugPayload?.sanctionsState}
-            onMounted={handleDebugOverlayMounted}
-          />
-        </DebugOverlayErrorBoundary>
-      )}
-    </>
+    <ErrorBoundary>
+      <>
+        {shellView}
+        {import.meta.env.DEV && shellState === appShellState.Run && debugOverlayMounted && (
+          <div className="fixed bottom-2 left-2 z-[90] rounded bg-slate-900/70 px-2 py-1 text-[10px] uppercase tracking-widest text-white shadow">
+            debug mounted
+          </div>
+        )}
+        {shellState === appShellState.Run && (
+          <DebugOverlayErrorBoundary>
+            <DebugOverlay
+              gameState={debugPayload?.gameState}
+              config={debugPayload?.config}
+              history={debugPayload?.history}
+              sanctionsState={debugPayload?.sanctionsState}
+              onMounted={handleDebugOverlayMounted}
+            />
+          </DebugOverlayErrorBoundary>
+        )}
+      </>
+    </ErrorBoundary>
   );
 }

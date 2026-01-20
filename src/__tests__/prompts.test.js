@@ -104,6 +104,7 @@ describe('prompt builders', () => {
     expect(motionPrompt).toContain('Motion (defense): "Suppress evidence"');
     expect(motionPrompt).toContain('Rebuttal (prosecution): "Opposing response"');
     expect(motionPrompt).toContain('evidence_status_updates');
+    expect(motionPrompt).toContain('"breakdown"');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },

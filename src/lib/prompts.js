@@ -390,6 +390,7 @@ export const getMotionPrompt = (
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Do not introduce facts or entities not present in the docket inputs.
     Include evidence_status_updates entries for every evidence item (even if admissible).
+    Valid dispositions: "GRANTED", "DENIED", "PARTIALLY GRANTED".
     Return JSON:
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
@@ -397,7 +398,19 @@ export const getMotionPrompt = (
       "score": number (0-100),
       "evidence_status_updates": [
         { "id": number, "status": "admissible" or "suppressed" }
-      ]
+      ],
+      "breakdown": {
+        "issues": [
+          {
+            "id": "string",
+            "label": "short label",
+            "disposition": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
+            "reasoning": "Concise reasoning grounded in docket facts.",
+            "affectedEvidenceIds": [number]
+          }
+        ],
+        "docket_entries": ["string"]
+      }
     }
   `;
 };

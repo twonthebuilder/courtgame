@@ -206,6 +206,25 @@ const assertNumberArray = (value, field, responseLabel) => {
 };
 
 /**
+ * Ensure an array contains only non-empty strings for response validation.
+ *
+ * @param {unknown} value - Value to validate.
+ * @param {string} field - Field name for error context.
+ * @param {string} responseLabel - Response label for user messaging.
+ */
+const assertStringArray = (value, field, responseLabel) => {
+  assertArray(value, field, responseLabel);
+  const invalidEntry = value.find((item) => typeof item !== 'string' || item.trim().length === 0);
+  if (invalidEntry !== undefined) {
+    throw createLlmError(`Expected ${field} entries to be non-empty strings.`, {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete response. Please try again.',
+      context: { field, responseLabel, invalidEntry, value },
+    });
+  }
+};
+
+/**
  * Normalize evidence entries into docket-ready objects.
  *
  * @param {unknown} value - Evidence payload from the model.
@@ -387,6 +406,13 @@ export const parseMotionResponse = (payload) => {
   }
 
   assertString(payload.ruling, 'ruling', 'motion');
+  if (!['GRANTED', 'DENIED', 'PARTIALLY GRANTED'].includes(payload.ruling)) {
+    throw createLlmError('Motion response has an invalid ruling disposition.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { ruling: payload.ruling },
+    });
+  }
   assertString(payload.outcome_text, 'outcome_text', 'motion');
   assertNumber(payload.score, 'score', 'motion');
   assertArray(payload.evidence_status_updates, 'evidence_status_updates', 'motion');
@@ -411,6 +437,44 @@ export const parseMotionResponse = (payload) => {
       );
     }
   });
+
+  if (!payload.breakdown || typeof payload.breakdown !== 'object') {
+    throw createLlmError('Motion response is missing a breakdown object.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { breakdown: payload.breakdown },
+    });
+  }
+
+  assertArray(payload.breakdown.issues, 'breakdown.issues', 'motion');
+  payload.breakdown.issues.forEach((issue, index) => {
+    if (!issue || typeof issue !== 'object') {
+      throw createLlmError(`Breakdown issue ${index + 1} is not an object.`, {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+        context: { issue, index },
+      });
+    }
+    assertString(issue.id, `breakdown.issues[${index}].id`, 'motion');
+    assertString(issue.label, `breakdown.issues[${index}].label`, 'motion');
+    assertString(issue.reasoning, `breakdown.issues[${index}].reasoning`, 'motion');
+    if (!['GRANTED', 'DENIED', 'PARTIALLY GRANTED'].includes(issue.disposition)) {
+      throw createLlmError(`Breakdown issue ${index + 1} has invalid disposition.`, {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+        context: { issue, index },
+      });
+    }
+    if (issue.affectedEvidenceIds !== undefined && issue.affectedEvidenceIds !== null) {
+      assertNumberArray(
+        issue.affectedEvidenceIds,
+        `breakdown.issues[${index}].affectedEvidenceIds`,
+        'motion'
+      );
+    }
+  });
+
+  assertStringArray(payload.breakdown.docket_entries, 'breakdown.docket_entries', 'motion');
 
   return payload;
 };

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import ActionFooter from '../layout/ActionFooter';
-import ExpandableText from '../shared/ExpandableText';
+import ExpandableMarkdown from '../shared/ExpandableMarkdown';
 
 /** @typedef {import('../../lib/types').MotionResult} MotionResult */
 
@@ -50,6 +50,7 @@ const MotionSection = ({
       : 'The prosecution rebuts the motion by...';
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setText('');
   }, [motionPhase, isPhaseLocked]);
 
@@ -60,14 +61,14 @@ const MotionSection = ({
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
             {roleLabel(motionBy)} Motion
           </h4>
-          <ExpandableText
+          <ExpandableMarkdown
             text={motionText}
             className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
           />
           <h4 className="text-xs font-bold text-slate-400 uppercase mb-1 mt-4">
             {roleLabel(rebuttalBy)} Rebuttal
           </h4>
-          <ExpandableText
+          <ExpandableMarkdown
             text={rebuttalText}
             className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
           />
@@ -89,7 +90,7 @@ const MotionSection = ({
               <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
                 Judge's Ruling
               </h4>
-              <ExpandableText
+              <ExpandableMarkdown
                 text={ruling.outcome_text}
                 className="text-sm text-slate-800 font-medium mt-6 before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
               />
@@ -120,7 +121,7 @@ const MotionSection = ({
             {roleLabel(motionBy)} Motion
           </h4>
           {motionText ? (
-            <ExpandableText
+            <ExpandableMarkdown
               text={motionText}
               className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
             />
@@ -133,7 +134,7 @@ const MotionSection = ({
             {roleLabel(rebuttalBy)} Rebuttal
           </h4>
           {rebuttalText ? (
-            <ExpandableText
+            <ExpandableMarkdown
               text={rebuttalText}
               className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
             />

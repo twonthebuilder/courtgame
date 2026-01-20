@@ -58,6 +58,18 @@ vi.mock('../hooks/useGameState', async () => {
           outcome_text: 'Denied.',
           score: 0,
           evidence_status_updates: [],
+          breakdown: {
+            issues: [
+              {
+                id: 'issue-1',
+                label: 'Issue',
+                disposition: 'DENIED',
+                reasoning: 'Placeholder.',
+                affectedEvidenceIds: [],
+              },
+            ],
+            docket_entries: [],
+          },
         },
       },
       trial: { locked: false, text: '' },

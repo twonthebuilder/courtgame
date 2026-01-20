@@ -1,16 +1,17 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import MarkdownText from './MarkdownText';
 
 /**
- * Renders text with a line-clamped preview and a toggle to reveal the full content.
+ * Renders markdown text with a line-clamped preview and a toggle to reveal the full content.
  *
  * @param {object} props - Component props.
- * @param {string} props.text - Full text to render without modification.
+ * @param {string} props.text - Markdown text to render.
  * @param {number} [props.previewLines=3] - Number of lines to show in the collapsed preview.
- * @param {string} [props.className] - Additional classes applied to the text element.
+ * @param {string} [props.className] - Additional classes applied to the text container.
  * @param {string} [props.toggleClassName] - Additional classes applied to the toggle button.
- * @returns {JSX.Element} The expandable text block.
+ * @returns {JSX.Element} The expandable markdown block.
  */
-const ExpandableText = ({
+const ExpandableMarkdown = ({
   text = '',
   previewLines = 3,
   className = '',
@@ -47,14 +48,14 @@ const ExpandableText = ({
 
   return (
     <div>
-      <p
+      <div
         id={textId}
         ref={textRef}
         className={className}
         style={clampStyles}
       >
-        {text}
-      </p>
+        <MarkdownText text={text} />
+      </div>
       {isOverflowing && (
         <button
           type="button"
@@ -70,4 +71,4 @@ const ExpandableText = ({
   );
 };
 
-export default ExpandableText;
+export default ExpandableMarkdown;
