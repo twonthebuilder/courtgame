@@ -17,6 +17,7 @@ import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoadingView from './components/ui/LoadingView';
+import ProfileDrawer from './components/profile/ProfileDrawer';
 import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
 import { GAME_STATES } from './lib/constants';
 import { debugEnabled } from './lib/debugStore';
@@ -60,6 +61,7 @@ class DebugOverlayErrorBoundary extends Component {
 
 const RunShell = ({
   startPayload,
+  profile,
   onExitToMenu,
   onShellEvent,
   onDebugData,
@@ -476,6 +478,7 @@ const RunShell = ({
         )}
       </main>
       <DebugToast message={debugBanner} />
+      <ProfileDrawer profile={profile} />
     </div>
   );
 
@@ -617,6 +620,7 @@ export default function PocketCourt() {
       shellView = (
         <RunShell
           startPayload={startPayload}
+          profile={profileSnapshot}
           onExitToMenu={exitToMenu}
           onShellEvent={handleShellEvent}
           onDebugData={setDebugPayload}
