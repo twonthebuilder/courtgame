@@ -9,7 +9,8 @@ This document describes the top-level shell states that wrap the run experience 
    - Player selects “Play” to move into setup.
 2. **SetupHub**
    - Player chooses role, difficulty, jurisdiction, and court type.
-   - Displays any setup errors and the current sanctions snapshot.
+   - Displays any setup errors and the persisted bar status snapshot.
+   - Enforces public defender role locks and blocks case starts during disbarment or reinstatement grace (with the eligibility timer).
 3. **Run**
    - Hosts the docket UI and calls `useGameState` for run orchestration.
    - This state owns the run HUD, docket, and debug overlay mount point.

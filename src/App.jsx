@@ -595,7 +595,6 @@ export default function PocketCourt() {
         <SetupHub
           onStart={handleStart}
           error={setupError}
-          sanctionsState={sanctionsSnapshot}
           profile={profileSnapshot}
           isInitializing={runStartInProgress}
           initializingRole={startPayload?.role ?? null}
