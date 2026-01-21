@@ -235,7 +235,7 @@
  * Persisted sanctions state snapshot for a player profile.
  *
  * @typedef {object} PlayerSanctionsState
- * @property {SanctionsState} state - Canonical sanctions state identifier.
+ * @property {SanctionsState} state - Canonical sanctions state identifier (public_defender implies disbarment in UI).
  * @property {number} level - Numeric sanction level.
  * @property {string} startedAt - ISO timestamp when the current sanctions state began.
  * @property {string | null} expiresAt - ISO timestamp when the current sanctions state expires.

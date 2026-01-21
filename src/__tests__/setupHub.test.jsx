@@ -12,15 +12,15 @@ describe('SetupHub', () => {
       <SetupHub
         onStart={vi.fn()}
         error={null}
-        sanctionsState={{ state: SANCTION_STATES.SANCTIONED, level: 2 }}
-        profile={{ pdStatus: { startedAt: 'now', expiresAt: null }, sanctions: { disbarred: true } }}
+        sanctionsState={{ state: SANCTION_STATES.PUBLIC_DEFENDER, level: 3 }}
+        profile={{ pdStatus: { startedAt: 'now', expiresAt: null } }}
         isInitializing={false}
         initializingRole={null}
       />
     );
 
     expect(screen.getByText('Status Summary')).toBeInTheDocument();
-    expect(screen.getByText(/Tier 2/i)).toBeInTheDocument();
+    expect(screen.getByText(/Tier 3/i)).toBeInTheDocument();
     expect(screen.getByText('Public Defender')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Disbarred')).toBeInTheDocument();

@@ -28,6 +28,7 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 - `sanctions`: snapshot of the current sanctions state (no docket text).
 - `pdStatus`: public defender assignment window (`startedAt`, `expiresAt`) when applicable.
 - `reinstatement`: grace window snapshot (`until`) when applicable.
+- Disbarment is not stored as a separate field; UI treats `sanctions.state = public_defender` as disbarred.
 - `stats`: aggregated totals (`runsCompleted`, `verdictsFinalized`).
 - `achievements`: list of awarded achievements with timestamps and optional run linkage.
 

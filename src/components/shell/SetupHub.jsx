@@ -57,7 +57,7 @@ const SetupHub = ({
     : 'Tier unknown';
   const pdActive =
     Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const disbarred = Boolean(profile?.sanctions?.disbarred);
+  const disbarred = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const prosecutionDisabled = isPublicDefenderMode || isInitializing;
   const defenseDisabled = isInitializing;
 
