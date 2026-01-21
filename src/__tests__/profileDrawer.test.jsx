@@ -19,9 +19,14 @@ describe('ProfileDrawer', () => {
           id: 'run-1',
           startedAt: '2024-02-01T00:00:00.000Z',
           endedAt: '2024-02-01T01:00:00.000Z',
+          jurisdiction: 'USA',
+          difficulty: 'normal',
+          courtType: 'nightCourt',
+          playerRole: 'defense',
           outcome: 'dismissed_with_prejudice',
           score: 88,
           caseTitle: 'State v. Doe',
+          judgeName: 'Hon. Redwood',
         },
       ],
     });
@@ -46,5 +51,10 @@ describe('ProfileDrawer', () => {
     expect(screen.getByText('1')).toBeInTheDocument();
     expect(screen.getByText(/Dismissed With Prejudice/i)).toBeInTheDocument();
     expect(screen.getByText(/State v\. Doe/i)).toBeInTheDocument();
+    expect(screen.getByText(/Judge: Hon\. Redwood/i)).toBeInTheDocument();
+    expect(screen.getByText(/Role: Defense/i)).toBeInTheDocument();
+    expect(screen.getByText(/Difficulty: Normal/i)).toBeInTheDocument();
+    expect(screen.getByText(/Jurisdiction: USA/i)).toBeInTheDocument();
+    expect(screen.getByText(/Court: Night Court/i)).toBeInTheDocument();
   });
 });

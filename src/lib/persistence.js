@@ -51,6 +51,7 @@ export const defaultPlayerProfile = () => {
     stats: {
       runsCompleted: 0,
       verdictsFinalized: 0,
+      sanctionsIncurred: 0,
     },
     achievements: [],
   };

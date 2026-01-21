@@ -27,7 +27,11 @@ describe('persistence helpers', () => {
     expect(profile.sanctions).toBeNull();
     expect(profile.pdStatus).toBeNull();
     expect(profile.reinstatement).toBeNull();
-    expect(profile.stats).toEqual({ runsCompleted: 0, verdictsFinalized: 0 });
+    expect(profile.stats).toEqual({
+      runsCompleted: 0,
+      verdictsFinalized: 0,
+      sanctionsIncurred: 0,
+    });
     expect(profile.achievements).toEqual([]);
   });
 
