@@ -7,6 +7,7 @@ import {
   loadRunHistory,
   savePlayerProfile,
   saveRunHistory,
+  RUN_HISTORY_STORAGE_KEY,
 } from '../lib/persistence';
 
 const LEGACY_SANCTIONS_KEY = 'courtgame.sanctions.state';
@@ -32,7 +33,7 @@ describe('persistence helpers', () => {
 
   it('builds default run history metadata', () => {
     const history = defaultRunHistory();
-    expect(history.schemaVersion).toBe(1);
+    expect(history.schemaVersion).toBe(2);
     expect(history.createdAt).toBeTruthy();
     expect(history.updatedAt).toBeTruthy();
     expect(history.runs).toEqual([]);
@@ -60,6 +61,21 @@ describe('persistence helpers', () => {
     const saved = saveRunHistory({ runs: [{ id: 'run-1' }] });
     const loaded = loadRunHistory();
     expect(loaded).toMatchObject(saved);
+  });
+
+  it('migrates v1 run history to the latest schema', () => {
+    const legacyHistory = {
+      schemaVersion: 1,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      runs: [{ id: 'run-legacy' }],
+    };
+    window.localStorage.setItem(RUN_HISTORY_STORAGE_KEY, JSON.stringify(legacyHistory));
+
+    const loaded = loadRunHistory();
+
+    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.runs[0]).toMatchObject({ id: 'run-legacy', sanctionDelta: null });
   });
 
   it('migrates legacy sanctions into the profile when v1 is absent', () => {

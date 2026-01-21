@@ -245,6 +245,14 @@
  */
 
 /**
+ * Snapshot delta for sanctions state across a single run.
+ *
+ * @typedef {object} SanctionsDelta
+ * @property {PlayerSanctionsState | null} before - Sanctions snapshot at run start.
+ * @property {PlayerSanctionsState | null} after - Sanctions snapshot at run end.
+ */
+
+/**
  * Persisted public defender status snapshot.
  *
  * @typedef {object} PublicDefenderStatus
@@ -291,7 +299,7 @@
  */
 
 /**
- * Persisted run history entry (v1 schema).
+ * Persisted run history entry (v2 schema).
  *
  * @typedef {object} RunHistoryEntry
  * @property {string} id - Unique run identifier.
@@ -306,6 +314,7 @@
  * @property {string | null} outcome - Final outcome type when available.
  * @property {number | null} score - Final weighted score when a verdict is reached.
  * @property {string | null} achievementId - Achievement identifier when awarded.
+ * @property {SanctionsDelta | null} sanctionDelta - Sanctions snapshot delta for the run.
  */
 
 /**
