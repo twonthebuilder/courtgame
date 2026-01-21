@@ -273,6 +273,7 @@
  * @typedef {object} PlayerStats
  * @property {number} runsCompleted - Total completed runs.
  * @property {number} verdictsFinalized - Total finalized verdicts.
+ * @property {number} sanctionsIncurred - Total sanctions incurred across runs.
  */
 
 /**

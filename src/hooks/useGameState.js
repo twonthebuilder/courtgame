@@ -181,6 +181,7 @@ const updatePlayerProfile = (updater) => {
 const buildDefaultStats = () => ({
   runsCompleted: 0,
   verdictsFinalized: 0,
+  sanctionsIncurred: 0,
 });
 
 const persistSanctionsState = (state) => {
@@ -190,6 +191,27 @@ const persistSanctionsState = (state) => {
     pdStatus: buildPdStatusSnapshot(state),
     reinstatement: buildReinstatementSnapshot(state),
   }));
+};
+
+const buildSanctionEntryKey = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  if (entry.id) return `id:${entry.id}`;
+  if (entry.timestamp) return `timestamp:${entry.timestamp}`;
+  return null;
+};
+
+const countNewSanctionEntries = (sanctionsLog, countedEntries) => {
+  if (!Array.isArray(sanctionsLog)) return 0;
+  let total = 0;
+  sanctionsLog.forEach((entry) => {
+    const key = buildSanctionEntryKey(entry);
+    if (!key || countedEntries.has(key)) return;
+    countedEntries.add(key);
+    if (evaluateConductTrigger(entry, sanctionsLog, RECIDIVISM_WINDOW_MS).triggered) {
+      total += 1;
+    }
+  });
+  return total;
 };
 
 const isJudicialAcknowledgment = (entry) =>
@@ -925,6 +947,7 @@ const useGameState = (options = {}) => {
   const [debugBanner, setDebugBanner] = useState(null);
   const debugBannerTimeoutRef = useRef(null);
   const runStartSanctionsRef = useRef(null);
+  const countedSanctionsRef = useRef(new Set());
   const [sanctionsState, setSanctionsState] = useState(() => {
     const storedState = loadPlayerProfile()?.sanctions ?? null;
     return normalizeSanctionsState(
@@ -938,6 +961,26 @@ const useGameState = (options = {}) => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
+  }, [history.sanctions]);
+
+  useEffect(() => {
+    const sanctionsLog = history.sanctions ?? [];
+    const newSanctionsCount = countNewSanctionEntries(
+      sanctionsLog,
+      countedSanctionsRef.current
+    );
+    if (newSanctionsCount > 0) {
+      updatePlayerProfile((profile) => {
+        const stats = profile.stats ?? buildDefaultStats();
+        return {
+          ...profile,
+          stats: {
+            ...stats,
+            sanctionsIncurred: (stats.sanctionsIncurred ?? 0) + newSanctionsCount,
+          },
+        };
+      });
+    }
   }, [history.sanctions]);
 
   const emitShellEvent = useCallback(
@@ -991,6 +1034,7 @@ const useGameState = (options = {}) => {
         stats: {
           runsCompleted: stats.runsCompleted + 1,
           verdictsFinalized: stats.verdictsFinalized + (hasVerdict ? 1 : 0),
+          sanctionsIncurred: stats.sanctionsIncurred ?? 0,
         },
       };
     });
@@ -1077,6 +1121,7 @@ const useGameState = (options = {}) => {
     setDebugBanner(null);
     setRunOutcome(null);
     runStartSanctionsRef.current = null;
+    countedSanctionsRef.current = new Set();
     if (debugBannerTimeoutRef.current) {
       window.clearTimeout(debugBannerTimeoutRef.current);
       debugBannerTimeoutRef.current = null;
@@ -2140,6 +2185,7 @@ export default useGameState;
 export const __testables = {
   SANCTION_STATES,
   buildDefaultSanctionsState,
+  countNewSanctionEntries,
   deriveSanctionsState,
   evaluateConductTrigger,
   RECIDIVISM_WINDOW_MS,

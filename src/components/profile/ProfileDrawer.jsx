@@ -3,12 +3,15 @@ import { UserCircle, X } from 'lucide-react';
 import { buildBarStatus } from '../../lib/barStatus';
 import { loadRunHistory } from '../../lib/persistence';
 
-const formatOutcomeLabel = (outcome) => {
-  if (!outcome) return 'Outcome unavailable';
-  return outcome
+const formatTokenLabel = (token) => {
+  if (!token) return null;
+  return String(token)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 };
+
+const formatOutcomeLabel = (outcome) => formatTokenLabel(outcome) ?? 'Outcome unavailable';
 
 const formatTimestamp = (timestamp) => {
   if (!timestamp) return null;
@@ -34,7 +37,11 @@ const ProfileDrawer = ({ profile }) => {
     }),
     [profile]
   );
-  const stats = profile?.stats ?? { runsCompleted: 0, verdictsFinalized: 0 };
+  const stats = profile?.stats ?? {
+    runsCompleted: 0,
+    verdictsFinalized: 0,
+    sanctionsIncurred: 0,
+  };
   const achievementsCount = profile?.achievements?.length ?? 0;
 
   const closeDrawer = useCallback(() => setIsOpen(false), []);
@@ -44,6 +51,17 @@ const ProfileDrawer = ({ profile }) => {
     const history = loadRunHistory();
     return getLastCompletedRun(history?.runs ?? []);
   }, [isOpen]);
+  const lastRunSummary = useMemo(() => {
+    if (!lastRun?.sanctionDelta) return null;
+    const before = lastRun.sanctionDelta.before
+      ? buildBarStatus({ sanctions: lastRun.sanctionDelta.before }).label
+      : null;
+    const after = lastRun.sanctionDelta.after
+      ? buildBarStatus({ sanctions: lastRun.sanctionDelta.after }).label
+      : null;
+    if (!before && !after) return null;
+    return `${before ?? 'No record'} → ${after ?? 'No record'}`;
+  }, [lastRun]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -158,6 +176,33 @@ const ProfileDrawer = ({ profile }) => {
                       </div>
                       {lastRun.caseTitle && (
                         <p className="text-xs text-slate-500">Case: {lastRun.caseTitle}</p>
+                      )}
+                      {lastRun.judgeName && (
+                        <p className="text-xs text-slate-500">Judge: {lastRun.judgeName}</p>
+                      )}
+                      {(lastRun.playerRole ||
+                        lastRun.jurisdiction ||
+                        lastRun.courtType ||
+                        lastRun.difficulty) && (
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+                          {lastRun.playerRole && (
+                            <span>Role: {formatTokenLabel(lastRun.playerRole)}</span>
+                          )}
+                          {lastRun.difficulty && (
+                            <span>Difficulty: {formatTokenLabel(lastRun.difficulty)}</span>
+                          )}
+                          {lastRun.jurisdiction && (
+                            <span>Jurisdiction: {formatTokenLabel(lastRun.jurisdiction)}</span>
+                          )}
+                          {lastRun.courtType && (
+                            <span>Court: {formatTokenLabel(lastRun.courtType)}</span>
+                          )}
+                        </div>
+                      )}
+                      {lastRunSummary && (
+                        <p className="text-xs text-slate-500">
+                          Sanctions: {lastRunSummary}
+                        </p>
                       )}
                       <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-slate-500">
                         {typeof lastRun.score === 'number' && (

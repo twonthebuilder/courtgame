@@ -829,7 +829,11 @@ describe('useGameState transitions', () => {
     const profile = loadPlayerProfile();
     const runHistory = loadRunHistory();
 
-    expect(profile.stats).toEqual({ runsCompleted: 1, verdictsFinalized: 1 });
+    expect(profile.stats).toEqual({
+      runsCompleted: 1,
+      verdictsFinalized: 1,
+      sanctionsIncurred: 0,
+    });
     expect(profile.achievements[0]).toMatchObject({
       title: 'Order of Operations',
     });
@@ -886,7 +890,11 @@ describe('useGameState transitions', () => {
     const profile = loadPlayerProfile();
     const runHistory = loadRunHistory();
 
-    expect(profile.stats).toEqual({ runsCompleted: 1, verdictsFinalized: 0 });
+    expect(profile.stats).toEqual({
+      runsCompleted: 1,
+      verdictsFinalized: 0,
+      sanctionsIncurred: 0,
+    });
     expect(runHistory.runs).toHaveLength(1);
     expect(runHistory.runs[0]).toMatchObject({
       jurisdiction: JURISDICTIONS.USA,
@@ -1984,6 +1992,22 @@ describe('useGameState transitions', () => {
     );
 
     expect(evaluation.triggered).toBe(false);
+  });
+
+  it('counts newly-triggered sanctions once when entries are added', () => {
+    const warnedEntry = buildSanctionsEntry({
+      id: 's-4',
+      docketText: 'The court issues a warning for decorum.',
+    });
+    const nonTriggerEntry = buildSanctionsEntry({
+      id: 's-5',
+      docketText: 'Losing on the merits is not misconduct.',
+    });
+    const counted = new Set();
+
+    expect(__testables.countNewSanctionEntries([warnedEntry], counted)).toBe(1);
+    expect(__testables.countNewSanctionEntries([warnedEntry], counted)).toBe(0);
+    expect(__testables.countNewSanctionEntries([warnedEntry, nonTriggerEntry], counted)).toBe(0);
   });
 
   it('escalates to public defender mode after repeated procedural violations', () => {
