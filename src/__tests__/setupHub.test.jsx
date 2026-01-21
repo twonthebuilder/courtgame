@@ -2,7 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import SetupHub from '../components/shell/SetupHub';
-import { SANCTION_STATES } from '../lib/constants';
+import { COURT_TYPES, SANCTION_STATES } from '../lib/constants';
 
 globalThis.React = React;
 
@@ -79,6 +79,73 @@ describe('SetupHub', () => {
     expect(screen.getByText(/Start blocked by bar status/i)).toBeInTheDocument();
     expect(screen.getByText(/Reinstatement grace ends/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /defense/i })).toBeDisabled();
+
+    vi.useRealTimers();
+  });
+
+  it('blocks start while disbarred and disables role buttons', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
+    const onStart = vi.fn();
+
+    render(
+      <SetupHub
+        onStart={onStart}
+        error={null}
+        profile={{
+          sanctions: { state: SANCTION_STATES.PUBLIC_DEFENDER, level: 4 },
+          pdStatus: {
+            startedAt: '2024-01-01T00:00:00.000Z',
+            expiresAt: '2024-01-01T00:15:00.000Z',
+          },
+        }}
+        isInitializing={false}
+        initializingRole={null}
+      />
+    );
+
+    expect(screen.getByText(/Start blocked by bar status/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /prosecution/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /public defender/i })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /public defender/i }));
+    expect(onStart).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it('forces public defender role and court type during PD assignment', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
+    const onStart = vi.fn();
+
+    render(
+      <SetupHub
+        onStart={onStart}
+        error={null}
+        profile={{
+          sanctions: { state: SANCTION_STATES.CLEAN, level: 0 },
+          pdStatus: {
+            startedAt: '2024-01-01T00:00:00.000Z',
+            expiresAt: '2024-01-01T00:30:00.000Z',
+          },
+        }}
+        isInitializing={false}
+        initializingRole={null}
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /prosecution/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /public defender/i })).toBeEnabled();
+
+    fireEvent.click(screen.getByRole('button', { name: /public defender/i }));
+
+    expect(onStart).toHaveBeenCalledWith(
+      'defense',
+      expect.any(String),
+      expect.any(String),
+      COURT_TYPES.NIGHT_COURT
+    );
 
     vi.useRealTimers();
   });

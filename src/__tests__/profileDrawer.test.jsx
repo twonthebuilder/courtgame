@@ -57,4 +57,32 @@ describe('ProfileDrawer', () => {
     expect(screen.getByText(/Jurisdiction: USA/i)).toBeInTheDocument();
     expect(screen.getByText(/Court: Night Court/i)).toBeInTheDocument();
   });
+
+  it('opens and closes the drawer with mobile-safe layout', () => {
+    window.innerWidth = 360;
+    window.dispatchEvent(new Event('resize'));
+
+    render(
+      <ProfileDrawer
+        profile={{
+          sanctions: { state: SANCTION_STATES.PUBLIC_DEFENDER, level: 2 },
+          pdStatus: {
+            startedAt: '2024-01-01T00:00:00.000Z',
+            expiresAt: '2099-01-01T00:20:00.000Z',
+          },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open profile drawer/i }));
+
+    const dialog = screen.getByRole('dialog', { name: /profile summary/i });
+    expect(dialog).toBeInTheDocument();
+    expect(dialog.className).toContain('w-full');
+    expect(screen.getByText('Bar Status')).toBeInTheDocument();
+    expect(screen.getByText(/Public defender ends/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /close profile drawer/i }));
+    expect(screen.queryByRole('dialog', { name: /profile summary/i })).not.toBeInTheDocument();
+  });
 });
