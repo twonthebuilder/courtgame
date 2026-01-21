@@ -18,7 +18,6 @@ import InitializationScreen from '../screens/InitializationScreen';
  * @param {object} props - Component props.
  * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
- * @param {object | null} props.sanctionsState - Current sanctions state.
  * @param {import('../../lib/types').PlayerProfile | null} props.profile - Persisted player profile snapshot.
  * @param {boolean} props.isInitializing - Whether setup is starting a run.
  * @param {string | null} props.initializingRole - Role to display while initializing.
@@ -27,7 +26,6 @@ import InitializationScreen from '../screens/InitializationScreen';
 const SetupHub = ({
   onStart,
   error,
-  sanctionsState,
   profile,
   isInitializing,
   initializingRole,
@@ -41,22 +39,27 @@ const SetupHub = ({
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
   const startGateRef = useRef(false);
-  const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
   const barStatus = buildBarStatus({
-    sanctions: sanctionsState ?? profile?.sanctions ?? null,
+    sanctions: profile?.sanctions ?? null,
     pdStatus: profile?.pdStatus ?? null,
     reinstatement: profile?.reinstatement ?? null,
   });
-  const hasSanctionsSnapshot = Boolean(sanctionsState ?? profile?.sanctions);
+  const publicDefenderTimer = barStatus.timers.find((timer) => timer.key === 'public_defender');
+  const reinstatementTimer = barStatus.timers.find((timer) => timer.key === 'reinstatement');
+  const isPublicDefenderMode = Boolean(publicDefenderTimer);
+  const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
+  const hasSanctionsSnapshot = Boolean(profile?.sanctions);
   const sanctionsLabel = hasSanctionsSnapshot
     ? `Tier ${barStatus.level ?? 'unknown'} — ${barStatus.label}`
     : 'Tier unknown';
-  const pdActive =
-    Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const disbarred = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const prosecutionDisabled = isPublicDefenderMode || isInitializing;
-  const defenseDisabled = isInitializing;
+  const pdActive = isPublicDefenderMode;
+  const disbarred = barStatus.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const reinstatementRequired =
+    barStatus.state === SANCTION_STATES.RECENTLY_REINSTATED || Boolean(reinstatementTimer);
+  const startBlocked = disbarred || reinstatementRequired;
+  const blockTimer = disbarred ? publicDefenderTimer : reinstatementTimer;
+  const prosecutionDisabled = isPublicDefenderMode || isInitializing || startBlocked;
+  const defenseDisabled = isInitializing || startBlocked;
 
   useEffect(() => {
     persistApiKey(apiKey, rememberKey);
@@ -69,7 +72,7 @@ const SetupHub = ({
   }, [isInitializing]);
 
   const handleStart = (role) => {
-    if (startGateRef.current || isInitializing) return;
+    if (startGateRef.current || isInitializing || startBlocked) return;
     startGateRef.current = true;
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
     if (debugEnabled()) {
@@ -124,6 +127,26 @@ const SetupHub = ({
             </div>
           )}
         </div>
+        {isPublicDefenderMode && !startBlocked && (
+          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700">
+            Public defender assignment active. Role selection is locked to defense.
+          </div>
+        )}
+        {startBlocked && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+            <p className="font-semibold">Start blocked by bar status.</p>
+            <p className="mt-1 text-amber-700/90">
+              {disbarred
+                ? 'Your license is suspended pending public defender assignment completion.'
+                : 'Your reinstatement grace period is still active.'}
+            </p>
+            <p className="mt-1 text-amber-700/90">
+              {blockTimer
+                ? `${blockTimer.label}: ${blockTimer.remainingLabel} remaining.`
+                : 'Eligibility timer unavailable.'}
+            </p>
+          </div>
+        )}
       </div>
       <div className="w-full max-w-md mb-8 space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
