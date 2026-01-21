@@ -349,6 +349,10 @@ describe('useGameState transitions', () => {
       outcome: null,
       score: null,
       achievementId: null,
+      sanctionDelta: {
+        before: expect.any(Object),
+        after: null,
+      },
     });
 
     await act(async () => {
@@ -839,6 +843,10 @@ describe('useGameState transitions', () => {
       outcome: 'not_guilty',
       score: 99,
       achievementId: 'Order of Operations',
+      sanctionDelta: {
+        before: expect.any(Object),
+        after: expect.any(Object),
+      },
     });
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
@@ -889,6 +897,10 @@ describe('useGameState transitions', () => {
       outcome: 'dismissed_with_prejudice',
       score: null,
       achievementId: null,
+      sanctionDelta: {
+        before: expect.any(Object),
+        after: expect.any(Object),
+      },
     });
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });

@@ -76,8 +76,32 @@ const normalizeProfile = (profile) => {
   return profile;
 };
 
+const migrateRunHistory = (history) => {
+  if (!history || typeof history !== 'object') return null;
+  if (history.schemaVersion === RUN_HISTORY_SCHEMA_VERSION) return history;
+  if (history.schemaVersion === 1 && RUN_HISTORY_SCHEMA_VERSION === 2) {
+    const timestamp = nowIso();
+    return {
+      ...history,
+      schemaVersion: RUN_HISTORY_SCHEMA_VERSION,
+      createdAt: history.createdAt ?? timestamp,
+      updatedAt: timestamp,
+      runs: (history.runs ?? []).map((run) => ({
+        ...run,
+        sanctionDelta: run?.sanctionDelta ?? null,
+      })),
+    };
+  }
+  return null;
+};
+
 const normalizeRunHistory = (history) => {
   if (history?.schemaVersion !== RUN_HISTORY_SCHEMA_VERSION) {
+    const migrated = migrateRunHistory(history);
+    if (migrated) {
+      saveStoredObject(RUN_HISTORY_STORAGE_KEY, migrated);
+      return migrated;
+    }
     console.warn('Stored run history schema mismatch. Resetting to defaults.');
     const reset = defaultRunHistory();
     saveStoredObject(RUN_HISTORY_STORAGE_KEY, reset);

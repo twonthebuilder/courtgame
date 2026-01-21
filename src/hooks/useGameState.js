@@ -303,6 +303,10 @@ const buildSanctionsState = (state, nowMs, overrides = {}) => {
 };
 
 const cloneSanctionsSnapshot = (state) => (state ? { ...state } : null);
+const buildSanctionsDelta = (before, after) => ({
+  before: cloneSanctionsSnapshot(before),
+  after: cloneSanctionsSnapshot(after),
+});
 
 const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
   const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
@@ -1005,6 +1009,9 @@ const useGameState = (options = {}) => {
     if (!runMeta || runMeta.endedAt) return;
     const endedAt = new Date().toISOString();
     const runId = runMeta.id ?? createRunId();
+    const sanctionsBefore =
+      runStartSanctionsRef.current ?? cloneSanctionsSnapshot(sanctionsState);
+    const sanctionDelta = buildSanctionsDelta(sanctionsBefore, sanctionsState);
     const baseEntry = {
       id: runId,
       startedAt: runMeta.startedAt ?? endedAt,
@@ -1022,6 +1029,7 @@ const useGameState = (options = {}) => {
       score:
         typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
       achievementId: achievementId ?? null,
+      sanctionDelta,
     };
     const historySnapshot = loadRunHistory();
     const runs = historySnapshot.runs ?? [];
@@ -1218,6 +1226,7 @@ const useGameState = (options = {}) => {
         outcome: null,
         score: null,
         achievementId: null,
+        sanctionDelta: buildSanctionsDelta(runStartSanctionsRef.current, null),
       });
       setRunMeta({
         id: runId,

@@ -40,7 +40,7 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 - `createdAt`, `updatedAt`: ISO timestamps for history lifecycle.
 - `runs`: array of run entries including `id`, `startedAt`, `endedAt`, `jurisdiction`,
   `difficulty`, `playerRole`, `caseTitle`, `judgeName`, `outcome`, `score`, and
-  `achievementId`.
+  `achievementId`, plus `sanctionDelta` snapshots (`before`/`after`) for each run.
 
 ### Schema Versioning, Migration, and Reset Rules
 
