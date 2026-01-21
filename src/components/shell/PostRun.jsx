@@ -1,16 +1,7 @@
 import React from 'react';
 import { Home, RefreshCw } from 'lucide-react';
+import { buildBarStatus } from '../../lib/barStatus';
 import { SANCTION_STATES } from '../../lib/constants';
-
-const SANCTIONS_LABELS = Object.freeze({
-  [SANCTION_STATES.CLEAN]: 'Clean Record',
-  [SANCTION_STATES.WARNED]: 'Warning Issued',
-  [SANCTION_STATES.SANCTIONED]: 'Sanctioned',
-  [SANCTION_STATES.PUBLIC_DEFENDER]: 'Public Defender Assignment',
-  [SANCTION_STATES.RECENTLY_REINSTATED]: 'Reinstated (Grace Period)',
-});
-
-const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
 
 const buildSnapshotRows = (snapshot, profile) => {
   if (!snapshot) {
@@ -22,11 +13,18 @@ const buildSnapshotRows = (snapshot, profile) => {
 
   const pdActive =
     Boolean(profile?.pdStatus) || snapshot.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const barStatus = buildBarStatus({
+    sanctions: snapshot,
+    pdStatus: profile?.pdStatus ?? null,
+    reinstatement: profile?.reinstatement ?? null,
+  });
+  const tierLabel =
+    barStatus.level !== null ? `Tier ${barStatus.level} — ${barStatus.label}` : 'Tier unknown';
 
   return [
     {
       label: 'Sanctions tier',
-      value: `Tier ${snapshot.level} — ${formatSanctionsLabel(snapshot.state)}`,
+      value: tierLabel,
     },
     {
       label: 'Public Defender',
@@ -37,15 +35,18 @@ const buildSnapshotRows = (snapshot, profile) => {
 
 const buildStatusItems = (before, after) => {
   const items = [];
+  const beforeLabel = before ? buildBarStatus({ sanctions: before }).label : null;
+  const afterLabel = after ? buildBarStatus({ sanctions: after }).label : null;
+
   if (before && after) {
     if (before.state !== after.state || before.level !== after.level) {
       items.push(
-        `Sanctions updated: ${formatSanctionsLabel(before.state)} → ${formatSanctionsLabel(after.state)} (Level ${before.level} → ${after.level}).`
+        `Sanctions updated: ${beforeLabel} → ${afterLabel} (Level ${before.level} → ${after.level}).`
       );
     }
   } else if (after) {
     items.push(
-      `Sanctions status: ${formatSanctionsLabel(after.state)} (Level ${after.level}).`
+      `Sanctions status: ${afterLabel} (Level ${after.level}).`
     );
   }
 

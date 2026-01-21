@@ -6,20 +6,11 @@ import {
   DIFFICULTY_OPTIONS,
   JURISDICTION_OPTIONS,
 } from '../../lib/config';
+import { buildBarStatus } from '../../lib/barStatus';
 import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 import InitializationScreen from '../screens/InitializationScreen';
-
-const SANCTIONS_LABELS = Object.freeze({
-  [SANCTION_STATES.CLEAN]: 'Clean Record',
-  [SANCTION_STATES.WARNED]: 'Warning Issued',
-  [SANCTION_STATES.SANCTIONED]: 'Sanctioned',
-  [SANCTION_STATES.PUBLIC_DEFENDER]: 'Public Defender Assignment',
-  [SANCTION_STATES.RECENTLY_REINSTATED]: 'Reinstated (Grace Period)',
-});
-
-const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
 
 /**
  * Setup hub for selecting a game mode, jurisdiction, and side.
@@ -52,8 +43,14 @@ const SetupHub = ({
   const startGateRef = useRef(false);
   const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
-  const sanctionsLabel = sanctionsState
-    ? `Tier ${sanctionsState.level} — ${formatSanctionsLabel(sanctionsState.state)}`
+  const barStatus = buildBarStatus({
+    sanctions: sanctionsState ?? profile?.sanctions ?? null,
+    pdStatus: profile?.pdStatus ?? null,
+    reinstatement: profile?.reinstatement ?? null,
+  });
+  const hasSanctionsSnapshot = Boolean(sanctionsState ?? profile?.sanctions);
+  const sanctionsLabel = hasSanctionsSnapshot
+    ? `Tier ${barStatus.level ?? 'unknown'} — ${barStatus.label}`
     : 'Tier unknown';
   const pdActive =
     Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
