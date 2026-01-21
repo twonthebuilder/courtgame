@@ -10,6 +10,7 @@ import { buildBarStatus } from '../../lib/barStatus';
 import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
+import ProfileDrawer from '../profile/ProfileDrawer';
 import InitializationScreen from '../screens/InitializationScreen';
 
 /**
@@ -290,6 +291,7 @@ const SetupHub = ({
           <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
       </div>
+      <ProfileDrawer profile={profile} />
     </div>
   );
 };
