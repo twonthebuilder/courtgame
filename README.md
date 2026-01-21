@@ -129,25 +129,22 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 
 > **Note for future developers:** keep this roadmap updated with every shipped change or merge so it always reflects current gameplay and docs.
 
-### **v15 (Current - GitHub Launch)**
+### **v16 (Current - `main` build)**
 - ✅ Living docket architecture
 - ✅ Jury strike mechanics with strike provenance (player/opponent status shown in the pool)
 - ✅ Pre-trial motion practice
 - ✅ Bench trials skip jury selection when applicable
 - ✅ Multi-phase scoring philosophy (pre-trial 20%, judge 45%, jury 35%; overflow reason codes)
 - ✅ Legendary achievements (100+ scores)
-
-### **v16 (Planned)**
-_Keep the items below scoped to v16 until they are verified end-to-end in the full run flow._
-- [ ] Granular motion rulings (✅/❌ breakdown with reasoning)
-- [ ] Markdown rendering in arguments (proper formatting)
-- [ ] Mobile optimization (responsive docket)
+- ✅ Markdown rendering in arguments (proper formatting)
+- ✅ Mobile optimization (responsive docket)
 
 ### **v17 (Future)**
 - [ ] Appeals system (argue that trial judge made legal error)
 - [ ] Case history browser (see all past cases, win/loss records)
 - [ ] Custom case creator (write your own dockets)
 - [ ] More judge archetypes (20+ philosophies)
+- [ ] Granular motion rulings (✅/❌ breakdown with reasoning)
 
 ---
 
