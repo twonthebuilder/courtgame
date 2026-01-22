@@ -27,7 +27,7 @@ describe('SetupHub', () => {
       />
     );
 
-    expect(screen.getByText('Status Summary')).toBeInTheDocument();
+    expect(screen.getByText('Profile')).toBeInTheDocument();
     expect(screen.getByText(/Tier 3/i)).toBeInTheDocument();
     expect(screen.getByText('Public Defender')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();

@@ -27,8 +27,16 @@ const getLastCompletedRun = (runs = []) => {
   return null;
 };
 
-const ProfileDrawer = ({ profile }) => {
-  const [isOpen, setIsOpen] = useState(false);
+const ProfileDrawer = ({
+  profile,
+  isOpen: isOpenProp,
+  onOpen,
+  onClose,
+  showTrigger = true,
+}) => {
+  const [isOpenInternal, setIsOpenInternal] = useState(false);
+  const isControlled = typeof isOpenProp === 'boolean';
+  const isOpen = isControlled ? isOpenProp : isOpenInternal;
   const barStatus = useMemo(
     () => buildBarStatus({
       sanctions: profile?.sanctions ?? null,
@@ -44,7 +52,23 @@ const ProfileDrawer = ({ profile }) => {
   };
   const achievementsCount = profile?.achievements?.length ?? 0;
 
-  const closeDrawer = useCallback(() => setIsOpen(false), []);
+  const openDrawer = useCallback(() => {
+    if (!isControlled) {
+      setIsOpenInternal(true);
+    }
+    if (onOpen) {
+      onOpen();
+    }
+  }, [isControlled, onOpen]);
+
+  const closeDrawer = useCallback(() => {
+    if (!isControlled) {
+      setIsOpenInternal(false);
+    }
+    if (onClose) {
+      onClose();
+    }
+  }, [isControlled, onClose]);
 
   const lastRun = useMemo(() => {
     if (!isOpen) return null;
@@ -74,15 +98,17 @@ const ProfileDrawer = ({ profile }) => {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 z-[80] inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-md transition hover:border-slate-300 hover:text-slate-800"
-        aria-label="Open profile drawer"
-      >
-        <UserCircle className="h-4 w-4" />
-        Profile
-      </button>
+      {showTrigger && (
+        <button
+          type="button"
+          onClick={openDrawer}
+          className="fixed bottom-4 right-4 z-[80] inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 shadow-md transition hover:border-slate-300 hover:text-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+          aria-label="Open profile drawer"
+        >
+          <UserCircle className="h-4 w-4" />
+          Profile
+        </button>
+      )}
       {isOpen && (
         <div
           className="fixed inset-0 z-[95] overflow-y-auto bg-slate-900/40 backdrop-blur-sm"

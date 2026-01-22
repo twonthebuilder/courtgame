@@ -39,6 +39,7 @@ const SetupHub = ({
   const [apiKey, setApiKey] = useState(storedApiKey ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const startGateRef = useRef(false);
   const barStatus = buildBarStatus({
     sanctions: profile?.sanctions ?? null,
@@ -108,10 +109,18 @@ const SetupHub = ({
           </p>
         </div>
       )}
-      <div className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          Status Summary
-        </p>
+      <button
+        type="button"
+        onClick={() => setIsProfileOpen(true)}
+        className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm transition hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+        aria-label="Open profile details"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Profile</p>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-500">
+            View details
+          </span>
+        </div>
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <span className="font-semibold text-slate-500">Sanctions tier</span>
@@ -148,7 +157,7 @@ const SetupHub = ({
             </p>
           </div>
         )}
-      </div>
+      </button>
       <div className="w-full max-w-md mb-8 space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
           <div>
@@ -291,7 +300,12 @@ const SetupHub = ({
           <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
       </div>
-      <ProfileDrawer profile={profile} />
+      <ProfileDrawer
+        profile={profile}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        showTrigger={false}
+      />
     </div>
   );
 };
