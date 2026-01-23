@@ -247,7 +247,7 @@ const RunShell = ({
           <button
             type="button"
             onClick={handleReset}
-            className="text-xs font-bold uppercase tracking-widest bg-slate-800 text-amber-100 hover:text-amber-50 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
+            className="text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
           >
             Main Menu
           </button>
