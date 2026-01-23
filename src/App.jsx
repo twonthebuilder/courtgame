@@ -79,6 +79,7 @@ const RunShell = ({
   const disableStickyHeader = layoutDebugLevel === 3;
   const debugLogsEnabled = debugEnabled();
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const scrollRef = useRef(null);
   const didStartRef = useRef(false);
   const startPayloadRef = useRef(startPayload);
@@ -246,11 +247,18 @@ const RunShell = ({
           <button
             type="button"
             onClick={handleReset}
-            className="text-xs font-bold uppercase tracking-widest text-amber-200 hover:text-amber-100 transition-colors"
+            className="text-xs font-bold uppercase tracking-widest bg-slate-800 text-amber-100 hover:text-amber-50 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
           >
             Main Menu
           </button>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(true)}
+              className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
+            >
+              PROFILE
+            </button>
             <button
               onClick={() => handleCopyFull(docketNumber)}
               className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
@@ -478,7 +486,12 @@ const RunShell = ({
         )}
       </main>
       <DebugToast message={debugBanner} />
-      <ProfileDrawer profile={profile} />
+      <ProfileDrawer
+        profile={profile}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        showTrigger={false}
+      />
     </div>
   );
 
