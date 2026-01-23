@@ -77,9 +77,9 @@ export const COURT_TYPE_OPTIONS = [
  * @type {{value: string, label: string}[]}
  */
 export const JURISDICTION_OPTIONS = [
-  { value: JURISDICTIONS.USA, label: 'USA' },
-  { value: JURISDICTIONS.CANADA, label: 'Canada' },
   { value: JURISDICTIONS.FICTIONAL, label: 'Fictional' },
+  { value: JURISDICTIONS.CANADA, label: 'Canada' },
+  { value: JURISDICTIONS.USA, label: 'USA' },
 ];
 
 /**
@@ -98,9 +98,9 @@ export const CASE_TYPE_OPTIONS = [
  * @type {{difficulty: string, jurisdiction: string, courtType: string, role: string, caseType: string}}
  */
 export const DEFAULT_GAME_CONFIG = {
-  difficulty: DEFAULT_DIFFICULTY,
-  jurisdiction: JURISDICTIONS.USA,
-  courtType: COURT_TYPES.STANDARD,
+  difficulty: 'silly',
+  jurisdiction: JURISDICTIONS.FICTIONAL,
+  courtType: COURT_TYPES.NIGHT_COURT,
   role: 'defense',
   caseType: CASE_TYPES.STANDARD,
 };
