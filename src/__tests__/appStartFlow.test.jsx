@@ -153,7 +153,7 @@ describe('App run start flow', () => {
       });
     });
 
-    expect(await screen.findByText('Status Summary')).toBeInTheDocument();
+    expect(await screen.findByText('Profile')).toBeInTheDocument();
     expect(screen.queryByText('COPY DOCKET')).not.toBeInTheDocument();
     expect(gameStateTestables.generateCase).toHaveBeenCalledTimes(1);
   });

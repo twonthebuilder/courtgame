@@ -181,6 +181,7 @@ const updatePlayerProfile = (updater) => {
 const buildDefaultStats = () => ({
   runsCompleted: 0,
   verdictsFinalized: 0,
+  sanctionsIncurred: 0,
 });
 
 const persistSanctionsState = (state) => {
@@ -190,6 +191,27 @@ const persistSanctionsState = (state) => {
     pdStatus: buildPdStatusSnapshot(state),
     reinstatement: buildReinstatementSnapshot(state),
   }));
+};
+
+const buildSanctionEntryKey = (entry) => {
+  if (!entry || typeof entry !== 'object') return null;
+  if (entry.id) return `id:${entry.id}`;
+  if (entry.timestamp) return `timestamp:${entry.timestamp}`;
+  return null;
+};
+
+const countNewSanctionEntries = (sanctionsLog, countedEntries) => {
+  if (!Array.isArray(sanctionsLog)) return 0;
+  let total = 0;
+  sanctionsLog.forEach((entry) => {
+    const key = buildSanctionEntryKey(entry);
+    if (!key || countedEntries.has(key)) return;
+    countedEntries.add(key);
+    if (evaluateConductTrigger(entry, sanctionsLog, RECIDIVISM_WINDOW_MS).triggered) {
+      total += 1;
+    }
+  });
+  return total;
 };
 
 const isJudicialAcknowledgment = (entry) =>
@@ -303,6 +325,10 @@ const buildSanctionsState = (state, nowMs, overrides = {}) => {
 };
 
 const cloneSanctionsSnapshot = (state) => (state ? { ...state } : null);
+const buildSanctionsDelta = (before, after) => ({
+  before: cloneSanctionsSnapshot(before),
+  after: cloneSanctionsSnapshot(after),
+});
 
 const buildVisibilityContext = (sanctionsState, nowMs = Date.now()) => {
   const reinstatedUntilMs = toTimestampMs(sanctionsState?.recentlyReinstatedUntil);
@@ -921,6 +947,7 @@ const useGameState = (options = {}) => {
   const [debugBanner, setDebugBanner] = useState(null);
   const debugBannerTimeoutRef = useRef(null);
   const runStartSanctionsRef = useRef(null);
+  const countedSanctionsRef = useRef(new Set());
   const [sanctionsState, setSanctionsState] = useState(() => {
     const storedState = loadPlayerProfile()?.sanctions ?? null;
     return normalizeSanctionsState(
@@ -934,6 +961,26 @@ const useGameState = (options = {}) => {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSanctionsState((prev) => deriveSanctionsState(prev, history.sanctions ?? []));
+  }, [history.sanctions]);
+
+  useEffect(() => {
+    const sanctionsLog = history.sanctions ?? [];
+    const newSanctionsCount = countNewSanctionEntries(
+      sanctionsLog,
+      countedSanctionsRef.current
+    );
+    if (newSanctionsCount > 0) {
+      updatePlayerProfile((profile) => {
+        const stats = profile.stats ?? buildDefaultStats();
+        return {
+          ...profile,
+          stats: {
+            ...stats,
+            sanctionsIncurred: (stats.sanctionsIncurred ?? 0) + newSanctionsCount,
+          },
+        };
+      });
+    }
   }, [history.sanctions]);
 
   const emitShellEvent = useCallback(
@@ -987,6 +1034,7 @@ const useGameState = (options = {}) => {
         stats: {
           runsCompleted: stats.runsCompleted + 1,
           verdictsFinalized: stats.verdictsFinalized + (hasVerdict ? 1 : 0),
+          sanctionsIncurred: stats.sanctionsIncurred ?? 0,
         },
       };
     });
@@ -1005,6 +1053,9 @@ const useGameState = (options = {}) => {
     if (!runMeta || runMeta.endedAt) return;
     const endedAt = new Date().toISOString();
     const runId = runMeta.id ?? createRunId();
+    const sanctionsBefore =
+      runStartSanctionsRef.current ?? cloneSanctionsSnapshot(sanctionsState);
+    const sanctionDelta = buildSanctionsDelta(sanctionsBefore, sanctionsState);
     const baseEntry = {
       id: runId,
       startedAt: runMeta.startedAt ?? endedAt,
@@ -1022,6 +1073,7 @@ const useGameState = (options = {}) => {
       score:
         typeof verdict?.final_weighted_score === 'number' ? verdict.final_weighted_score : null,
       achievementId: achievementId ?? null,
+      sanctionDelta,
     };
     const historySnapshot = loadRunHistory();
     const runs = historySnapshot.runs ?? [];
@@ -1069,6 +1121,7 @@ const useGameState = (options = {}) => {
     setDebugBanner(null);
     setRunOutcome(null);
     runStartSanctionsRef.current = null;
+    countedSanctionsRef.current = new Set();
     if (debugBannerTimeoutRef.current) {
       window.clearTimeout(debugBannerTimeoutRef.current);
       debugBannerTimeoutRef.current = null;
@@ -1218,6 +1271,7 @@ const useGameState = (options = {}) => {
         outcome: null,
         score: null,
         achievementId: null,
+        sanctionDelta: buildSanctionsDelta(runStartSanctionsRef.current, null),
       });
       setRunMeta({
         id: runId,
@@ -2131,6 +2185,7 @@ export default useGameState;
 export const __testables = {
   SANCTION_STATES,
   buildDefaultSanctionsState,
+  countNewSanctionEntries,
   deriveSanctionsState,
   evaluateConductTrigger,
   RECIDIVISM_WINDOW_MS,

@@ -28,7 +28,8 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 - `sanctions`: snapshot of the current sanctions state (no docket text).
 - `pdStatus`: public defender assignment window (`startedAt`, `expiresAt`) when applicable.
 - `reinstatement`: grace window snapshot (`until`) when applicable.
-- `stats`: aggregated totals (`runsCompleted`, `verdictsFinalized`).
+- Disbarment is not stored as a separate field; UI treats `sanctions.state = public_defender` as disbarred.
+- `stats`: aggregated totals (`runsCompleted`, `verdictsFinalized`, `sanctionsIncurred`).
 - `achievements`: list of awarded achievements with timestamps and optional run linkage.
 
 ### RunHistory (Local Storage)
@@ -39,7 +40,7 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 - `createdAt`, `updatedAt`: ISO timestamps for history lifecycle.
 - `runs`: array of run entries including `id`, `startedAt`, `endedAt`, `jurisdiction`,
   `difficulty`, `playerRole`, `caseTitle`, `judgeName`, `outcome`, `score`, and
-  `achievementId`.
+  `achievementId`, plus `sanctionDelta` snapshots (`before`/`after`) for each run.
 
 ### Schema Versioning, Migration, and Reset Rules
 

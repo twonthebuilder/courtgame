@@ -99,7 +99,7 @@ export const SANCTIONS_TIMERS_MS = Object.freeze({
 export const PROFILE_STORAGE_KEY = 'pocketcourt.profile.v1';
 export const RUN_HISTORY_STORAGE_KEY = 'pocketcourt.runHistory.v1';
 export const PROFILE_SCHEMA_VERSION = 1;
-export const RUN_HISTORY_SCHEMA_VERSION = 1;
+export const RUN_HISTORY_SCHEMA_VERSION = 2;
 
 const isCanonicalValue = (value, values) => values.includes(value);
 

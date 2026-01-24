@@ -235,13 +235,21 @@
  * Persisted sanctions state snapshot for a player profile.
  *
  * @typedef {object} PlayerSanctionsState
- * @property {SanctionsState} state - Canonical sanctions state identifier.
+ * @property {SanctionsState} state - Canonical sanctions state identifier (public_defender implies disbarment in UI).
  * @property {number} level - Numeric sanction level.
  * @property {string} startedAt - ISO timestamp when the current sanctions state began.
  * @property {string | null} expiresAt - ISO timestamp when the current sanctions state expires.
  * @property {string | null} lastMisconductAt - ISO timestamp of the last misconduct entry.
  * @property {number} recidivismCount - Count of recent misconduct events.
  * @property {string | null} recentlyReinstatedUntil - ISO timestamp for the reinstatement grace period.
+ */
+
+/**
+ * Snapshot delta for sanctions state across a single run.
+ *
+ * @typedef {object} SanctionsDelta
+ * @property {PlayerSanctionsState | null} before - Sanctions snapshot at run start.
+ * @property {PlayerSanctionsState | null} after - Sanctions snapshot at run end.
  */
 
 /**
@@ -265,6 +273,7 @@
  * @typedef {object} PlayerStats
  * @property {number} runsCompleted - Total completed runs.
  * @property {number} verdictsFinalized - Total finalized verdicts.
+ * @property {number} sanctionsIncurred - Total sanctions incurred across runs.
  */
 
 /**
@@ -291,7 +300,7 @@
  */
 
 /**
- * Persisted run history entry (v1 schema).
+ * Persisted run history entry (v2 schema).
  *
  * @typedef {object} RunHistoryEntry
  * @property {string} id - Unique run identifier.
@@ -306,6 +315,7 @@
  * @property {string | null} outcome - Final outcome type when available.
  * @property {number | null} score - Final weighted score when a verdict is reached.
  * @property {string | null} achievementId - Achievement identifier when awarded.
+ * @property {SanctionsDelta | null} sanctionDelta - Sanctions snapshot delta for the run.
  */
 
 /**

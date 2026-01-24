@@ -6,20 +6,12 @@ import {
   DIFFICULTY_OPTIONS,
   JURISDICTION_OPTIONS,
 } from '../../lib/config';
+import { buildBarStatus } from '../../lib/barStatus';
 import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
 import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
+import ProfileDrawer from '../profile/ProfileDrawer';
 import InitializationScreen from '../screens/InitializationScreen';
-
-const SANCTIONS_LABELS = Object.freeze({
-  [SANCTION_STATES.CLEAN]: 'Clean Record',
-  [SANCTION_STATES.WARNED]: 'Warning Issued',
-  [SANCTION_STATES.SANCTIONED]: 'Sanctioned',
-  [SANCTION_STATES.PUBLIC_DEFENDER]: 'Public Defender Assignment',
-  [SANCTION_STATES.RECENTLY_REINSTATED]: 'Reinstated (Grace Period)',
-});
-
-const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unknown';
 
 /**
  * Setup hub for selecting a game mode, jurisdiction, and side.
@@ -27,7 +19,6 @@ const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unkno
  * @param {object} props - Component props.
  * @param {(role: string, difficulty: string, jurisdiction: string, courtType: string) => void} props.onStart - Callback to start the game.
  * @param {string | null} props.error - Error message to display when startup fails.
- * @param {object | null} props.sanctionsState - Current sanctions state.
  * @param {import('../../lib/types').PlayerProfile | null} props.profile - Persisted player profile snapshot.
  * @param {boolean} props.isInitializing - Whether setup is starting a run.
  * @param {string | null} props.initializingRole - Role to display while initializing.
@@ -36,7 +27,6 @@ const formatSanctionsLabel = (state) => SANCTIONS_LABELS[state] ?? 'Status Unkno
 const SetupHub = ({
   onStart,
   error,
-  sanctionsState,
   profile,
   isInitializing,
   initializingRole,
@@ -49,17 +39,29 @@ const SetupHub = ({
   const [apiKey, setApiKey] = useState(storedApiKey ?? '');
   const [showApiKey, setShowApiKey] = useState(false);
   const [rememberKey, setRememberKey] = useState(Boolean(storedApiKey));
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const startGateRef = useRef(false);
-  const isPublicDefenderMode = sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const barStatus = buildBarStatus({
+    sanctions: profile?.sanctions ?? null,
+    pdStatus: profile?.pdStatus ?? null,
+    reinstatement: profile?.reinstatement ?? null,
+  });
+  const publicDefenderTimer = barStatus.timers.find((timer) => timer.key === 'public_defender');
+  const reinstatementTimer = barStatus.timers.find((timer) => timer.key === 'reinstatement');
+  const isPublicDefenderMode = Boolean(publicDefenderTimer);
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
-  const sanctionsLabel = sanctionsState
-    ? `Tier ${sanctionsState.level} — ${formatSanctionsLabel(sanctionsState.state)}`
+  const hasSanctionsSnapshot = Boolean(profile?.sanctions);
+  const sanctionsLabel = hasSanctionsSnapshot
+    ? `Tier ${barStatus.level ?? 'unknown'} — ${barStatus.label}`
     : 'Tier unknown';
-  const pdActive =
-    Boolean(profile?.pdStatus) || sanctionsState?.state === SANCTION_STATES.PUBLIC_DEFENDER;
-  const disbarred = Boolean(profile?.sanctions?.disbarred);
-  const prosecutionDisabled = isPublicDefenderMode || isInitializing;
-  const defenseDisabled = isInitializing;
+  const pdActive = isPublicDefenderMode;
+  const disbarred = barStatus.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const reinstatementRequired =
+    barStatus.state === SANCTION_STATES.RECENTLY_REINSTATED || Boolean(reinstatementTimer);
+  const startBlocked = disbarred || reinstatementRequired;
+  const blockTimer = disbarred ? publicDefenderTimer : reinstatementTimer;
+  const prosecutionDisabled = isPublicDefenderMode || isInitializing || startBlocked;
+  const defenseDisabled = isInitializing || startBlocked;
 
   useEffect(() => {
     persistApiKey(apiKey, rememberKey);
@@ -72,7 +74,7 @@ const SetupHub = ({
   }, [isInitializing]);
 
   const handleStart = (role) => {
-    if (startGateRef.current || isInitializing) return;
+    if (startGateRef.current || isInitializing || startBlocked) return;
     startGateRef.current = true;
     const effectiveRole = isPublicDefenderMode ? 'defense' : role;
     if (debugEnabled()) {
@@ -107,10 +109,18 @@ const SetupHub = ({
           </p>
         </div>
       )}
-      <div className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          Status Summary
-        </p>
+      <button
+        type="button"
+        onClick={() => setIsProfileOpen(true)}
+        className="w-full max-w-md mb-8 rounded-xl border border-slate-200 bg-white p-4 text-left text-xs text-slate-600 shadow-sm transition hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2"
+        aria-label="Open profile details"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Profile</p>
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-amber-500">
+            View details
+          </span>
+        </div>
         <div className="mt-3 space-y-2">
           <div className="flex items-center justify-between gap-3">
             <span className="font-semibold text-slate-500">Sanctions tier</span>
@@ -127,7 +137,27 @@ const SetupHub = ({
             </div>
           )}
         </div>
-      </div>
+        {isPublicDefenderMode && !startBlocked && (
+          <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700">
+            Public defender assignment active. Role selection is locked to defense.
+          </div>
+        )}
+        {startBlocked && (
+          <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+            <p className="font-semibold">Start blocked by bar status.</p>
+            <p className="mt-1 text-amber-700/90">
+              {disbarred
+                ? 'Your license is suspended pending public defender assignment completion.'
+                : 'Your reinstatement grace period is still active.'}
+            </p>
+            <p className="mt-1 text-amber-700/90">
+              {blockTimer
+                ? `${blockTimer.label}: ${blockTimer.remainingLabel} remaining.`
+                : 'Eligibility timer unavailable.'}
+            </p>
+          </div>
+        )}
+      </button>
       <div className="w-full max-w-md mb-8 space-y-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
           <div>
@@ -270,6 +300,12 @@ const SetupHub = ({
           <Shield className="w-5 h-5" /> {isPublicDefenderMode ? 'PUBLIC DEFENDER' : 'DEFENSE'}
         </button>
       </div>
+      <ProfileDrawer
+        profile={profile}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        showTrigger={false}
+      />
     </div>
   );
 };

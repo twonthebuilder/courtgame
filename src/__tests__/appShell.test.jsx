@@ -120,7 +120,7 @@ describe('App shell navigation', () => {
     render(<PocketCourt />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Play' }));
-    expect(screen.getByText('Status Summary')).toBeInTheDocument();
+    expect(screen.getByText('Profile')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /defense/i }));
     expect(screen.getByText('COPY DOCKET')).toBeInTheDocument();

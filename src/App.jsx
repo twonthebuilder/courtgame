@@ -17,6 +17,7 @@ import DebugOverlay from './components/DebugOverlay';
 import DebugToast from './components/ui/DebugToast';
 import ErrorBoundary from './components/ui/ErrorBoundary';
 import LoadingView from './components/ui/LoadingView';
+import ProfileDrawer from './components/profile/ProfileDrawer';
 import useGameState, { normalizeSanctionsState } from './hooks/useGameState';
 import { GAME_STATES } from './lib/constants';
 import { debugEnabled } from './lib/debugStore';
@@ -60,6 +61,7 @@ class DebugOverlayErrorBoundary extends Component {
 
 const RunShell = ({
   startPayload,
+  profile,
   onExitToMenu,
   onShellEvent,
   onDebugData,
@@ -77,6 +79,7 @@ const RunShell = ({
   const disableStickyHeader = layoutDebugLevel === 3;
   const debugLogsEnabled = debugEnabled();
   const [docketNumber] = useState(() => Math.floor(Math.random() * 90000) + 10000);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const scrollRef = useRef(null);
   const didStartRef = useRef(false);
   const startPayloadRef = useRef(startPayload);
@@ -244,11 +247,18 @@ const RunShell = ({
           <button
             type="button"
             onClick={handleReset}
-            className="text-xs font-bold uppercase tracking-widest text-amber-200 hover:text-amber-100 transition-colors"
+            className="text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
           >
             Main Menu
           </button>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsProfileOpen(true)}
+              className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
+            >
+              PROFILE
+            </button>
             <button
               onClick={() => handleCopyFull(docketNumber)}
               className="flex items-center gap-2 text-xs font-bold bg-slate-800 hover:bg-slate-700 px-3 py-1 rounded transition-colors border border-slate-700"
@@ -476,6 +486,12 @@ const RunShell = ({
         )}
       </main>
       <DebugToast message={debugBanner} />
+      <ProfileDrawer
+        profile={profile}
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        showTrigger={false}
+      />
     </div>
   );
 
@@ -595,7 +611,6 @@ export default function PocketCourt() {
         <SetupHub
           onStart={handleStart}
           error={setupError}
-          sanctionsState={sanctionsSnapshot}
           profile={profileSnapshot}
           isInitializing={runStartInProgress}
           initializingRole={startPayload?.role ?? null}
@@ -618,6 +633,7 @@ export default function PocketCourt() {
       shellView = (
         <RunShell
           startPayload={startPayload}
+          profile={profileSnapshot}
           onExitToMenu={exitToMenu}
           onShellEvent={handleShellEvent}
           onDebugData={setDebugPayload}
