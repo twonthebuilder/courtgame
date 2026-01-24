@@ -94,7 +94,11 @@ courtgame/
 - [LLM client notes](docs/llm-client.md)
 - [Game state](docs/game-state.md)
 - [App shell & run lifecycle](docs/app-shell.md)
+- [Counsel notes](docs/counsel-notes.md)
 - [Configuration](docs/configuration.md)
+- [Markdown rendering](docs/markdown-rendering.md)
+- [Motion prompt flow](docs/motion-prompts.md)
+- [Sanctions timers](docs/sanctions-timers.md)
 
 ---
 
@@ -129,22 +133,24 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 
 > **Note for future developers:** keep this roadmap updated with every shipped change or merge so it always reflects current gameplay and docs.
 
-### **v16 (Current - `main` build)**
+### **v17 (Current - `main` build)**
 - ✅ Living docket architecture
 - ✅ Jury strike mechanics with strike provenance (player/opponent status shown in the pool)
-- ✅ Pre-trial motion practice
+- ✅ Pre-trial motion exchange with rebuttals and structured rulings
 - ✅ Bench trials skip jury selection when applicable
 - ✅ Multi-phase scoring philosophy (pre-trial 20%, judge 45%, jury 35%; overflow reason codes)
 - ✅ Legendary achievements (100+ scores)
 - ✅ Markdown rendering in arguments (proper formatting)
 - ✅ Mobile optimization (responsive docket)
+- ✅ Counsel notes that update on jury lock, motion rulings, and verdicts
+- ✅ Sanctions system with warnings, suspensions, public defender assignment, and reinstatement timers
+- ✅ Granular motion rulings (issue breakdowns + docket-ready entries + evidence status updates)
 
-### **v17 (Future)**
+### **v18 (Roadmap)**
 - [ ] Appeals system (argue that trial judge made legal error)
 - [ ] Case history browser (see all past cases, win/loss records)
 - [ ] Custom case creator (write your own dockets)
 - [ ] More judge archetypes (20+ philosophies)
-- [ ] Granular motion rulings (✅/❌ breakdown with reasoning)
 
 ---
 
