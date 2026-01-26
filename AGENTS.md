@@ -89,6 +89,7 @@ A task is complete when:
 - Most experimental work occurs on the `moonshots` branch.
 - `main` is the stable branch.
 - Backup branches may exist for recovery purposes.
+- Graduations mark the merge from `moonshots` to `main`
 
 Respect existing branch structure unless instructed otherwise.
 
