@@ -7,7 +7,14 @@ import {
 
 const LEGACY_SANCTIONS_STORAGE_KEY = 'courtgame.sanctions.state';
 
-const hasWindowStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
+const hasWindowStorage = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return Boolean(window.localStorage);
+  } catch {
+    return false;
+  }
+};
 
 const nowIso = () => new Date().toISOString();
 
@@ -26,12 +33,17 @@ const parseStoredJson = (rawValue) => {
 
 const loadStoredObject = (key, label) => {
   if (!hasWindowStorage()) return { value: null, error: null };
-  const rawValue = window.localStorage.getItem(key);
-  const { value, error } = parseStoredJson(rawValue);
-  if (error) {
-    console.warn(`Failed to parse stored ${label}.`, error);
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    const { value, error } = parseStoredJson(rawValue);
+    if (error) {
+      console.warn(`Failed to parse stored ${label}.`, error);
+    }
+    return { value, error };
+  } catch (error) {
+    console.warn(`Failed to read stored ${label}.`, error);
+    return { value: null, error };
   }
-  return { value, error };
 };
 
 const saveStoredObject = (key, payload) => {

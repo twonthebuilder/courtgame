@@ -46,11 +46,16 @@ export const getActiveApiKey = () => runtimeApiKey || getEnvApiKey();
  */
 export const loadStoredApiKey = () => {
   if (typeof window === 'undefined') return '';
-  const storedKey = window.localStorage.getItem(GEMINI_STORAGE_KEY) ?? '';
-  if (storedKey) {
-    runtimeApiKey = storedKey;
+  try {
+    const storedKey = window.localStorage.getItem(GEMINI_STORAGE_KEY) ?? '';
+    if (storedKey) {
+      runtimeApiKey = storedKey;
+    }
+    return storedKey;
+  } catch (error) {
+    console.warn('Failed to read API key from localStorage.', error);
+    return runtimeApiKey;
   }
-  return storedKey;
 };
 
 /**
@@ -65,11 +70,19 @@ export const persistApiKey = (key, remember) => {
   if (typeof window === 'undefined') return;
 
   if (remember && sanitizedKey) {
-    window.localStorage.setItem(GEMINI_STORAGE_KEY, sanitizedKey);
+    try {
+      window.localStorage.setItem(GEMINI_STORAGE_KEY, sanitizedKey);
+    } catch (error) {
+      console.warn('Failed to save API key to localStorage.', error);
+    }
     return;
   }
 
-  window.localStorage.removeItem(GEMINI_STORAGE_KEY);
+  try {
+    window.localStorage.removeItem(GEMINI_STORAGE_KEY);
+  } catch (error) {
+    console.warn('Failed to remove API key from localStorage.', error);
+  }
 };
 
 /**
