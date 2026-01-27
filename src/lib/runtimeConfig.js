@@ -53,7 +53,9 @@ export const loadStoredApiKey = () => {
     }
     return storedKey;
   } catch (error) {
-    console.warn('Failed to read API key from localStorage.', error);
+    if (import.meta.env.DEV) {
+      console.warn('Failed to read API key from localStorage.', error);
+    }
     return runtimeApiKey;
   }
 };
@@ -73,7 +75,10 @@ export const persistApiKey = (key, remember) => {
     try {
       window.localStorage.setItem(GEMINI_STORAGE_KEY, sanitizedKey);
     } catch (error) {
-      console.warn('Failed to save API key to localStorage.', error);
+      if (import.meta.env.DEV) {
+        console.warn('Failed to save API key to localStorage.', error);
+      }
+      return;
     }
     return;
   }
@@ -81,7 +86,10 @@ export const persistApiKey = (key, remember) => {
   try {
     window.localStorage.removeItem(GEMINI_STORAGE_KEY);
   } catch (error) {
-    console.warn('Failed to remove API key from localStorage.', error);
+    if (import.meta.env.DEV) {
+      console.warn('Failed to remove API key from localStorage.', error);
+    }
+    return;
   }
 };
 
