@@ -929,7 +929,7 @@ const createRunId = () =>
  *   triggerAiMotionSubmission: () => Promise<void>,
  *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
- *   handleCopyFull: (docketNumber?: number) => void,
+ *   handleCopyFull: (docketNumber?: number) => Promise<void>,
  *   resetGame: () => void,
  *   toggleStrikeSelection: (id: number) => void,
  * }} Game state values and action handlers.
@@ -2045,7 +2045,7 @@ const useGameState = (options = {}) => {
    *
    * @param {number} [docketNumber] - Optional docket number to include in the header.
    */
-  const handleCopyFull = (docketNumber) => {
+  const handleCopyFull = async (docketNumber) => {
     const sections = [];
     const headerLines = [`DOCKET: ${history.case.title}`, `JUDGE: ${history.case.judge.name}`];
     if (typeof docketNumber === 'number') {
@@ -2154,9 +2154,13 @@ const useGameState = (options = {}) => {
     }
 
     const log = sections.join('\n\n');
-    copyToClipboard(log);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const didCopy = await copyToClipboard(log);
+    if (didCopy) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      setCopied(false);
+    }
   };
 
   return {
