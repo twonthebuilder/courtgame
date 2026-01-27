@@ -35,8 +35,14 @@ const loadStoredObject = (key, label) => {
 };
 
 const saveStoredObject = (key, payload) => {
-  if (!hasWindowStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(payload));
+  if (!hasWindowStorage()) return false;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.warn(`Failed to save ${key} to localStorage.`, error);
+    return false;
+  }
 };
 
 export const defaultPlayerProfile = () => {
@@ -153,8 +159,8 @@ export const savePlayerProfile = (profile) => {
     createdAt: profile?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  saveStoredObject(PROFILE_STORAGE_KEY, payload);
-  return payload;
+  const saved = saveStoredObject(PROFILE_STORAGE_KEY, payload);
+  return saved ? payload : null;
 };
 
 export const loadRunHistory = () => {
@@ -180,8 +186,8 @@ export const saveRunHistory = (history) => {
     createdAt: history?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  saveStoredObject(RUN_HISTORY_STORAGE_KEY, payload);
-  return payload;
+  const saved = saveStoredObject(RUN_HISTORY_STORAGE_KEY, payload);
+  return saved ? payload : null;
 };
 
 export {
