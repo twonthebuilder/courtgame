@@ -67,6 +67,22 @@ describe('persistence helpers', () => {
     expect(loaded).toMatchObject(saved);
   });
 
+  it('returns null when saving a profile fails', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('disk full');
+      });
+
+    const saved = savePlayerProfile({ sanctions: { state: 'clean' } });
+
+    expect(saved).toBeNull();
+    expect(warnSpy).toHaveBeenCalled();
+
+    setItemSpy.mockRestore();
+  });
+
   it('migrates v1 run history to the latest schema', () => {
     const legacyHistory = {
       schemaVersion: 1,
@@ -80,6 +96,35 @@ describe('persistence helpers', () => {
 
     expect(loaded.schemaVersion).toBe(2);
     expect(loaded.runs[0]).toMatchObject({ id: 'run-legacy', sanctionDelta: null });
+  });
+
+  it('returns migrated history even if saving fails', () => {
+    const legacyHistory = {
+      schemaVersion: 1,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      runs: [{ id: 'run-legacy' }],
+    };
+    const originalSetItem = Storage.prototype.setItem;
+    originalSetItem.call(
+      window.localStorage,
+      RUN_HISTORY_STORAGE_KEY,
+      JSON.stringify(legacyHistory),
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const setItemSpy = vi
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new Error('disk full');
+      });
+
+    const loaded = loadRunHistory();
+
+    expect(loaded.schemaVersion).toBe(2);
+    expect(loaded.runs[0]).toMatchObject({ id: 'run-legacy', sanctionDelta: null });
+    expect(warnSpy).toHaveBeenCalled();
+
+    setItemSpy.mockRestore();
   });
 
   it('migrates legacy sanctions into the profile when v1 is absent', () => {
