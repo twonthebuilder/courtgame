@@ -119,7 +119,8 @@ const buildLlmResponse = (payload, rawText = JSON.stringify(payload)) => ({
 describe('useGameState transitions', () => {
   beforeEach(() => {
     requestLlmJson.mockReset();
-    copyToClipboard.mockClear();
+    copyToClipboard.mockReset();
+    copyToClipboard.mockResolvedValue(true);
     window.localStorage.clear();
     debugTestables.resetDebugState();
   });
@@ -1327,14 +1328,47 @@ describe('useGameState transitions', () => {
       result.current.history.counselNotes = 'Remember to cite precedent.';
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     expect(copyToClipboard).toHaveBeenCalledTimes(1);
     expect(copyToClipboard.mock.calls[0][0]).toContain(
       'COUNSEL NOTES (NON-RECORD FLAVOR):\nRemember to cite precedent.'
     );
+  });
+
+  it('updates copied state only when the clipboard write succeeds', async () => {
+    vi.useFakeTimers();
+    requestLlmJson.mockResolvedValueOnce(buildLlmResponse(benchCasePayload));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    copyToClipboard.mockResolvedValueOnce(true);
+    await act(async () => {
+      await result.current.handleCopyFull();
+    });
+
+    expect(result.current.copied).toBe(true);
+
+    act(() => {
+      vi.runAllTimers();
+    });
+
+    expect(result.current.copied).toBe(false);
+
+    copyToClipboard.mockResolvedValueOnce(false);
+    await act(async () => {
+      await result.current.handleCopyFull();
+    });
+
+    expect(result.current.copied).toBe(false);
+
+    vi.useRealTimers();
   });
 
   it('includes achievement titles in the copied docket when present', async () => {
@@ -1358,8 +1392,8 @@ describe('useGameState transitions', () => {
       };
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     expect(copyToClipboard.mock.calls[0][0]).toContain(
@@ -1416,8 +1450,8 @@ describe('useGameState transitions', () => {
       };
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     const copiedText = copyToClipboard.mock.calls[0][0];
@@ -1818,8 +1852,8 @@ describe('useGameState transitions', () => {
       };
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     const copiedText = copyToClipboard.mock.calls[0][0];
@@ -1861,8 +1895,8 @@ describe('useGameState transitions', () => {
       };
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     const copiedText = copyToClipboard.mock.calls[0][0];
@@ -1937,8 +1971,8 @@ describe('useGameState transitions', () => {
       ];
     });
 
-    act(() => {
-      result.current.handleCopyFull();
+    await act(async () => {
+      await result.current.handleCopyFull();
     });
 
     const copiedText = copyToClipboard.mock.calls[0][0];
