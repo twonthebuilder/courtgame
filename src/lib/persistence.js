@@ -7,7 +7,14 @@ import {
 
 const LEGACY_SANCTIONS_STORAGE_KEY = 'courtgame.sanctions.state';
 
-const hasWindowStorage = () => typeof window !== 'undefined' && Boolean(window.localStorage);
+const hasWindowStorage = () => {
+  if (typeof window === 'undefined') return false;
+  try {
+    return Boolean(window.localStorage);
+  } catch {
+    return false;
+  }
+};
 
 const nowIso = () => new Date().toISOString();
 
@@ -26,17 +33,28 @@ const parseStoredJson = (rawValue) => {
 
 const loadStoredObject = (key, label) => {
   if (!hasWindowStorage()) return { value: null, error: null };
-  const rawValue = window.localStorage.getItem(key);
-  const { value, error } = parseStoredJson(rawValue);
-  if (error) {
-    console.warn(`Failed to parse stored ${label}.`, error);
+  try {
+    const rawValue = window.localStorage.getItem(key);
+    const { value, error } = parseStoredJson(rawValue);
+    if (error) {
+      console.warn(`Failed to parse stored ${label}.`, error);
+    }
+    return { value, error };
+  } catch (error) {
+    console.warn(`Failed to read stored ${label}.`, error);
+    return { value: null, error };
   }
-  return { value, error };
 };
 
 const saveStoredObject = (key, payload) => {
-  if (!hasWindowStorage()) return;
-  window.localStorage.setItem(key, JSON.stringify(payload));
+  if (!hasWindowStorage()) return false;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(payload));
+    return true;
+  } catch (error) {
+    console.warn(`Failed to save ${key} to localStorage.`, error);
+    return false;
+  }
 };
 
 export const defaultPlayerProfile = () => {
@@ -153,8 +171,8 @@ export const savePlayerProfile = (profile) => {
     createdAt: profile?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  saveStoredObject(PROFILE_STORAGE_KEY, payload);
-  return payload;
+  const saved = saveStoredObject(PROFILE_STORAGE_KEY, payload);
+  return saved ? payload : null;
 };
 
 export const loadRunHistory = () => {
@@ -180,8 +198,8 @@ export const saveRunHistory = (history) => {
     createdAt: history?.createdAt ?? timestamp,
     updatedAt: timestamp,
   };
-  saveStoredObject(RUN_HISTORY_STORAGE_KEY, payload);
-  return payload;
+  const saved = saveStoredObject(RUN_HISTORY_STORAGE_KEY, payload);
+  return saved ? payload : null;
 };
 
 export {

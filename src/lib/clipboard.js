@@ -2,9 +2,9 @@
  * Copies the provided text to the user's clipboard with a legacy fallback.
  *
  * @param {string} text - The text to copy.
- * @returns {void}
+ * @returns {Promise<boolean>}
  */
-export const copyToClipboard = (text) => {
+export const copyToClipboard = async (text) => {
   if (!navigator.clipboard) {
     const textArea = document.createElement('textarea');
     textArea.value = text;
@@ -14,13 +14,20 @@ export const copyToClipboard = (text) => {
     document.body.appendChild(textArea);
     textArea.focus();
     textArea.select();
+    let didCopy = false;
     try {
-      document.execCommand('copy');
+      didCopy = document.execCommand('copy');
     } catch (err) {
       console.error('Fallback copy failed', err);
     }
     document.body.removeChild(textArea);
-    return;
+    return didCopy;
   }
-  navigator.clipboard.writeText(text);
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (err) {
+    console.error('Clipboard copy failed', err);
+    return false;
+  }
 };
