@@ -3,7 +3,6 @@ import { getActiveApiKey } from './runtimeConfig';
 
 const GEMINI_ENDPOINT =
   'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
-const LLM_TIMEOUT_MS = 30000;
 
 /**
  * Standardized error thrown by the LLM client and response parsers.
@@ -266,19 +265,15 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
   }
 
   try {
-    const response = await fetchWithRetry(
-      `${GEMINI_ENDPOINT}?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: userPrompt }] }],
-          systemInstruction: { parts: [{ text: systemPrompt }] },
-          generationConfig: { responseMimeType: 'application/json' },
-        }),
-      },
-      { timeoutMs: LLM_TIMEOUT_MS }
-    );
+    const response = await fetchWithRetry(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: userPrompt }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        generationConfig: { responseMimeType: 'application/json' },
+      }),
+    });
 
     const responseText = extractResponseText(response, responseLabel);
     return {

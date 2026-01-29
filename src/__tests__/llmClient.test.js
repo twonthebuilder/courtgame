@@ -39,8 +39,7 @@ describe('llm client wrappers', () => {
 
     expect(fetchWithRetry).toHaveBeenCalledWith(
       expect.stringContaining('generativelanguage.googleapis.com'),
-      expect.objectContaining({ method: 'POST' }),
-      expect.objectContaining({ timeoutMs: expect.any(Number) })
+      expect.objectContaining({ method: 'POST' })
     );
     expect(result).toEqual({
       parsed: { decision: 'ok' },
