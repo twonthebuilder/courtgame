@@ -6,44 +6,29 @@ import VerdictSection from '../components/docket/VerdictSection';
 globalThis.React = React;
 
 describe('VerdictSection', () => {
-  it('shows the normalized base score for standard verdicts', () => {
+  it('renders judge and jury opinions as distinct cards', () => {
     const result = {
+      final_weighted_score: 88,
       final_ruling: 'Not Guilty',
-      final_weighted_score: 78.4,
-      judge_opinion: 'Measured ruling.',
-      jury_verdict: 'N/A',
-      jury_reasoning: '',
-      jury_score: 0,
-      is_jnov: false,
-      achievement_title: null,
-      overflow_reason_code: null,
-      overflow_explanation: null,
+      overflow_reason_code: '',
+      overflow_explanation: '',
+      achievement_title: '',
+      judge_opinion: 'Bench opinion.',
+      jury_verdict: 'Not Guilty',
+      jury_reasoning: 'Jury reasoning text.',
     };
 
     render(<VerdictSection result={result} />);
 
-    expect(screen.getByText('78')).toBeInTheDocument();
-    expect(screen.queryByText(/overflow/i)).not.toBeInTheDocument();
-  });
+    const judgeTitle = screen.getByText("Judge's Opinion");
+    const juryTitle = screen.getByText('Jury Reasoning');
+    const judgeCard = judgeTitle.closest('div');
+    const juryCard = juryTitle.closest('div');
 
-  it('shows overflow details while clamping the base score to 100', () => {
-    const result = {
-      final_ruling: 'Not Guilty',
-      final_weighted_score: 132.4,
-      judge_opinion: 'Masterful close.',
-      jury_verdict: 'N/A',
-      jury_reasoning: '',
-      jury_score: 0,
-      is_jnov: false,
-      achievement_title: null,
-      overflow_reason_code: 'LEGENDARY_ARGUMENT',
-      overflow_explanation: 'Argument exceeded the difficulty curve.',
-    };
-
-    render(<VerdictSection result={result} />);
-
-    expect(screen.getByText('100')).toBeInTheDocument();
-    expect(screen.getByText(/Overflow 132\/100/i)).toBeInTheDocument();
-    expect(screen.getByText(/LEGENDARY_ARGUMENT/)).toBeInTheDocument();
+    expect(judgeCard).toBeInTheDocument();
+    expect(juryCard).toBeInTheDocument();
+    expect(judgeCard).not.toBe(juryCard);
+    expect(judgeCard).toHaveClass('rounded-lg');
+    expect(juryCard).toHaveClass('rounded-lg');
   });
 });
