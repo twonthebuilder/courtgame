@@ -1,5 +1,6 @@
 import { Trophy } from 'lucide-react';
 import ExpandableText from '../shared/ExpandableText';
+import ResultCard from '../shared/ResultCard';
 
 /** @typedef {import('../../lib/types').VerdictResult} VerdictResult */
 
@@ -31,7 +32,9 @@ const VerdictSection = ({ result }) => {
         </div>
       )}
 
-      <h2 className={`text-4xl font-black uppercase mb-2 mt-4 ${isGuilty ? 'text-red-700' : 'text-green-700'}`}>
+      <h2
+        className={`text-4xl font-black uppercase mb-2 mt-4 break-words ${isGuilty ? 'text-red-700' : 'text-green-700'}`}
+      >
         {result.final_ruling}
       </h2>
       <div className="text-6xl font-black text-slate-800 mb-6">
@@ -51,21 +54,19 @@ const VerdictSection = ({ result }) => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-        <div className="bg-white p-4 rounded border border-slate-200">
-          <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Judge's Opinion</h4>
+        <ResultCard title="Judge's Opinion">
           <ExpandableText
             text={result.judge_opinion}
-            className="font-serif text-slate-700 text-sm before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+            className="font-serif text-slate-700 text-sm break-words before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
           />
-        </div>
+        </ResultCard>
         {result.jury_verdict !== 'N/A' && (
-          <div className="bg-white p-4 rounded border border-slate-200">
-            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Jury Reasoning</h4>
+          <ResultCard title="Jury Reasoning">
             <ExpandableText
               text={result.jury_reasoning}
-              className="font-serif text-slate-700 text-sm before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+              className="font-serif text-slate-700 text-sm break-words before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
             />
-          </div>
+          </ResultCard>
         )}
       </div>
     </div>
