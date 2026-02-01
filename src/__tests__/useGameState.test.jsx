@@ -76,6 +76,12 @@ const buildSanctionsEntry = ({
   visibility: SANCTION_VISIBILITY.PUBLIC,
   timestamp: timestamp ?? new Date().toISOString(),
 });
+const baseAccountability = {
+  sanction_recommended: false,
+  severity: null,
+  target: null,
+  reason: null,
+};
 const buildVerdict = (overrides = {}) => ({
   jury_verdict: 'N/A',
   jury_reasoning: '',
@@ -88,6 +94,7 @@ const buildVerdict = (overrides = {}) => ({
   overflow_reason_code: null,
   overflow_explanation: null,
   achievement_title: null,
+  accountability: baseAccountability,
   ...overrides,
 });
 const buildMotionBreakdown = (overrides = {}) => ({
@@ -108,6 +115,7 @@ const buildMotionRuling = (overrides = {}) => ({
   outcome_text: 'Denied',
   score: 50,
   evidence_status_updates: [],
+  accountability: baseAccountability,
   breakdown: buildMotionBreakdown(),
   ...overrides,
 });
@@ -328,6 +336,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Not Guilty',
           final_weighted_score: 77,
           judge_opinion: 'Bench decision',
+          accountability: baseAccountability,
         })
       );
 
@@ -411,6 +420,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Guilty',
           final_weighted_score: 44,
           judge_opinion: 'Bench decision',
+          accountability: baseAccountability,
         })
       );
 
@@ -460,6 +470,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Acquitted',
           final_weighted_score: 77,
           judge_opinion: 'Bench decision',
+          accountability: baseAccountability,
         })
       );
 
@@ -802,6 +813,7 @@ describe('useGameState transitions', () => {
           final_weighted_score: 99,
           judge_opinion: 'Bench decision',
           achievement_title: 'Order of Operations',
+          accountability: baseAccountability,
         })
       );
 
@@ -854,6 +866,55 @@ describe('useGameState transitions', () => {
       },
     });
     expect(runHistory.runs[0].endedAt).toBeTruthy();
+  });
+
+  it('logs structured accountability sanctions from verdict payloads', async () => {
+    const accountability = {
+      sanction_recommended: true,
+      severity: 'warning',
+      target: 'defense',
+      reason: 'frivolous arguments',
+    };
+
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse(buildVerdict({ accountability, jury_reasoning: 'N/A' }))
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing');
+    });
+
+    expect(result.current.history.sanctions).toHaveLength(1);
+    expect(result.current.history.sanctions[0].accountability).toMatchObject(accountability);
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.WARNED);
   });
 
   it('records run history when a motion ends the run early', async () => {
@@ -1233,6 +1294,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Acquitted',
           final_weighted_score: 77,
           judge_opinion: 'Bench decision',
+          accountability: baseAccountability,
         })
       );
 
@@ -1283,6 +1345,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Guilty based on Evidence 2',
           final_weighted_score: 60,
           judge_opinion: 'Evidence 2 controls this outcome.',
+          accountability: baseAccountability,
         })
       );
 
@@ -1636,6 +1699,7 @@ describe('useGameState transitions', () => {
           final_ruling: 'Not Guilty',
           final_weighted_score: 77,
           judge_opinion: 'Bench decision',
+          accountability: baseAccountability,
         })
       );
 

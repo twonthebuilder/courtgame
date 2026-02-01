@@ -32,15 +32,15 @@ If the weighted score exceeds 100, the verdict payload includes an overflow reas
 
 ## Sanction Acknowledgments (Explicit + Docketed)
 
-Sanction-related acknowledgments only exist when the judge explicitly records them in the docket. The game uses `history.sanctions` entries to render in-world acknowledgments (public, sealed, or internal).
+Sanction-related acknowledgments only exist when the judge explicitly records them in structured output. The game uses `history.sanctions` entries to render in-world acknowledgments (public, sealed, or internal).
 
 **Triggers (create a docketed acknowledgment):**
-- The judge explicitly states a warning, reprimand, or sanction and records it in the docket text.
-- The judge references a specific misconduct category (e.g., evidence misuse, contempt) as part of that docket entry.
+- The judge sets `accountability.sanction_recommended = true` in the ruling/verdict JSON output.
+- The judge supplies `accountability.severity`, `accountability.target`, and `accountability.reason` to record the entry.
 
 **Non-triggers (do not create a sanction entry):**
 - Player misplays, low scores, or adverse verdicts without explicit judicial acknowledgment.
-- Model-inferred misconduct that is not recorded in the docket.
+- Model-inferred misconduct that is not declared in `accountability`.
 - UI warnings or validation rejections that are not accompanied by a judge's docketed statement.
 
 ## Phase-by-Phase Implementation Map

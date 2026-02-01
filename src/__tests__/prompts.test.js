@@ -105,6 +105,7 @@ describe('prompt builders', () => {
     expect(motionPrompt).toContain('Rebuttal (prosecution): "Opposing response"');
     expect(motionPrompt).toContain('evidence_status_updates');
     expect(motionPrompt).toContain('"breakdown"');
+    expect(motionPrompt).toContain('"accountability"');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },
@@ -117,6 +118,7 @@ describe('prompt builders', () => {
     expect(verdictPrompt).toContain('Type: BENCH');
     expect(verdictPrompt).toContain('Jury: []');
     expect(verdictPrompt).toContain('Motion Result: DENIED (42)');
+    expect(verdictPrompt).toContain('"accountability"');
   });
 
   it('builds opposing counsel prompts for both motion and rebuttal phases', () => {

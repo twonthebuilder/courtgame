@@ -10,6 +10,12 @@ import {
 } from './llmClient';
 
 describe('llmClient response parsers', () => {
+  const baseAccountability = {
+    sanction_recommended: false,
+    severity: null,
+    target: null,
+    reason: null,
+  };
   const baseCase = {
     title: 'State v. Quick',
     facts: ['A dispute occurred.'],
@@ -76,6 +82,7 @@ describe('llmClient response parsers', () => {
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      accountability: baseAccountability,
       breakdown: {
         issues: [
           {
@@ -98,6 +105,7 @@ describe('llmClient response parsers', () => {
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      accountability: baseAccountability,
     };
     expect(() => parseMotionResponse(payload)).toThrow(LlmClientError);
   });
@@ -108,6 +116,7 @@ describe('llmClient response parsers', () => {
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      accountability: baseAccountability,
       breakdown: {
         issues: [
           {
@@ -133,6 +142,7 @@ describe('llmClient response parsers', () => {
       final_ruling: 'Not guilty',
       final_weighted_score: 82.5,
       judge_opinion: 'Compelling defense argument.',
+      accountability: baseAccountability,
     };
     expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
   });
@@ -145,6 +155,7 @@ describe('llmClient response parsers', () => {
       jury_verdict: 'Guilty',
       jury_reasoning: 'The testimony aligned with the evidence.',
       jury_score: 88,
+      accountability: baseAccountability,
     };
     expect(parseVerdictResponse(payload, { isJuryTrial: true })).toEqual(payload);
   });
@@ -156,6 +167,7 @@ describe('llmClient response parsers', () => {
       judge_opinion: 'Exceptional advocacy.',
       overflow_reason_code: 'LEGENDARY_ARGUMENT',
       overflow_explanation: 'Argument outperformed the difficulty curve.',
+      accountability: baseAccountability,
     };
     expect(parseVerdictResponse(payload, { isJuryTrial: false })).toEqual(payload);
   });
@@ -165,6 +177,7 @@ describe('llmClient response parsers', () => {
       final_ruling: 'Not guilty',
       final_weighted_score: 105,
       judge_opinion: 'Exceptional advocacy.',
+      accountability: baseAccountability,
     };
     expect(() => parseVerdictResponse(payload, { isJuryTrial: false })).toThrow(LlmClientError);
   });
