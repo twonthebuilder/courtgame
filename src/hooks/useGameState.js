@@ -11,6 +11,7 @@ import {
   SANCTION_REASON_CODES,
   SANCTION_STATES,
   SANCTIONS_TIMERS_MS,
+  SANCTION_VISIBILITY,
   normalizeCaseType,
   normalizeJurisdiction,
   normalizeSanctionState,
@@ -184,6 +185,44 @@ const buildDefaultStats = () => ({
   sanctionsIncurred: 0,
 });
 
+const ACCOUNTABILITY_SEVERITY_LABELS = {
+  warning: 'warning',
+  sanction: 'sanction',
+  disbarment: 'disbarment',
+};
+
+const buildAccountabilityTrigger = (reason) => {
+  if (!reason) return SANCTION_REASON_CODES.OTHER;
+  const normalized = reason.toLowerCase();
+  if (normalized.includes('contempt')) return SANCTION_REASON_CODES.CONTEMPT;
+  if (normalized.includes('decorum')) return SANCTION_REASON_CODES.DECORUM_VIOLATION;
+  if (normalized.includes('evidence')) return SANCTION_REASON_CODES.EVIDENCE_VIOLATION;
+  if (normalized.includes('misrepresent')) return SANCTION_REASON_CODES.MISREPRESENTATION;
+  if (normalized.includes('discovery')) return SANCTION_REASON_CODES.DISCOVERY_VIOLATION;
+  if (normalized.includes('deadline')) return SANCTION_REASON_CODES.DEADLINE_VIOLATION;
+  return SANCTION_REASON_CODES.OTHER;
+};
+
+const buildAccountabilityEntry = (accountability) => {
+  if (!accountability?.sanction_recommended) return null;
+  const severity = accountability.severity ?? 'sanction';
+  const target = accountability.target ?? 'defense';
+  const reason = accountability.reason ?? 'unspecified conduct';
+  const severityLabel = ACCOUNTABILITY_SEVERITY_LABELS[severity] ?? 'sanction';
+  return {
+    id: `sanction-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    state:
+      severity === 'warning'
+        ? SANCTION_ENTRY_STATES.WARNED
+        : SANCTION_ENTRY_STATES.SANCTIONED,
+    trigger: buildAccountabilityTrigger(reason),
+    docket_text: `The court issues a ${severityLabel} to the ${target} for ${reason}.`,
+    visibility: SANCTION_VISIBILITY.PUBLIC,
+    timestamp: new Date().toISOString(),
+    accountability,
+  };
+};
+
 const persistSanctionsState = (state) => {
   updatePlayerProfile((profile) => ({
     ...profile,
@@ -242,14 +281,29 @@ const getEntryTimestampMs = (entry) => toTimestampMs(entry?.timestamp);
 
 const evaluateConductTrigger = (entry, entries, recidivismWindowMs) => {
   if (!isJudicialAcknowledgment(entry)) {
-    return { triggered: false, severe: false, timestampMs: null };
-  }
-  if (isNonTriggerDocketText(entry.docket_text)) {
-    return { triggered: false, severe: false, timestampMs: getEntryTimestampMs(entry) };
+    return { triggered: false, severe: false, timestampMs: null, forcedState: null };
   }
   const timestampMs = getEntryTimestampMs(entry);
   if (timestampMs === null) {
-    return { triggered: false, severe: false, timestampMs: null };
+    return { triggered: false, severe: false, timestampMs: null, forcedState: null };
+  }
+
+  if (entry?.accountability && typeof entry.accountability === 'object') {
+    if (!entry.accountability.sanction_recommended) {
+      return { triggered: false, severe: false, timestampMs, forcedState: null };
+    }
+    const severity = entry.accountability.severity;
+    const severe = severity === 'sanction' || severity === 'disbarment';
+    return {
+      triggered: true,
+      severe,
+      timestampMs,
+      forcedState: severity === 'disbarment' ? SANCTION_STATES.PUBLIC_DEFENDER : null,
+    };
+  }
+
+  if (isNonTriggerDocketText(entry.docket_text)) {
+    return { triggered: false, severe: false, timestampMs, forcedState: null };
   }
 
   const docketText = entry.docket_text ?? '';
@@ -282,6 +336,7 @@ const evaluateConductTrigger = (entry, entries, recidivismWindowMs) => {
     triggered,
     severe: severeTrigger,
     timestampMs,
+    forcedState: null,
   };
 };
 
@@ -462,9 +517,10 @@ const deriveSanctionsState = (prevState, sanctionsLog = [], nowMs = Date.now()) 
       recidivismCount,
       severe: evaluation.severe,
     });
+    const resolvedNextState = evaluation.forcedState ?? nextSanctionsState;
 
-    if (nextSanctionsState !== currentState.state) {
-      currentState = buildSanctionsState(nextSanctionsState, entryTimeMs, {
+    if (resolvedNextState !== currentState.state) {
+      currentState = buildSanctionsState(resolvedNextState, entryTimeMs, {
         lastMisconductAt: new Date(entryTimeMs).toISOString(),
         recidivismCount,
       });
@@ -1827,6 +1883,7 @@ const useGameState = (options = {}) => {
         ruling: data?.ruling,
         outcomeText: data?.outcome_text,
       });
+      const accountabilityEntry = buildAccountabilityEntry(data.accountability);
       const rulingDiff = applyMotionRulingDiff(history, data);
       const nextDisposition = deriveDispositionFromMotion({
         ...history.motion,
@@ -1845,6 +1902,9 @@ const useGameState = (options = {}) => {
           motionPhase: 'motion_ruling_locked',
           locked: true,
         };
+        const nextSanctions = accountabilityEntry
+          ? [...(prev.sanctions ?? []), accountabilityEntry]
+          : prev.sanctions;
         return {
           ...prev,
           motion: updatedMotion,
@@ -1855,6 +1915,7 @@ const useGameState = (options = {}) => {
           },
           counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
           trial: { ...prev.trial, locked: false },
+          sanctions: nextSanctions,
         };
       });
       const endedAt = new Date().toISOString();
@@ -1939,6 +2000,7 @@ const useGameState = (options = {}) => {
         seatedJurorIds: seatedJurors.map((juror) => juror.id),
         docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
       });
+      const accountabilityEntry = buildAccountabilityEntry(data.accountability);
       const nextDisposition = deriveDispositionFromVerdict(data);
       const verdictText = [
         data.final_ruling,
@@ -1985,6 +2047,9 @@ const useGameState = (options = {}) => {
           disposition: guardDisposition(prev.disposition, nextDisposition),
           counselNotes: deriveVerdictCounselNotes(data, config.role),
           validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+          sanctions: accountabilityEntry
+            ? [...(prev.sanctions ?? []), accountabilityEntry]
+            : prev.sanctions,
         };
       });
       if (!isVerdictCompliant) {
