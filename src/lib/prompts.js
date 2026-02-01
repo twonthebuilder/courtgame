@@ -389,6 +389,15 @@ export const getMotionPrompt = (
     Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Do not introduce facts or entities not present in the docket inputs.
+    JUDICIAL VOCABULARY (these phrases have mechanical consequences):
+    - Use them only when you intend the consequence; do not force outcomes.
+    - "misconduct" — flags the attorney for sanctions review.
+    - "dismissed with prejudice" — case permanently closed, cannot be refiled.
+    - "dismissed without prejudice" — case closed but may be refiled.
+    - "mistrial due to misconduct" — ends trial AND triggers sanction review.
+    - "procedural violation" — logged as minor infraction.
+    - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
+      use: "dismissed with prejudice due to [prosecution/defense] misconduct".
     Include evidence_status_updates entries for every evidence item (even if admissible).
     Valid dispositions: "GRANTED", "DENIED", "PARTIALLY GRANTED".
     Return JSON:
@@ -470,8 +479,17 @@ export const getFinalVerdictPrompt = (
     6. Docket rule: If it is not recorded in the docket, it is not true.
     7. Only docket facts/evidence/witnesses/jurors/rulings count as true.
     8. Do not introduce facts or entities not present in the docket inputs.
-    9. ${complianceGuidance}
-    10. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
+    9. JUDICIAL VOCABULARY (these phrases have mechanical consequences):
+       - Use them only when you intend the consequence; do not force outcomes.
+       - "misconduct" — flags the attorney for sanctions review.
+       - "dismissed with prejudice" — case permanently closed, cannot be refiled.
+       - "dismissed without prejudice" — case closed but may be refiled.
+       - "mistrial due to misconduct" — ends trial AND triggers sanction review.
+       - "procedural violation" — logged as minor infraction.
+       - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
+         use: "dismissed with prejudice due to [prosecution/defense] misconduct".
+    10. ${complianceGuidance}
+    11. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
     
     Return JSON:
     {
