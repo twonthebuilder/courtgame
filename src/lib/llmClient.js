@@ -186,7 +186,15 @@ const assertOptionalNumber = (value, field, responseLabel) => {
  * @returns {{sanction_recommended: boolean, severity: string | null, target: string | null, reason: string | null}}
  */
 const parseAccountability = (value, responseLabel) => {
-  if (!value || typeof value !== 'object') {
+  if (value === undefined || value === null) {
+    return {
+      sanction_recommended: false,
+      severity: null,
+      target: null,
+      reason: null,
+    };
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
     throw createLlmError('Accountability payload is missing or invalid.', {
       code: 'INVALID_RESPONSE',
       userMessage: 'The AI returned an incomplete response. Please try again.',

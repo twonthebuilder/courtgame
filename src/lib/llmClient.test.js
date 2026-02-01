@@ -99,6 +99,29 @@ describe('llmClient response parsers', () => {
     expect(parseMotionResponse(payload)).toEqual(payload);
   });
 
+  it('defaults accountability when missing from motion responses', () => {
+    const payload = {
+      ruling: 'DENIED',
+      outcome_text: 'Insufficient basis.',
+      score: 55,
+      evidence_status_updates: [{ id: 1, status: 'admissible' }],
+      breakdown: {
+        issues: [
+          {
+            id: 'issue-1',
+            label: 'Standing',
+            disposition: 'DENIED',
+            reasoning: 'The defense lacked standing.',
+            affectedEvidenceIds: [1],
+          },
+        ],
+        docket_entries: ['Motion denied on standing grounds.'],
+      },
+    };
+
+    expect(parseMotionResponse(payload).accountability).toEqual(baseAccountability);
+  });
+
   it('rejects a motion response missing a breakdown', () => {
     const payload = {
       ruling: 'Denied',
