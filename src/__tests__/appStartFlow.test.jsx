@@ -18,6 +18,21 @@ vi.mock('../hooks/useGameState', async () => {
   const { GAME_STATES, SANCTION_STATES } = await vi.importActual('../lib/constants');
   let onShellEvent = null;
   const generateCase = vi.fn();
+  const runEndedPayload = {
+    disposition: {
+      summary: 'Case Closed',
+      details: 'The court has closed the docket for this run.',
+    },
+    sanctions: {
+      before: { state: SANCTION_STATES.CLEAN, level: 0 },
+      after: { state: SANCTION_STATES.CLEAN, level: 0 },
+    },
+  };
+  const resetGame = vi.fn(() => {
+    if (typeof onShellEvent === 'function') {
+      onShellEvent({ type: 'RUN_ENDED', payload: runEndedPayload });
+    }
+  });
   const mockState = {
     gameState: GAME_STATES.PLAYING,
     config: {
@@ -75,7 +90,20 @@ vi.mock('../hooks/useGameState', async () => {
           },
         },
       },
-      trial: { locked: false, text: '' },
+      trial: {
+        locked: true,
+        text: 'Closing statement',
+        verdict: {
+          final_weighted_score: 82,
+          final_ruling: 'Not Guilty',
+          overflow_reason_code: null,
+          overflow_explanation: null,
+          achievement_title: null,
+          judge_opinion: 'The court finds no basis for conviction.',
+          jury_verdict: 'N/A',
+          jury_reasoning: '',
+        },
+      },
       counselNotes: '',
       disposition: null,
     },
@@ -91,7 +119,7 @@ vi.mock('../hooks/useGameState', async () => {
     requestMotionRuling: vi.fn(),
     submitArgument: vi.fn(),
     handleCopyFull: vi.fn(),
-    resetGame: vi.fn(),
+    resetGame,
     toggleStrikeSelection: vi.fn(),
   };
 
@@ -110,6 +138,7 @@ vi.mock('../hooks/useGameState', async () => {
     __testables: {
       emitShellEvent,
       generateCase,
+      resetGame,
     },
   };
 });
@@ -119,6 +148,7 @@ describe('App run start flow', () => {
     window.Element.prototype.scrollIntoView = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
     gameStateTestables.generateCase.mockClear();
+    gameStateTestables.resetGame.mockClear();
   });
 
   it('mounts RunShell once per start click and contains DebugOverlay errors', async () => {
@@ -156,5 +186,51 @@ describe('App run start flow', () => {
     expect(await screen.findByText('Profile')).toBeInTheDocument();
     expect(screen.queryByText('COPY DOCKET')).not.toBeInTheDocument();
     expect(gameStateTestables.generateCase).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes both new-case actions to SetupHub', async () => {
+    render(<PocketCourt />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Play' }));
+    fireEvent.click(screen.getByRole('button', { name: /defense/i }));
+
+    await waitFor(() => {
+      expect(gameStateTestables.generateCase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /start new case/i }));
+
+    expect(await screen.findByText('Profile')).toBeInTheDocument();
+    expect(screen.queryByText('COPY DOCKET')).not.toBeInTheDocument();
+    expect(gameStateTestables.resetGame).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: /defense/i }));
+
+    await waitFor(() => {
+      expect(gameStateTestables.generateCase).toHaveBeenCalledTimes(2);
+    });
+
+    act(() => {
+      gameStateTestables.emitShellEvent({
+        type: 'RUN_ENDED',
+        payload: {
+          disposition: {
+            summary: 'Not Guilty',
+            details: 'Judge cleared the docket.',
+          },
+          sanctions: {
+            before: { state: SANCTION_STATES.CLEAN, level: 0 },
+            after: { state: SANCTION_STATES.CLEAN, level: 0 },
+          },
+        },
+      });
+    });
+
+    expect(await screen.findByRole('button', { name: /new case/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /new case/i }));
+
+    expect(await screen.findByText('Profile')).toBeInTheDocument();
+    expect(screen.queryByText('Outcome Summary')).not.toBeInTheDocument();
   });
 });
