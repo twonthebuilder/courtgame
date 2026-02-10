@@ -7,6 +7,16 @@ const normalizeDispositionText = (text) => {
   if (!text) return null;
   const normalized = text.toLowerCase();
   const hasNegatedDismissal = /\b(?:not|no)\s+dismiss(?:ed|al)?\b/.test(normalized);
+  const impliesAcquittal =
+    /\b(?:found|finds?|judg(?:ment)?\s+entered)\s+(?:for|in favor of)\s+(?:the\s+)?(?:defen[cs]e|defendant|accused)\b/.test(
+      normalized
+    ) ||
+    /\b(?:defen[cs]e|defendant|accused)\s+(?:prevails?|wins?)\b/.test(normalized);
+  const impliesConviction =
+    /\b(?:found|finds?|judg(?:ment)?\s+entered)\s+(?:for|in favor of)\s+(?:the\s+)?(?:prosecution|state|people)\b/.test(
+      normalized
+    ) ||
+    /\b(?:prosecution|state|people)\s+(?:prevails?|wins?)\b/.test(normalized);
 
   if (normalized.includes('dismiss') && !hasNegatedDismissal) {
     if (normalized.includes('without prejudice')) {
@@ -26,14 +36,15 @@ const normalizeDispositionText = (text) => {
     return FINAL_DISPOSITIONS.MISTRIAL_CONDUCT;
   }
 
-  if (normalized.includes('not guilty') || normalized.includes('acquit')) {
+  if (normalized.includes('not guilty') || normalized.includes('acquit') || impliesAcquittal) {
     return FINAL_DISPOSITIONS.NOT_GUILTY;
   }
 
   if (
     normalized.includes('guilty') ||
     normalized.includes('liable') ||
-    normalized.includes('convict')
+    normalized.includes('convict') ||
+    impliesConviction
   ) {
     return FINAL_DISPOSITIONS.GUILTY;
   }
