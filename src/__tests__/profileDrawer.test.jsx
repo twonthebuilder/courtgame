@@ -37,6 +37,41 @@ describe('ProfileDrawer', () => {
           sanctions: { state: SANCTION_STATES.WARNED, level: 1 },
           stats: { runsCompleted: 3, verdictsFinalized: 2 },
           achievements: [{ title: 'First win', awardedAt: '2024-01-01T00:00:00.000Z' }],
+          caseHistory: [
+            {
+              id: 'case-1',
+              caseName: 'State v. Doe',
+              outcome: 'dismissed_with_prejudice',
+              date: '2024-02-01T01:00:00.000Z',
+              finalSanctionsCount: 1,
+              docketSnapshot: {
+                sections: {
+                  case: {
+                    title: 'State v. Doe',
+                    defendant: 'Jordan Doe',
+                    charge: 'Fraud',
+                    judge: { name: 'Hon. Redwood', bias: 'Strict on procedure.' },
+                    facts: ['Fact one'],
+                    evidence: ['Memo'],
+                    opposing_counsel: {},
+                    is_jury_trial: false,
+                  },
+                  counselNotes: 'Notes',
+                  jury: { skipped: true },
+                  motion: {
+                    motionPhase: 'motion_ruling_locked',
+                    motionText: 'Move to dismiss',
+                    motionBy: 'defense',
+                    rebuttalText: 'Denied',
+                    rebuttalBy: 'prosecution',
+                    ruling: { ruling: 'GRANTED', outcome_text: 'Dismissed.' },
+                  },
+                  trial: { text: '', verdict: null },
+                  sanctions: [{ id: 's1', docket_text: 'Warning' }],
+                },
+              },
+            },
+          ],
         }}
       />
     );
@@ -49,13 +84,17 @@ describe('ProfileDrawer', () => {
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
-    expect(screen.getByText(/Dismissed With Prejudice/i)).toBeInTheDocument();
-    expect(screen.getByText(/State v\. Doe/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Dismissed With Prejudice/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/State v\. Doe/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Judge: Hon\. Redwood/i)).toBeInTheDocument();
     expect(screen.getByText(/Role: Defense/i)).toBeInTheDocument();
     expect(screen.getByText(/Difficulty: Normal/i)).toBeInTheDocument();
     expect(screen.getByText(/Jurisdiction: USA/i)).toBeInTheDocument();
     expect(screen.getByText(/Court: Night Court/i)).toBeInTheDocument();
+    expect(screen.getByText(/Past Cases/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /state v\. doe/i }));
+    expect(screen.getAllByText(/State v\. Doe/i).length).toBeGreaterThan(1);
+    expect(screen.getByText(/Sanctions: 1/i)).toBeInTheDocument();
   });
 
   it('opens and closes the drawer with mobile-safe layout', () => {

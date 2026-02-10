@@ -33,6 +33,7 @@ describe('persistence helpers', () => {
       sanctionsIncurred: 0,
     });
     expect(profile.achievements).toEqual([]);
+    expect(profile.caseHistory).toEqual([]);
   });
 
   it('builds default run history metadata', () => {

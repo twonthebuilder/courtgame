@@ -72,6 +72,7 @@ export const defaultPlayerProfile = () => {
       sanctionsIncurred: 0,
     },
     achievements: [],
+    caseHistory: [],
   };
 };
 

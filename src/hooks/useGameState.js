@@ -1098,6 +1098,32 @@ const useGameState = (options = {}) => {
     });
   };
 
+  const appendCaseHistoryEntry = useCallback(
+    ({ disposition, endedAt, sanctionsAfter, docketSnapshot }) => {
+      if (!isTerminalDisposition(disposition)) return;
+      const finalSanctionsCount = Array.isArray(docketSnapshot?.sections?.sanctions)
+        ? docketSnapshot.sections.sanctions.length
+        : 0;
+      updatePlayerProfile((profile) => {
+        const existingHistory = Array.isArray(profile.caseHistory) ? profile.caseHistory : [];
+        const nextEntry = {
+          id: `case-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          caseName: history.case?.title ?? runMeta?.caseTitle ?? 'Untitled case',
+          outcome: disposition?.type ?? null,
+          date: endedAt,
+          finalSanctionsCount,
+          docketSnapshot,
+          sanctionsState: cloneSanctionsSnapshot(sanctionsAfter),
+        };
+        return {
+          ...profile,
+          caseHistory: [nextEntry, ...existingHistory].slice(0, 30),
+        };
+      });
+    },
+    [history.case?.title, runMeta?.caseTitle]
+  );
+
   const recordRunHistoryEntry = useCallback((entry) => {
     const historySnapshot = loadRunHistory();
     const runs = historySnapshot.runs ?? [];
@@ -1892,34 +1918,30 @@ const useGameState = (options = {}) => {
         ruling: data,
       });
 
-      setHistory((prev) => {
-        const nextRuling = {
-          ...(prev.motion?.ruling ?? {}),
-          ...data,
-          docket_entries: rulingDiff.docketEntries,
-        };
-        const updatedMotion = {
-          ...prev.motion,
-          ruling: nextRuling,
+      const nextHistory = {
+        ...history,
+        motion: {
+          ...(history.motion ?? {}),
+          ruling: {
+            ...(history.motion?.ruling ?? {}),
+            ...data,
+            docket_entries: rulingDiff.docketEntries,
+          },
           motionPhase: 'motion_ruling_locked',
           locked: true,
-        };
-        const nextSanctions = accountabilityEntry
-          ? [...(prev.sanctions ?? []), accountabilityEntry]
-          : prev.sanctions;
-        return {
-          ...prev,
-          motion: updatedMotion,
-          disposition: guardDisposition(prev.disposition, nextDisposition),
-          case: {
-            ...prev.case,
-            evidence: rulingDiff.evidence,
-          },
-          counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
-          trial: { ...prev.trial, locked: false },
-          sanctions: nextSanctions,
-        };
-      });
+        },
+        disposition: guardDisposition(history.disposition, nextDisposition),
+        case: {
+          ...history.case,
+          evidence: rulingDiff.evidence,
+        },
+        counselNotes: deriveMotionCounselNotes(history.motion, data, config.role),
+        trial: { ...history.trial, locked: false },
+        sanctions: accountabilityEntry
+          ? [...(history.sanctions ?? []), accountabilityEntry]
+          : history.sanctions,
+      };
+      setHistory(nextHistory);
       const endedAt = new Date().toISOString();
       setLastAction({
         endedAt,
@@ -1928,10 +1950,17 @@ const useGameState = (options = {}) => {
       });
       setLoadingMsg(null);
       if (isTerminalDisposition(nextDisposition)) {
+        const docketSnapshot = buildDocketSnapshot(nextHistory);
         const outcomePayload = buildRunOutcome(nextDisposition, sanctionsState);
         setRunOutcome(outcomePayload);
         emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
         finalizeRunHistoryEntry(null, nextDisposition, null);
+        appendCaseHistoryEntry({
+          disposition: nextDisposition,
+          endedAt,
+          sanctionsAfter: sanctionsState,
+          docketSnapshot,
+        });
       }
     } catch (err) {
       console.error(err);
@@ -2020,48 +2049,45 @@ const useGameState = (options = {}) => {
       );
       const isVerdictCompliant = verdictValidation.classification === 'compliant';
 
-      setHistory((prev) => {
-        if (!isVerdictCompliant) {
-          return {
-            ...prev,
-            trial: {
-              ...prev.trial,
-              text,
-              verdict: prev.trial?.verdict,
-              locked: false,
-              rejectedVerdicts: [
-                ...(prev.trial?.rejectedVerdicts ?? []),
-                {
-                  payload: parsed,
-                  reason: 'Verdict referenced off-docket or inadmissible material.',
-                  validation: verdictRecord,
-                  timestamp: new Date().toISOString(),
-                },
-              ],
-            },
-            validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
-          };
-        }
-
-        return {
-          ...prev,
-          trial: { text, verdict: data, locked: true },
-          disposition: guardDisposition(prev.disposition, nextDisposition),
-          counselNotes: deriveVerdictCounselNotes(data, config.role),
-          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
-          sanctions: accountabilityEntry
-            ? [...(prev.sanctions ?? []), accountabilityEntry]
-            : prev.sanctions,
-        };
-      });
       if (!isVerdictCompliant) {
+        setHistory((prev) => ({
+          ...prev,
+          trial: {
+            ...prev.trial,
+            text,
+            verdict: prev.trial?.verdict,
+            locked: false,
+            rejectedVerdicts: [
+              ...(prev.trial?.rejectedVerdicts ?? []),
+              {
+                payload: parsed,
+                reason: 'Verdict referenced off-docket or inadmissible material.',
+                validation: verdictRecord,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        }));
         setError('Verdict rejected for off-docket or inadmissible references.');
         setLoadingMsg(null);
         return;
       }
+      const nextHistory = {
+        ...history,
+        trial: { text, verdict: data, locked: true },
+        disposition: guardDisposition(history.disposition, nextDisposition),
+        counselNotes: deriveVerdictCounselNotes(data, config.role),
+        validationHistory: [...(history.validationHistory ?? []), verdictRecord],
+        sanctions: accountabilityEntry
+          ? [...(history.sanctions ?? []), accountabilityEntry]
+          : history.sanctions,
+      };
+      setHistory(nextHistory);
       const shouldReinstate =
         isMeritReleaseDisposition(nextDisposition) &&
         sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+      // eslint-disable-next-line react-hooks/purity
       const nowMs = shouldReinstate ? Date.now() : null;
       const nextSanctionsState = shouldReinstate
         ? buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
@@ -2077,9 +2103,17 @@ const useGameState = (options = {}) => {
       }
       finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
       if (isTerminalDisposition(nextDisposition)) {
+        const endedAt = new Date().toISOString();
+        const docketSnapshot = buildDocketSnapshot(nextHistory);
         const outcomePayload = buildRunOutcome(nextDisposition, nextSanctionsState);
         setRunOutcome(outcomePayload);
         emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+        appendCaseHistoryEntry({
+          disposition: nextDisposition,
+          endedAt,
+          sanctionsAfter: nextSanctionsState,
+          docketSnapshot,
+        });
       }
       setLoadingMsg(null);
     } catch (err) {
@@ -2145,10 +2179,44 @@ const useGameState = (options = {}) => {
   const buildSanctionsSection = (sanctions = []) => {
     if (!sanctions.length) return null;
     const lines = sanctions.map((entry) => {
-      const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
-      return `- ${state}: ${entry.docket_text}`;
-    });
+        const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
+        return `- ${state}: ${entry.docket_text}`;
+      });
     return `SANCTIONS/STATUS FLAGS:\n${lines.join('\n')}`;
+  };
+
+  const toJsonClone = (value) => JSON.parse(JSON.stringify(value));
+
+  const buildDocketSnapshot = (historyState) => {
+    const snapshot = {
+      case: toJsonClone(historyState.case ?? null),
+      jury: toJsonClone(historyState.jury ?? null),
+      motion: toJsonClone(historyState.motion ?? null),
+      trial: toJsonClone(historyState.trial ?? null),
+      disposition: toJsonClone(historyState.disposition ?? null),
+      sanctions: toJsonClone(historyState.sanctions ?? []),
+      counselNotes: historyState.counselNotes ?? '',
+      validationHistory: toJsonClone(historyState.validationHistory ?? []),
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      sections: {
+        case: snapshot.case,
+        header: {
+          title: snapshot.case?.title ?? null,
+          judge: snapshot.case?.judge?.name ?? null,
+        },
+        facts: snapshot.case?.facts ?? [],
+        jury: snapshot.jury,
+        motion: snapshot.motion,
+        trial: snapshot.trial,
+        disposition: snapshot.disposition,
+        sanctions: snapshot.sanctions,
+        counselNotes: snapshot.counselNotes,
+        validationHistory: snapshot.validationHistory,
+      },
+    };
   };
 
   /**

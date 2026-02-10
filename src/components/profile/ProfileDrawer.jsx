@@ -1,5 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { UserCircle, X } from 'lucide-react';
+import { ChevronDown, UserCircle, X } from 'lucide-react';
+import ArgumentSection from '../docket/ArgumentSection';
+import CaseHeader from '../docket/CaseHeader';
+import JurySection from '../docket/JurySection';
+import MotionSection from '../docket/MotionSection';
+import VerdictSection from '../docket/VerdictSection';
 import { buildBarStatus } from '../../lib/barStatus';
 import { loadRunHistory } from '../../lib/persistence';
 
@@ -27,6 +32,65 @@ const getLastCompletedRun = (runs = []) => {
   return null;
 };
 
+const PastCaseSnapshot = ({ docketSnapshot }) => {
+  const sections = docketSnapshot?.sections;
+  if (!sections?.case) {
+    return <p className="text-xs text-slate-500">No docket snapshot available.</p>;
+  }
+
+  return (
+    <div className="mt-3 origin-top scale-[0.95] space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <CaseHeader data={sections.case} counselNotes={sections.counselNotes} />
+      {sections.jury && !sections.jury.skipped && (
+        <JurySection
+          pool={sections.jury.pool ?? []}
+          isLocked={true}
+          myStrikes={sections.jury.myStrikes ?? []}
+          opponentStrikes={sections.jury.opponentStrikes ?? []}
+          judgeComment={sections.jury.comment ?? ''}
+          playerRole={sections.motion?.motionBy ?? 'defense'}
+          onStrike={() => {}}
+        />
+      )}
+      {sections.motion && (
+        <MotionSection
+          isLocked={true}
+          motionPhase={sections.motion.motionPhase ?? 'motion_ruling_locked'}
+          motionText={sections.motion.motionText ?? ''}
+          motionBy={sections.motion.motionBy ?? 'defense'}
+          rebuttalText={sections.motion.rebuttalText ?? ''}
+          rebuttalBy={sections.motion.rebuttalBy ?? 'prosecution'}
+          ruling={sections.motion.ruling ?? null}
+          playerRole={sections.motion.motionBy ?? 'defense'}
+          isLoading={false}
+          onSubmitStep={() => {}}
+        />
+      )}
+      {sections.trial?.text && (
+        <ArgumentSection
+          isLocked={true}
+          submittedText={sections.trial.text}
+          isJuryTrial={Boolean(sections.case?.is_jury_trial)}
+          onSubmit={() => {}}
+        />
+      )}
+      {sections.trial?.verdict && <VerdictSection result={sections.trial.verdict} />}
+      {Array.isArray(sections.sanctions) && sections.sanctions.length > 0 && (
+        <div className="rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-600">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Sanctions</p>
+          <ul className="mt-2 list-disc space-y-1 pl-4">
+            {sections.sanctions.map((entry) => (
+              <li key={entry.id ?? `${entry.timestamp}-${entry.docket_text}`}>
+                {entry.docket_text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ProfileDrawer = ({
   profile,
   isOpen: isOpenProp,
@@ -35,6 +99,7 @@ const ProfileDrawer = ({
   showTrigger = true,
 }) => {
   const [isOpenInternal, setIsOpenInternal] = useState(false);
+  const [expandedCaseId, setExpandedCaseId] = useState(null);
   const isControlled = typeof isOpenProp === 'boolean';
   const isOpen = isControlled ? isOpenProp : isOpenInternal;
   const barStatus = useMemo(
@@ -51,6 +116,7 @@ const ProfileDrawer = ({
     sanctionsIncurred: 0,
   };
   const achievementsCount = profile?.achievements?.length ?? 0;
+  const caseHistory = Array.isArray(profile?.caseHistory) ? profile.caseHistory : [];
 
   const openDrawer = useCallback(() => {
     if (!isControlled) {
@@ -117,7 +183,7 @@ const ProfileDrawer = ({
         >
           <div className="flex min-h-full items-end justify-center p-4 sm:items-center">
             <div
-              className="w-full max-w-md rounded-2xl border border-slate-200 bg-white shadow-xl"
+              className="w-full max-w-3xl rounded-2xl border border-slate-200 bg-white shadow-xl"
               role="dialog"
               aria-modal="true"
               aria-label="Profile summary"
@@ -241,6 +307,51 @@ const ProfileDrawer = ({
                     </div>
                   ) : (
                     <p className="mt-3 text-xs text-slate-500">No completed runs yet.</p>
+                  )}
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                      Past Cases
+                    </p>
+                    <span className="text-xs font-semibold text-slate-500">{caseHistory.length} saved</span>
+                  </div>
+                  {caseHistory.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {caseHistory.map((pastCase) => {
+                        const isExpanded = expandedCaseId === pastCase.id;
+                        return (
+                          <div key={pastCase.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedCaseId((prev) => (prev === pastCase.id ? null : pastCase.id))
+                              }
+                              className="flex w-full items-center justify-between gap-3 text-left"
+                            >
+                              <div>
+                                <p className="text-sm font-semibold text-slate-800">
+                                  {pastCase.caseName ?? 'Untitled case'}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  {formatOutcomeLabel(pastCase.outcome)} · {formatTimestamp(pastCase.date)}
+                                </p>
+                                <p className="text-xs text-slate-500">
+                                  Sanctions: {pastCase.finalSanctionsCount ?? 0}
+                                </p>
+                              </div>
+                              <ChevronDown
+                                className={`h-4 w-4 text-slate-500 transition ${isExpanded ? 'rotate-180' : ''}`}
+                              />
+                            </button>
+                            {isExpanded && <PastCaseSnapshot docketSnapshot={pastCase.docketSnapshot} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-slate-500">No past cases saved yet.</p>
                   )}
                 </section>
               </div>
