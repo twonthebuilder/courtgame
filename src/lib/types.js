@@ -102,6 +102,7 @@
  * @property {number} score - Required motion score used in final weighting.
  * @property {EvidenceStatusUpdate[]} evidence_status_updates - Required updates for every evidence ID in the docket.
  * @property {MotionRulingBreakdown} breakdown - Required per-issue breakdown for the ruling.
+ * @property {AccountabilityDecision} accountability - Structured accountability decision for sanctions tracking.
  * @property {string[]} [docket_entries] - Normalized docket entries for docket summaries.
  */
 
@@ -139,6 +140,7 @@
  * @property {string | null} overflow_reason_code - Reason code when score exceeds 100.
  * @property {string | null} overflow_explanation - Short explanation when score exceeds 100.
  * @property {string | null} achievement_title - Optional achievement title.
+ * @property {AccountabilityDecision} accountability - Structured accountability decision for sanctions tracking.
  */
 
 /**
@@ -195,6 +197,16 @@
  */
 
 /**
+ * Structured accountability signal from the judge for sanctions tracking.
+ *
+ * @typedef {object} AccountabilityDecision
+ * @property {boolean} sanction_recommended - Whether sanctions should be logged.
+ * @property {'warning' | 'sanction' | 'disbarment' | null} severity - Recommended severity.
+ * @property {'prosecution' | 'defense' | null} target - Which side is accountable.
+ * @property {string | null} reason - Short reason phrase.
+ */
+
+/**
  * Sanction or conduct acknowledgment recorded in the living docket.
  *
  * @typedef {object} SanctionRecord
@@ -204,6 +216,7 @@
  * @property {string} docket_text - Explicit judge acknowledgment recorded on the docket.
  * @property {SanctionVisibility} visibility - How the acknowledgment is surfaced in-world.
  * @property {string} timestamp - ISO timestamp for the entry.
+ * @property {AccountabilityDecision} [accountability] - Structured accountability decision if available.
  */
 
 /**

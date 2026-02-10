@@ -2,6 +2,7 @@ import React from 'react';
 import { Home, RefreshCw } from 'lucide-react';
 import { buildBarStatus } from '../../lib/barStatus';
 import { SANCTION_STATES } from '../../lib/constants';
+import ResultCard from '../shared/ResultCard';
 
 const buildSnapshotRows = (snapshot, profile) => {
   if (!snapshot) {
@@ -91,17 +92,14 @@ const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) =>
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[80vh] text-center p-6 animate-in fade-in zoom-in duration-500">
-      <h1 className="text-4xl md:text-5xl font-black text-slate-800 mb-2 tracking-tighter">
+      <h1 className="text-4xl md:text-5xl font-black text-slate-800 mb-2 tracking-tighter break-words">
         {summaryTitle}
       </h1>
       <p className="text-slate-500 mb-10 text-base font-medium max-w-xl">
         {summaryDetails}
       </p>
       <div className="w-full max-w-2xl space-y-6 text-left">
-        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-3">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Outcome Summary
-          </p>
+        <ResultCard title="Outcome Summary" className="rounded-xl p-6 space-y-3">
           <p className="text-sm text-slate-600">
             {disposition?.summary ?? 'Awaiting disposition details.'}
           </p>
@@ -110,11 +108,8 @@ const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) =>
               {disposition.details}
             </pre>
             )}
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-4">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Run Impact
-          </p>
+        </ResultCard>
+        <ResultCard title="Run Impact" className="rounded-xl p-6 space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded-lg border border-slate-100 bg-slate-50 p-4 text-sm text-slate-600">
               <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
@@ -143,11 +138,8 @@ const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) =>
               </dl>
             </div>
           </div>
-        </div>
-        <div className="bg-white p-6 rounded-xl shadow-md border border-slate-200 space-y-3">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Sanctions & Status Updates
-          </p>
+        </ResultCard>
+        <ResultCard title="Sanctions & Status Updates" className="rounded-xl p-6 space-y-3">
           <ul className="space-y-2 text-sm text-slate-600">
             {statusItems.map((item, index) => (
               <li key={`${item}-${index}`} className="flex items-start gap-2">
@@ -156,7 +148,7 @@ const PostRun = ({ outcome, sanctionsState, profile, onNewCase, onMainMenu }) =>
               </li>
             ))}
           </ul>
-        </div>
+        </ResultCard>
       </div>
       <div className="flex w-full max-w-sm flex-col gap-4 mt-10">
         <button

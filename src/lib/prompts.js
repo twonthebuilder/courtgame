@@ -389,6 +389,16 @@ export const getMotionPrompt = (
     Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Do not introduce facts or entities not present in the docket inputs.
+    JUDICIAL VOCABULARY (these phrases have mechanical consequences):
+    - Use them only when you intend the consequence; do not force outcomes.
+    - "dismissed with prejudice" — case permanently closed, cannot be refiled.
+    - "dismissed without prejudice" — case closed but may be refiled.
+    - "mistrial due to misconduct" — ends trial AND triggers sanction review.
+    - "procedural violation" — logged as minor infraction.
+    - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
+      use: "dismissed with prejudice due to [prosecution/defense] misconduct".
+    Accountability rule: sanctions are recorded ONLY via the accountability object below, not by
+    keyword matching in narrative text.
     Include evidence_status_updates entries for every evidence item (even if admissible).
     Valid dispositions: "GRANTED", "DENIED", "PARTIALLY GRANTED".
     Return JSON:
@@ -399,6 +409,12 @@ export const getMotionPrompt = (
       "evidence_status_updates": [
         { "id": number, "status": "admissible" or "suppressed" }
       ],
+      "accountability": {
+        "sanction_recommended": boolean,
+        "severity": "warning" | "sanction" | "disbarment" | null,
+        "target": "prosecution" | "defense" | null,
+        "reason": "short reason phrase" | null
+      },
       "breakdown": {
         "issues": [
           {
@@ -470,8 +486,18 @@ export const getFinalVerdictPrompt = (
     6. Docket rule: If it is not recorded in the docket, it is not true.
     7. Only docket facts/evidence/witnesses/jurors/rulings count as true.
     8. Do not introduce facts or entities not present in the docket inputs.
-    9. ${complianceGuidance}
-    10. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
+    9. JUDICIAL VOCABULARY (these phrases have mechanical consequences):
+       - Use them only when you intend the consequence; do not force outcomes.
+       - "dismissed with prejudice" — case permanently closed, cannot be refiled.
+       - "dismissed without prejudice" — case closed but may be refiled.
+       - "mistrial due to misconduct" — ends trial AND triggers sanction review.
+       - "procedural violation" — logged as minor infraction.
+       - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
+         use: "dismissed with prejudice due to [prosecution/defense] misconduct".
+    10. Accountability rule: sanctions are recorded ONLY via the accountability object below, not by
+        keyword matching in narrative text.
+    11. ${complianceGuidance}
+    12. If final_weighted_score exceeds 100, include overflow_reason_code and overflow_explanation.
     
     Return JSON:
     {
@@ -485,7 +511,13 @@ export const getFinalVerdictPrompt = (
       "final_weighted_score": number,
       "overflow_reason_code": "CODE or null",
       "overflow_explanation": "Short explanation or null",
-      "achievement_title": "Title or null"
+      "achievement_title": "Title or null",
+      "accountability": {
+        "sanction_recommended": boolean,
+        "severity": "warning" | "sanction" | "disbarment" | null,
+        "target": "prosecution" | "defense" | null,
+        "reason": "short reason phrase" | null
+      }
     }
   `;
 };

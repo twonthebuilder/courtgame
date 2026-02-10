@@ -179,6 +179,82 @@ const assertOptionalNumber = (value, field, responseLabel) => {
 };
 
 /**
+ * Validate accountability output for sanctions tracking.
+ *
+ * @param {unknown} value - Accountability payload to validate.
+ * @param {string} responseLabel - Response label for user messaging.
+ * @returns {{sanction_recommended: boolean, severity: string | null, target: string | null, reason: string | null}}
+ */
+const parseAccountability = (value, responseLabel) => {
+  if (value === undefined || value === null) {
+    return {
+      sanction_recommended: false,
+      severity: null,
+      target: null,
+      reason: null,
+    };
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw createLlmError('Accountability payload is missing or invalid.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete response. Please try again.',
+      context: { field: 'accountability', responseLabel, value },
+    });
+  }
+  const { sanction_recommended, severity, target, reason } = value;
+  assertBoolean(sanction_recommended, 'accountability.sanction_recommended', responseLabel);
+
+  let normalizedSeverity = null;
+  if (severity !== undefined && severity !== null) {
+    assertString(severity, 'accountability.severity', responseLabel);
+    if (!['warning', 'sanction', 'disbarment'].includes(severity)) {
+      throw createLlmError('Accountability severity is invalid.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete response. Please try again.',
+        context: { severity, responseLabel },
+      });
+    }
+    normalizedSeverity = severity;
+  }
+
+  let normalizedTarget = null;
+  if (target !== undefined && target !== null) {
+    assertString(target, 'accountability.target', responseLabel);
+    if (!['prosecution', 'defense'].includes(target)) {
+      throw createLlmError('Accountability target is invalid.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete response. Please try again.',
+        context: { target, responseLabel },
+      });
+    }
+    normalizedTarget = target;
+  }
+
+  let normalizedReason = null;
+  if (reason !== undefined && reason !== null) {
+    assertString(reason, 'accountability.reason', responseLabel);
+    normalizedReason = reason.trim();
+  }
+
+  if (sanction_recommended) {
+    if (!normalizedSeverity || !normalizedTarget || !normalizedReason) {
+      throw createLlmError('Accountability details are required when sanctions are recommended.', {
+        code: 'INVALID_RESPONSE',
+        userMessage: 'The AI returned an incomplete response. Please try again.',
+        context: { value, responseLabel },
+      });
+    }
+  }
+
+  return {
+    sanction_recommended,
+    severity: normalizedSeverity,
+    target: normalizedTarget,
+    reason: normalizedReason,
+  };
+};
+
+/**
  * Coerce unknown values into safe string fields for profile display.
  *
  * @param {unknown} value - Value to sanitize.
@@ -475,6 +551,7 @@ export const parseMotionResponse = (payload) => {
   });
 
   assertStringArray(payload.breakdown.docket_entries, 'breakdown.docket_entries', 'motion');
+  payload.accountability = parseAccountability(payload.accountability, 'motion');
 
   return payload;
 };
@@ -569,6 +646,8 @@ export const parseVerdictResponse = (payload, context = {}) => {
       });
     }
   }
+
+  payload.accountability = parseAccountability(payload.accountability, 'verdict');
 
   return payload;
 };

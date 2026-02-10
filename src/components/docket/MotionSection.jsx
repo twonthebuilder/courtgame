@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ActionFooter from '../layout/ActionFooter';
 import ExpandableMarkdown from '../shared/ExpandableMarkdown';
+import ResultCard from '../shared/ResultCard';
 
 /** @typedef {import('../../lib/types').MotionResult} MotionResult */
 
@@ -73,7 +74,7 @@ const MotionSection = ({
             className="font-serif text-slate-700 italic before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
           />
         </div>
-        <div className="w-full md:w-1/3 bg-slate-50 p-4 rounded border border-slate-200 relative overflow-hidden">
+        <ResultCard title="Judge's Ruling" className="w-full md:w-1/3 bg-slate-50 relative overflow-hidden">
           {hasRuling ? (
             <>
               <div
@@ -87,25 +88,17 @@ const MotionSection = ({
               >
                 {ruling.ruling}
               </div>
-              <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
-                Judge's Ruling
-              </h4>
               <ExpandableMarkdown
                 text={ruling.outcome_text}
-                className="text-sm text-slate-800 font-medium mt-6 before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
+                className="text-sm text-slate-800 font-medium mt-6 break-words before:content-['“'] before:mr-1 after:content-['”'] after:ml-1"
               />
             </>
           ) : (
-            <>
-              <h4 className="text-xs font-bold text-slate-400 uppercase mb-1">
-                Judge's Ruling
-              </h4>
-              <p className="text-sm text-slate-500 italic mt-6">
-                Awaiting the court's decision.
-              </p>
-            </>
+            <p className="text-sm text-slate-500 italic mt-6">
+              Awaiting the court's decision.
+            </p>
           )}
-        </div>
+        </ResultCard>
       </div>
     );
   }

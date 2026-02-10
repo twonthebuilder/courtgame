@@ -140,6 +140,7 @@ are not stored by default; only high-level run metadata and sanctions summaries 
 ## Sanction Acknowledgment Rules
 
 - Sanctions and conduct acknowledgments only exist when the judge explicitly records them in `history.sanctions`.
+- The judge records them by setting the structured `accountability` object in motion rulings or verdict outputs.
 - UI warnings, validation rejections, or inferred misconduct do not create docket entries unless the judge acknowledges them on the record.
 - The `visibility` field controls whether the acknowledgment is shown in-world, sealed, or kept internal.
 
