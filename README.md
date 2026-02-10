@@ -2,6 +2,8 @@
 
 **An LLM-adjudicated legal strategy game where every case is unique.**
 
+![PocketCourt](https://github.com/user-attachments/assets/8025cd3f-1b34-421f-b616-9b799b0c23b8)
+
 ---
 
 ## What Is This?
@@ -14,10 +16,10 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 
 ## Core Mechanics
 
-### **1. Jury Selection (Voir Dire)**
-- 8 jurors in the pool, each with hidden biases
-- Strike 2 jurors strategically (prosecution strikes 2 as well)
-- Final jury of 4-6 people with varying sympathies
+### **1. The Living Docket**
+- The game is played from the docket, and it evolves in real time
+- Every action updates and saves it (struck jurors and striken evidence are crossed out).
+- Every case is a docket, every docket is saved to your profile
 
 ### **2. Pre-Trial Motions**
 - File motions to suppress evidence or dismiss charges
@@ -25,13 +27,19 @@ Pocket Court is a courtroom simulator that uses AI to create procedurally genera
 - Successful motions set up your trial strategy
 - **Weight: 20% of final score**
 
-### **3. Trial Arguments**
+### **3. Jury Selection (Voir Dire)**
+- 8 jurors in the pool, each with hidden biases
+- Strike 2 jurors strategically (prosecution strikes 2 as well)
+- Final jury of 4-6 people with varying sympathies
+- **Crucially:** Not all cases have juries. Bench trials skip this step entirely.
+
+### **4. Trial Arguments**
 - Present closing arguments to judge + jury (or just judge in bench trials)
 - Judge scores legal soundness (45% weight)
 - Jury scores persuasiveness (35% weight)
 - Both audiences must be convinced
 
-### **4. Verdict**
+### **5. Verdict**
 - Judge delivers ruling + detailed opinion
 - Jury explains their reasoning (in jury trials)
 - Scores 100+ unlock legendary achievements (with overflow reason codes when exceeded)
