@@ -1621,6 +1621,13 @@ describe('useGameState transitions', () => {
     expect(result.current.runOutcome.disposition.type).toBe(
       FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
     );
+    const profile = loadPlayerProfile();
+    expect(profile.caseHistory[0]).toEqual(
+      expect.objectContaining({
+        caseName: 'Bench Trial',
+        outcome: FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE,
+      })
+    );
     expect(result.current.gameState).toBe(GAME_STATES.PLAYING);
   });
 
@@ -1733,6 +1740,51 @@ describe('useGameState transitions', () => {
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
     expect(result.current.error).toBeNull();
+  });
+
+
+  it('stores a terminal case docket snapshot in player profile history', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse(buildVerdict({ jury_reasoning: 'N/A' })));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Denied.',
+          score: 45,
+          evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing statement.');
+    });
+
+    const profile = loadPlayerProfile();
+    expect(profile.caseHistory).toHaveLength(1);
+    const savedCase = profile.caseHistory[0];
+    expect(savedCase.caseName).toBe('Bench Trial');
+    expect(savedCase.outcome).toBe(FINAL_DISPOSITIONS.NOT_GUILTY);
+    expect(savedCase.finalSanctionsCount).toBe(0);
+    expect(savedCase.docketSnapshot.sections.case.title).toBe('Bench Trial');
+    expect(savedCase.docketSnapshot.sections.trial.text).toBe('Closing statement.');
+    expect(savedCase.docketSnapshot.sections.trial.verdict.final_ruling).toBe('Not Guilty');
   });
 
   it('emits RUN_ENDED with outcome payload after a final verdict', async () => {
