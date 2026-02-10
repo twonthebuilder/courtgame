@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveDispositionFromMotion } from '../lib/disposition';
+import { deriveDispositionFromMotion, deriveDispositionFromVerdict } from '../lib/disposition';
 
 describe('deriveDispositionFromMotion', () => {
   it('returns null when a motion is partially granted with dismissal language', () => {
@@ -36,5 +36,55 @@ describe('deriveDispositionFromMotion', () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe('deriveDispositionFromVerdict', () => {
+  it('returns not_guilty when the final ruling says the defense prevails', () => {
+    const result = deriveDispositionFromVerdict({
+      final_ruling: 'Final ruling: the defense prevails on all counts.',
+      jury_verdict: 'Not Guilty',
+    });
+
+    expect(result).toMatchObject({
+      type: 'not_guilty',
+      source: 'verdict',
+    });
+  });
+
+  it('returns not_guilty when the final ruling says found for the defendant', () => {
+    const result = deriveDispositionFromVerdict({
+      final_ruling: 'Judgment entered for the defendant.',
+      jury_verdict: 'N/A',
+    });
+
+    expect(result).toMatchObject({
+      type: 'not_guilty',
+      source: 'verdict',
+    });
+  });
+
+  it('returns guilty when the final ruling says the state prevails', () => {
+    const result = deriveDispositionFromVerdict({
+      final_ruling: 'The State prevails and judgment is entered accordingly.',
+      jury_verdict: 'Guilty',
+    });
+
+    expect(result).toMatchObject({
+      type: 'guilty',
+      source: 'verdict',
+    });
+  });
+
+  it('returns guilty when the final ruling says found in favor of the prosecution', () => {
+    const result = deriveDispositionFromVerdict({
+      final_ruling: 'Final ruling: found in favor of the prosecution.',
+      jury_verdict: 'N/A',
+    });
+
+    expect(result).toMatchObject({
+      type: 'guilty',
+      source: 'verdict',
+    });
   });
 });
