@@ -1173,6 +1173,29 @@ const useGameState = (options = {}) => {
     setRunMeta({ ...runMeta, endedAt });
   };
 
+  const completeRun = ({
+    verdict = null,
+    disposition,
+    achievementId = null,
+    nextHistory,
+    sanctionsAfter,
+    endedAt,
+  }) => {
+    if (!isTerminalDisposition(disposition)) return;
+    const resolvedEndedAt = endedAt ?? new Date().toISOString();
+    const resolvedSanctionsState = sanctionsAfter ?? sanctionsState;
+    finalizeRunHistoryEntry(verdict, disposition, achievementId);
+    appendCaseHistoryEntry({
+      disposition,
+      endedAt: resolvedEndedAt,
+      sanctionsAfter: resolvedSanctionsState,
+      docketSnapshot: buildDocketSnapshot(nextHistory),
+    });
+    const outcomePayload = buildRunOutcome(disposition, resolvedSanctionsState);
+    setRunOutcome(outcomePayload);
+    emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+  };
+
   useEffect(() => {
     const expiryCandidates = [
       toTimestampMs(sanctionsState.expiresAt),
@@ -1949,19 +1972,14 @@ const useGameState = (options = {}) => {
         result: 'success',
       });
       setLoadingMsg(null);
-      if (isTerminalDisposition(nextDisposition)) {
-        const docketSnapshot = buildDocketSnapshot(nextHistory);
-        const outcomePayload = buildRunOutcome(nextDisposition, sanctionsState);
-        setRunOutcome(outcomePayload);
-        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
-        finalizeRunHistoryEntry(null, nextDisposition, null);
-        appendCaseHistoryEntry({
-          disposition: nextDisposition,
-          endedAt,
-          sanctionsAfter: sanctionsState,
-          docketSnapshot,
-        });
-      }
+      completeRun({
+        verdict: null,
+        disposition: nextDisposition,
+        achievementId: null,
+        nextHistory,
+        sanctionsAfter: sanctionsState,
+        endedAt,
+      });
     } catch (err) {
       console.error(err);
       const endedAt = new Date().toISOString();
@@ -2101,20 +2119,13 @@ const useGameState = (options = {}) => {
       if (data.achievement_title) {
         appendAchievement(data.achievement_title);
       }
-      finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
-      if (isTerminalDisposition(nextDisposition)) {
-        const endedAt = new Date().toISOString();
-        const docketSnapshot = buildDocketSnapshot(nextHistory);
-        const outcomePayload = buildRunOutcome(nextDisposition, nextSanctionsState);
-        setRunOutcome(outcomePayload);
-        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
-        appendCaseHistoryEntry({
-          disposition: nextDisposition,
-          endedAt,
-          sanctionsAfter: nextSanctionsState,
-          docketSnapshot,
-        });
-      }
+      completeRun({
+        verdict: data,
+        disposition: nextDisposition,
+        achievementId: data.achievement_title ?? null,
+        nextHistory,
+        sanctionsAfter: nextSanctionsState,
+      });
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
