@@ -868,6 +868,90 @@ describe('useGameState transitions', () => {
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
+  it('does not finalize run history or stats for accepted non-terminal verdict text', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildVerdict({
+            final_ruling: 'Proceed to post-trial briefing.',
+            final_weighted_score: 70,
+            jury_reasoning: 'N/A',
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildVerdict({
+            final_ruling: 'Not Guilty',
+            final_weighted_score: 83,
+            jury_reasoning: 'N/A',
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing one');
+    });
+
+    const profileAfterFirstVerdict = loadPlayerProfile();
+    const runHistoryAfterFirstVerdict = loadRunHistory();
+
+    expect(result.current.history.disposition).toBeNull();
+    expect(result.current.history.trial.locked).toBe(false);
+    expect(result.current.runOutcome).toBeNull();
+    expect(profileAfterFirstVerdict.stats).toEqual({
+      runsCompleted: 0,
+      verdictsFinalized: 0,
+      sanctionsIncurred: 0,
+    });
+    expect(runHistoryAfterFirstVerdict.runs).toHaveLength(1);
+    expect(runHistoryAfterFirstVerdict.runs[0].endedAt).toBeNull();
+    expect(runHistoryAfterFirstVerdict.runs[0].outcome).toBeNull();
+
+    await act(async () => {
+      await result.current.submitArgument('Closing two');
+    });
+
+    const profileAfterSecondVerdict = loadPlayerProfile();
+    const runHistoryAfterSecondVerdict = loadRunHistory();
+
+    expect(profileAfterSecondVerdict.stats).toEqual({
+      runsCompleted: 1,
+      verdictsFinalized: 1,
+      sanctionsIncurred: 0,
+    });
+    expect(runHistoryAfterSecondVerdict.runs).toHaveLength(1);
+    expect(runHistoryAfterSecondVerdict.runs[0].outcome).toBe('not_guilty');
+    expect(runHistoryAfterSecondVerdict.runs[0].endedAt).toBeTruthy();
+  });
+
   it('logs structured accountability sanctions from verdict payloads', async () => {
     const accountability = {
       sanction_recommended: true,
