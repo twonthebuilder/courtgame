@@ -58,13 +58,6 @@ const ArgumentSection = ({
         onChange={(e) => setText(e.target.value)}
       />
       <ActionFooter>
-        <button
-          onClick={() => onSubmit(text)}
-          disabled={!text.trim()}
-          className="bg-amber-500 text-white px-8 py-3 rounded font-bold hover:bg-amber-600 flex items-center gap-2"
-        >
-          Rest Case <GavelIcon className="w-4 h-4" />
-        </button>
         {showAutoGenerate && onAutoGenerate && (
           <>
             <button
@@ -83,6 +76,13 @@ const ArgumentSection = ({
             </button>
           </>
         )}
+        <button
+          onClick={() => onSubmit(text)}
+          disabled={!text.trim()}
+          className="bg-amber-500 text-white px-8 py-3 rounded font-bold hover:bg-amber-600 flex items-center gap-2"
+        >
+          Rest Case <GavelIcon className="w-4 h-4" />
+        </button>
       </ActionFooter>
     </div>
   );

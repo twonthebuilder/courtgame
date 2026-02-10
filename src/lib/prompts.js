@@ -544,8 +544,9 @@ export const getAutoSubmissionPrompt = ({
   const modeGuidance =
     mode === 'absurd'
       ? `
-    Style: Chaotic, unhinged, meme-worthy, and intentionally unstable.
-    It may only loosely relate to the case, but should still read as courtroom speech.
+    Style: Chaotic, unhinged, and wildly theatrical while staying about this case.
+    Make specific references to the case facts or evidence in bizarre ways.
+    Never mention being auto-generated, absurd mode, prompts, AI, or writing process.
   `
       : `
     Style: Serious, coherent, and plausibly courtroom-ready.
