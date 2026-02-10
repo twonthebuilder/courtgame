@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CASE_TYPES, COURT_TYPES, JURISDICTIONS, SANCTION_STATES } from '../lib/constants';
 import {
+  getAutoSubmissionPrompt,
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
@@ -143,6 +144,38 @@ describe('prompt builders', () => {
     expect(rebuttalPrompt).toContain('Role: Prosecutor.');
     expect(rebuttalPrompt).toContain('Motion: "Suppress evidence"');
     expect(rebuttalPrompt).toContain('Draft a concise rebuttal');
+  });
+
+
+  it('builds lightweight auto-submission prompts for legit and absurd modes', () => {
+    const legitPrompt = getAutoSubmissionPrompt({
+      stage: 'motion',
+      mode: 'legit',
+      playerRole: 'defense',
+      caseData: {
+        title: 'State v. Example',
+        charge: 'Theft',
+        facts: ['Fact A'],
+        evidence: ['Video'],
+      },
+      opposingArgument: 'The motion should be denied.',
+    });
+
+    expect(legitPrompt).toContain('Stage: PRE-TRIAL MOTION.');
+    expect(legitPrompt).toContain('Style: Serious, coherent');
+    expect(legitPrompt).toContain('Opposing Counsel Argument: "The motion should be denied."');
+
+    const absurdPrompt = getAutoSubmissionPrompt({
+      stage: 'argument',
+      mode: 'absurd',
+      playerRole: 'prosecution',
+      caseData: { title: 'People v. Sample', charge: 'Fraud', facts: [], evidence: [] },
+      opposingArgument: '',
+    });
+
+    expect(absurdPrompt).toContain('Stage: FINAL ARGUMENT.');
+    expect(absurdPrompt).toContain('Style: Chaotic, unhinged');
+    expect(absurdPrompt).toContain('None provided yet.');
   });
 
   it('includes sanction context for judges/counsel but not jury prompts', () => {

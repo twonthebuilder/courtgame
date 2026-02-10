@@ -98,6 +98,7 @@ const RunShell = ({
     triggerAiMotionSubmission,
     requestMotionRuling,
     submitArgument,
+    generateAutoSubmission,
     handleCopyFull,
     resetGame,
     toggleStrikeSelection,
@@ -338,6 +339,8 @@ const RunShell = ({
                   playerRole={config.role}
                   isLoading={Boolean(loadingMsg)}
                   onSubmitStep={submitMotionStep}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'motion')}
+                  showAutoGenerate={debugLogsEnabled}
                 />
               </PhaseSection>
             )}
@@ -350,6 +353,8 @@ const RunShell = ({
                   isLocked={history.trial.locked}
                   isJuryTrial={history.case.is_jury_trial}
                   onSubmit={submitArgument}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'argument')}
+                  showAutoGenerate={debugLogsEnabled}
                   submittedText={history.trial.text}
                 />
               </PhaseSection>
@@ -441,6 +446,8 @@ const RunShell = ({
                   playerRole={config.role}
                   isLoading={Boolean(loadingMsg)}
                   onSubmitStep={submitMotionStep}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'motion')}
+                  showAutoGenerate={debugLogsEnabled}
                 />
               </PhaseSection>
             )}
@@ -453,6 +460,8 @@ const RunShell = ({
                   isLocked={history.trial.locked}
                   isJuryTrial={history.case.is_jury_trial}
                   onSubmit={submitArgument}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'argument')}
+                  showAutoGenerate={debugLogsEnabled}
                   submittedText={history.trial.text}
                 />
               </PhaseSection>
