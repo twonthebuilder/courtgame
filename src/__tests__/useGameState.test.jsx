@@ -868,7 +868,7 @@ describe('useGameState transitions', () => {
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
-  it('does not finalize run history or stats for accepted non-terminal verdict text', async () => {
+  it('rejects non-terminal verdict text and does not finalize run history or stats', async () => {
     requestLlmJson
       .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
       .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
@@ -926,6 +926,9 @@ describe('useGameState transitions', () => {
     expect(result.current.history.disposition).toBeNull();
     expect(result.current.history.trial.locked).toBe(false);
     expect(result.current.runOutcome).toBeNull();
+    expect(result.current.error).toBe(
+      'Verdict rejected because final ruling must resolve to a terminal disposition.'
+    );
     expect(profileAfterFirstVerdict.stats).toEqual({
       runsCompleted: 0,
       verdictsFinalized: 0,

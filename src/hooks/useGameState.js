@@ -2092,6 +2092,30 @@ const useGameState = (options = {}) => {
         setLoadingMsg(null);
         return;
       }
+      if (!hasTerminalDisposition) {
+        setHistory((prev) => ({
+          ...prev,
+          trial: {
+            ...prev.trial,
+            text,
+            verdict: prev.trial?.verdict,
+            locked: false,
+            rejectedVerdicts: [
+              ...(prev.trial?.rejectedVerdicts ?? []),
+              {
+                payload: parsed,
+                reason: 'Verdict did not provide a terminal disposition.',
+                validation: verdictRecord,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        }));
+        setError('Verdict rejected because final ruling must resolve to a terminal disposition.');
+        setLoadingMsg(null);
+        return;
+      }
       const nextHistory = {
         ...history,
         trial: { text, verdict: data, locked: hasTerminalDisposition },
