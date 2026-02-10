@@ -107,6 +107,8 @@ describe('prompt builders', () => {
     expect(motionPrompt).toContain('evidence_status_updates');
     expect(motionPrompt).toContain('"breakdown"');
     expect(motionPrompt).toContain('"accountability"');
+    expect(motionPrompt).toContain('"decision"');
+    expect(motionPrompt).toContain('dismissal');
 
     const verdictPrompt = getFinalVerdictPrompt(
       { is_jury_trial: false, judge: { name: 'Hon. Reed' } },

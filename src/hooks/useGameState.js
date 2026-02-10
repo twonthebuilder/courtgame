@@ -224,6 +224,28 @@ const buildAccountabilityEntry = (accountability) => {
   };
 };
 
+const buildDismissalConsequenceEntry = (ruling, motionBy) => {
+  const dismissal = ruling?.decision?.dismissal;
+  if (!dismissal || dismissal.isDismissed !== true) return null;
+
+  const target = motionBy === 'defense' ? 'defense' : 'prosecution';
+  if (dismissal.withPrejudice) {
+    return buildAccountabilityEntry({
+      sanction_recommended: true,
+      severity: 'disbarment',
+      target,
+      reason: 'with prejudice dismissal entered after pre-trial motion abuse',
+    });
+  }
+
+  return buildAccountabilityEntry({
+    sanction_recommended: true,
+    severity: 'warning',
+    target,
+    reason: 'without prejudice dismissal imposed a minor penalty',
+  });
+};
+
 const persistSanctionsState = (state) => {
   updatePlayerProfile((profile) => ({
     ...profile,
@@ -1935,6 +1957,8 @@ const useGameState = (options = {}) => {
         outcomeText: data?.outcome_text,
       });
       const accountabilityEntry = buildAccountabilityEntry(data.accountability);
+      const dismissalConsequenceEntry =
+        accountabilityEntry ?? buildDismissalConsequenceEntry(data, history.motion.motionBy);
       const rulingDiff = applyMotionRulingDiff(history, data);
       const nextDisposition = deriveDispositionFromMotion({
         ...history.motion,
@@ -1960,8 +1984,8 @@ const useGameState = (options = {}) => {
         },
         counselNotes: deriveMotionCounselNotes(history.motion, data, config.role),
         trial: { ...history.trial, locked: false },
-        sanctions: accountabilityEntry
-          ? [...(history.sanctions ?? []), accountabilityEntry]
+        sanctions: dismissalConsequenceEntry
+          ? [...(history.sanctions ?? []), dismissalConsequenceEntry]
           : history.sanctions,
       };
       setHistory(nextHistory);

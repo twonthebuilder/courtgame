@@ -389,14 +389,6 @@ export const getMotionPrompt = (
     Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Do not introduce facts or entities not present in the docket inputs.
-    JUDICIAL VOCABULARY (these phrases have mechanical consequences):
-    - Use them only when you intend the consequence; do not force outcomes.
-    - "dismissed with prejudice" — case permanently closed, cannot be refiled.
-    - "dismissed without prejudice" — case closed but may be refiled.
-    - "mistrial due to misconduct" — ends trial AND triggers sanction review.
-    - "procedural violation" — logged as minor infraction.
-    - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
-      use: "dismissed with prejudice due to [prosecution/defense] misconduct".
     Accountability rule: sanctions are recorded ONLY via the accountability object below, not by
     keyword matching in narrative text.
     Include evidence_status_updates entries for every evidence item (even if admissible).
@@ -404,7 +396,15 @@ export const getMotionPrompt = (
     Return JSON:
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
-      "outcome_text": "Explanation.",
+      "decision": {
+        "ruling": "granted" | "denied" | "partially_granted" | "dismissed",
+        "dismissal": {
+          "isDismissed": boolean,
+          "withPrejudice": boolean
+        },
+        "opinion": "Judge reasoning text."
+      },
+      "outcome_text": "Same as decision.opinion.",
       "score": number (0-100),
       "evidence_status_updates": [
         { "id": number, "status": "admissible" or "suppressed" }

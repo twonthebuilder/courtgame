@@ -12,7 +12,7 @@ The LLM client centralizes every Gemini request for Pocket Court and guarantees 
 The parsers focus on required fields only:
 - **Case:** title, facts array, judge metadata, jury flag, and jurors when applicable.
 - **Jury:** opponent strikes, seated juror IDs, and judge comment.
-- **Motion:** ruling summary and outcome text.
+- **Motion:** ruling enum, structured `decision` object (`ruling`, `dismissal`, `opinion`), score, and docket breakdown.
 - **Verdict:** ruling, weighted score, judge opinion, and overflow fields when score exceeds 100.
 
 If a required field is missing or the type is incorrect, a `LlmClientError` is thrown with the `INVALID_RESPONSE` code so the UI can display a consistent fallback message.
