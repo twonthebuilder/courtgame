@@ -2051,6 +2051,7 @@ const useGameState = (options = {}) => {
       });
       const accountabilityEntry = buildAccountabilityEntry(data.accountability);
       const nextDisposition = deriveDispositionFromVerdict(data);
+      const hasTerminalDisposition = isTerminalDisposition(nextDisposition);
       const verdictText = [
         data.final_ruling,
         data.judge_opinion,
@@ -2093,7 +2094,7 @@ const useGameState = (options = {}) => {
       }
       const nextHistory = {
         ...history,
-        trial: { text, verdict: data, locked: true },
+        trial: { text, verdict: data, locked: hasTerminalDisposition },
         disposition: guardDisposition(history.disposition, nextDisposition),
         counselNotes: deriveVerdictCounselNotes(data, config.role),
         validationHistory: [...(history.validationHistory ?? []), verdictRecord],
@@ -2119,13 +2120,15 @@ const useGameState = (options = {}) => {
       if (data.achievement_title) {
         appendAchievement(data.achievement_title);
       }
-      completeRun({
-        verdict: data,
-        disposition: nextDisposition,
-        achievementId: data.achievement_title ?? null,
-        nextHistory,
-        sanctionsAfter: nextSanctionsState,
-      });
+      if (hasTerminalDisposition) {
+        completeRun({
+          verdict: data,
+          disposition: nextDisposition,
+          achievementId: data.achievement_title ?? null,
+          nextHistory,
+          sanctionsAfter: nextSanctionsState,
+        });
+      }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);

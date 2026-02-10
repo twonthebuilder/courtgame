@@ -124,4 +124,52 @@ describe('ProfileDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: /close profile drawer/i }));
     expect(screen.queryByRole('dialog', { name: /profile summary/i })).not.toBeInTheDocument();
   });
+
+  it('uses the latest completed run and ignores in-progress run-history entries', () => {
+    saveRunHistory({
+      runs: [
+        {
+          id: 'run-complete',
+          startedAt: '2024-02-01T00:00:00.000Z',
+          endedAt: '2024-02-01T01:00:00.000Z',
+          jurisdiction: 'USA',
+          difficulty: 'normal',
+          courtType: 'standard',
+          playerRole: 'defense',
+          outcome: 'not_guilty',
+          score: 82,
+          caseTitle: 'People v. Lane',
+          judgeName: 'Hon. Slate',
+        },
+        {
+          id: 'run-in-progress',
+          startedAt: '2024-02-02T00:00:00.000Z',
+          endedAt: null,
+          jurisdiction: 'USA',
+          difficulty: 'normal',
+          courtType: 'standard',
+          playerRole: 'defense',
+          outcome: null,
+          score: null,
+          caseTitle: 'State v. Pending',
+          judgeName: 'Hon. Queue',
+        },
+      ],
+    });
+
+    render(
+      <ProfileDrawer
+        profile={{
+          sanctions: { state: SANCTION_STATES.CLEAN, level: 0 },
+          stats: { runsCompleted: 1, verdictsFinalized: 1 },
+        }}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /open profile drawer/i }));
+
+    expect(screen.getByText(/Not Guilty/i)).toBeInTheDocument();
+    expect(screen.getByText(/Case: People v\. Lane/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Case: State v\. Pending/i)).not.toBeInTheDocument();
+  });
 });
