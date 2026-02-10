@@ -6,6 +6,11 @@ describe('deriveDispositionFromMotion', () => {
     const result = deriveDispositionFromMotion({
       ruling: {
         ruling: 'PARTIALLY_GRANTED',
+        decision: {
+          ruling: 'partially_granted',
+          dismissal: { isDismissed: false, withPrejudice: false },
+          opinion: 'Claims are dismissed with prejudice.',
+        },
         outcome_text: 'Claims are dismissed with prejudice.',
       },
     });
@@ -17,6 +22,11 @@ describe('deriveDispositionFromMotion', () => {
     const result = deriveDispositionFromMotion({
       ruling: {
         ruling: 'GRANTED',
+        decision: {
+          ruling: 'dismissed',
+          dismissal: { isDismissed: true, withPrejudice: true },
+          opinion: 'All claims are dismissed with prejudice.',
+        },
         outcome_text: 'All claims are dismissed with prejudice.',
       },
     });
@@ -31,6 +41,11 @@ describe('deriveDispositionFromMotion', () => {
     const result = deriveDispositionFromMotion({
       ruling: {
         ruling: 'DENIED',
+        decision: {
+          ruling: 'denied',
+          dismissal: { isDismissed: false, withPrejudice: false },
+          opinion: 'Motion denied; case not dismissed.',
+        },
         outcome_text: 'Motion denied; case not dismissed.',
       },
     });

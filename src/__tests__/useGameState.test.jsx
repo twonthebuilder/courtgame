@@ -112,6 +112,14 @@ const buildMotionBreakdown = (overrides = {}) => ({
 });
 const buildMotionRuling = (overrides = {}) => ({
   ruling: 'DENIED',
+  decision: {
+    ruling: 'denied',
+    dismissal: {
+      isDismissed: false,
+      withPrejudice: false,
+    },
+    opinion: 'Denied',
+  },
   outcome_text: 'Denied',
   score: 50,
   evidence_status_updates: [],
@@ -1012,6 +1020,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Dismissed with prejudice' },
             outcome_text: 'Dismissed with prejudice',
             evidence_status_updates: [{ id: 1, status: 'admissible' }],
           })
@@ -1042,7 +1051,7 @@ describe('useGameState transitions', () => {
     expect(profile.stats).toEqual({
       runsCompleted: 1,
       verdictsFinalized: 0,
-      sanctionsIncurred: 0,
+      sanctionsIncurred: 1,
     });
     expect(runHistory.runs).toHaveLength(1);
     expect(runHistory.runs[0]).toMatchObject({
@@ -1059,6 +1068,7 @@ describe('useGameState transitions', () => {
         after: expect.any(Object),
       },
     });
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.PUBLIC_DEFENDER);
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
@@ -1568,7 +1578,8 @@ describe('useGameState transitions', () => {
         rebuttalBy: 'prosecution',
         ruling: {
           ruling: 'GRANTED',
-          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
+            outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
           score: 90,
           evidence_status_updates: [],
           breakdown: buildMotionBreakdown({
@@ -1618,6 +1629,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })
@@ -1659,6 +1671,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })
@@ -1725,6 +1738,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })

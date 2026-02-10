@@ -38,6 +38,10 @@ Sanction-related acknowledgments only exist when the judge explicitly records th
 - The judge sets `accountability.sanction_recommended = true` in the ruling/verdict JSON output.
 - The judge supplies `accountability.severity`, `accountability.target`, and `accountability.reason` to record the entry.
 
+- Motion dismissals now resolve from `history.motion.ruling.decision.dismissal` booleans, not opinion keyword parsing.
+- With-prejudice dismissals auto-apply a disbarment-level accountability entry (public defender consequence).
+- Without-prejudice dismissals auto-apply a warning-level accountability entry (minor penalty).
+
 **Non-triggers (do not create a sanction entry):**
 - Player misplays, low scores, or adverse verdicts without explicit judicial acknowledgment.
 - Model-inferred misconduct that is not declared in `accountability`.
