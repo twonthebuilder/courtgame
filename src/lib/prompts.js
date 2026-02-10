@@ -521,3 +521,50 @@ export const getFinalVerdictPrompt = (
     }
   `;
 };
+
+/**
+ * Builds a lightweight prompt for auto-generating player submissions during playtesting.
+ *
+ * @param {object} params - Prompt parameters.
+ * @param {'motion' | 'argument'} params.stage - Current submission stage.
+ * @param {'legit' | 'absurd'} params.mode - Generation mode.
+ * @param {object} params.caseData - Current docket case data.
+ * @param {string} params.playerRole - Current player role.
+ * @param {string} [params.opposingArgument] - Existing opposing argument to counter.
+ * @returns {string} Prompt text for auto-generation.
+ */
+export const getAutoSubmissionPrompt = ({
+  stage,
+  mode,
+  caseData,
+  playerRole,
+  opposingArgument = '',
+}) => {
+  const stageLabel = stage === 'motion' ? 'PRE-TRIAL MOTION' : 'FINAL ARGUMENT';
+  const modeGuidance =
+    mode === 'absurd'
+      ? `
+    Style: Chaotic, unhinged, meme-worthy, and intentionally unstable.
+    It may only loosely relate to the case, but should still read as courtroom speech.
+  `
+      : `
+    Style: Serious, coherent, and plausibly courtroom-ready.
+    Prioritize concise legal framing and direct rebuttal.
+  `;
+
+  return `
+    You are generating a short player submission for fast courtroom game playtesting.
+    Stage: ${stageLabel}.
+    Player Role: ${playerRole}.
+    Case Title: ${caseData?.title ?? 'Untitled Case'}.
+    Charge: ${caseData?.charge ?? 'Unspecified charge'}.
+    Facts: ${JSON.stringify(caseData?.facts ?? [])}.
+    Evidence: ${JSON.stringify(caseData?.evidence ?? [])}.
+    Opposing Counsel Argument: "${opposingArgument || 'None provided yet.'}"
+    ${modeGuidance}
+    Keep it brief (2-4 sentences) and return only valid JSON:
+    {
+      "text": "Generated submission text"
+    }
+  `;
+};

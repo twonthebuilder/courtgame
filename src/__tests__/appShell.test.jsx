@@ -87,6 +87,7 @@ vi.mock('../hooks/useGameState', async () => {
     triggerAiMotionSubmission: vi.fn(),
     requestMotionRuling: vi.fn(),
     submitArgument: vi.fn(),
+    generateAutoSubmission: vi.fn(),
     handleCopyFull: vi.fn(),
     resetGame: vi.fn(),
     toggleStrikeSelection: vi.fn(),

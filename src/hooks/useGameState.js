@@ -40,6 +40,7 @@ import {
   saveRunHistory,
 } from '../lib/persistence';
 import {
+  getAutoSubmissionPrompt,
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
@@ -985,6 +986,7 @@ const createRunId = () =>
  *   triggerAiMotionSubmission: () => Promise<void>,
  *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
+ *   generateAutoSubmission: (mode: 'legit' | 'absurd', stage: 'motion' | 'argument') => Promise<string>,
  *   handleCopyFull: (docketNumber?: number) => Promise<void>,
  *   resetGame: () => void,
  *   toggleStrikeSelection: (id: number) => void,
@@ -2087,6 +2089,50 @@ const useGameState = (options = {}) => {
     }
   };
 
+  /**
+   * Generate a lightweight auto-drafted player submission for playtesting.
+   *
+   * @param {'legit' | 'absurd'} mode - Generation mode.
+   * @param {'motion' | 'argument'} stage - Submission stage.
+   * @returns {Promise<string>} Generated submission text.
+   */
+  const generateAutoSubmission = async (mode, stage) => {
+    if (!['legit', 'absurd'].includes(mode) || !['motion', 'argument'].includes(stage)) {
+      return '';
+    }
+
+    const opposingArgument =
+      stage === 'motion'
+        ? history.motion?.motionPhase === 'rebuttal_submission'
+          ? history.motion?.motionText ?? ''
+          : ''
+        : history.motion?.rebuttalText || history.motion?.motionText || '';
+
+    setError(null);
+    setLoadingMsg(mode === 'absurd' ? 'Generating chaos...' : 'Generating draft argument...');
+    try {
+      const { parsed } = await requestLlmJson({
+        userPrompt: `Auto ${mode} ${stage}`,
+        systemPrompt: getAutoSubmissionPrompt({
+          stage,
+          mode,
+          caseData: buildDocketPromptCase(history.case),
+          playerRole: config.role,
+          opposingArgument,
+        }),
+        responseLabel: 'auto_submission',
+      });
+      const data = parseMotionTextResponse(parsed);
+      setLoadingMsg(null);
+      return data.text;
+    } catch (err) {
+      console.error(err);
+      setError(getLlmClientErrorMessage(err, 'Auto-generation failed.'));
+      setLoadingMsg(null);
+      return '';
+    }
+  };
+
   const formatJurorLabel = (id, pool = []) => {
     const juror = pool.find((entry) => entry.id === id);
     if (juror?.name) return `${juror.name} (#${juror.id})`;
@@ -2244,6 +2290,7 @@ const useGameState = (options = {}) => {
     triggerAiMotionSubmission,
     requestMotionRuling,
     submitArgument,
+    generateAutoSubmission,
     handleCopyFull,
     resetGame,
     toggleStrikeSelection,

@@ -8,13 +8,30 @@ import ExpandableMarkdown from '../shared/ExpandableMarkdown';
  *
  * @param {object} props - Component props.
  * @param {(text: string) => void} props.onSubmit - Callback to submit the argument text.
+ * @param {(mode: 'legit' | 'absurd') => Promise<string>} [props.onAutoGenerate] - Callback to auto-generate text.
+ * @param {boolean} [props.showAutoGenerate] - Whether auto-generation controls should render.
  * @param {boolean} props.isLocked - Whether the trial phase is finalized.
  * @param {boolean} props.isJuryTrial - Whether the case is a jury trial.
  * @param {string} props.submittedText - Closing argument stored in the docket history.
  * @returns {JSX.Element} The argument section UI.
  */
-const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial, submittedText = '' }) => {
+const ArgumentSection = ({
+  onSubmit,
+  onAutoGenerate,
+  showAutoGenerate = false,
+  isLocked,
+  isJuryTrial,
+  submittedText = '',
+}) => {
   const [text, setText] = useState('');
+
+  const handleAutoGenerate = async (mode) => {
+    if (!onAutoGenerate) return;
+    const generated = await onAutoGenerate(mode);
+    if (generated) {
+      setText(generated);
+    }
+  };
 
   if (isLocked) {
     return (
@@ -48,6 +65,24 @@ const ArgumentSection = ({ onSubmit, isLocked, isJuryTrial, submittedText = '' }
         >
           Rest Case <GavelIcon className="w-4 h-4" />
         </button>
+        {showAutoGenerate && onAutoGenerate && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleAutoGenerate('legit')}
+              className="bg-slate-200 text-slate-700 px-4 py-3 rounded font-bold hover:bg-slate-300"
+            >
+              Auto (Legit)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAutoGenerate('absurd')}
+              className="bg-fuchsia-600 text-white px-4 py-3 rounded font-bold hover:bg-fuchsia-700"
+            >
+              Auto (Absurd)
+            </button>
+          </>
+        )}
       </ActionFooter>
     </div>
   );
