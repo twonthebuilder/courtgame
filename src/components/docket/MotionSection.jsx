@@ -160,15 +160,6 @@ const MotionSection = ({
             onChange={(e) => setText(e.target.value)}
           />
           <ActionFooter>
-            <button
-              onClick={() => onSubmitStep(text)}
-              disabled={!text.trim()}
-              className="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-indigo-700"
-            >
-              {isMotionStep
-                ? `File ${roleLabel(playerRole)} Motion`
-                : `File ${roleLabel(playerRole)} Rebuttal`}
-            </button>
             {showAutoGenerate && onAutoGenerate && (
               <>
                 <button
@@ -187,6 +178,15 @@ const MotionSection = ({
                 </button>
               </>
             )}
+            <button
+              onClick={() => onSubmitStep(text)}
+              disabled={!text.trim()}
+              className="bg-indigo-600 text-white px-6 py-2 rounded font-bold text-sm hover:bg-indigo-700"
+            >
+              {isMotionStep
+                ? `File ${roleLabel(playerRole)} Motion`
+                : `File ${roleLabel(playerRole)} Rebuttal`}
+            </button>
           </ActionFooter>
         </>
       ) : (

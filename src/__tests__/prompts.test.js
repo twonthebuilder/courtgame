@@ -174,7 +174,8 @@ describe('prompt builders', () => {
     });
 
     expect(absurdPrompt).toContain('Stage: FINAL ARGUMENT.');
-    expect(absurdPrompt).toContain('Style: Chaotic, unhinged');
+    expect(absurdPrompt).toContain('Style: Chaotic, unhinged, and wildly theatrical while staying about this case.');
+    expect(absurdPrompt).toContain('Never mention being auto-generated, absurd mode, prompts, AI, or writing process.');
     expect(absurdPrompt).toContain('None provided yet.');
   });
 
