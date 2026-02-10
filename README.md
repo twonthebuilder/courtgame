@@ -105,7 +105,7 @@ courtgame/
 ## Installation
 ```bash
 # Clone repo
-git clone https://github.com/antwon99/courtgame.git
+git clone https://github.com/twonthebuilder/courtgame.git
 cd courtgame
 
 # Install dependencies
