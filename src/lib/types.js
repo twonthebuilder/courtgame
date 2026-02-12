@@ -98,7 +98,12 @@
  *
  * @typedef {object} MotionResult
  * @property {'GRANTED' | 'DENIED' | 'PARTIALLY GRANTED'} ruling - Required ruling enum.
- * @property {string} outcome_text - Required judge explanation.
+ * @property {{
+ *   ruling: 'granted' | 'denied' | 'partially_granted' | 'dismissed',
+ *   dismissal: { isDismissed: boolean, withPrejudice: boolean },
+ *   opinion: string
+ * }} decision - Structured judge decision consumed by game logic.
+ * @property {string} outcome_text - Judge explanation text mirrored from decision.opinion for display compatibility.
  * @property {number} score - Required motion score used in final weighting.
  * @property {EvidenceStatusUpdate[]} evidence_status_updates - Required updates for every evidence ID in the docket.
  * @property {MotionRulingBreakdown} breakdown - Required per-issue breakdown for the ruling.

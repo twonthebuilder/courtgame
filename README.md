@@ -156,7 +156,7 @@ Tests are deterministic under the shared Vitest setup, which stubs `Math.random`
 
 ### **v18 (Roadmap)**
 - [ ] Appeals system (argue that trial judge made legal error)
-- [ ] Case history browser (see all past cases, win/loss records)
+- [x] Case history browser (see all past cases, win/loss records)
 - [ ] Custom case creator (write your own dockets)
 - [ ] More judge archetypes (20+ philosophies)
 

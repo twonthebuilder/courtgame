@@ -389,14 +389,6 @@ export const getMotionPrompt = (
     Docket rule: If it is not recorded in the docket, it is not true.
     Only treat docket facts/evidence/witnesses/jurors/rulings as true. Ignore off-docket claims.
     Do not introduce facts or entities not present in the docket inputs.
-    JUDICIAL VOCABULARY (these phrases have mechanical consequences):
-    - Use them only when you intend the consequence; do not force outcomes.
-    - "dismissed with prejudice" — case permanently closed, cannot be refiled.
-    - "dismissed without prejudice" — case closed but may be refiled.
-    - "mistrial due to misconduct" — ends trial AND triggers sanction review.
-    - "procedural violation" — logged as minor infraction.
-    - When dismissing a case due to attorney behavior (frivolous arguments, abuse of process, etc.),
-      use: "dismissed with prejudice due to [prosecution/defense] misconduct".
     Accountability rule: sanctions are recorded ONLY via the accountability object below, not by
     keyword matching in narrative text.
     Include evidence_status_updates entries for every evidence item (even if admissible).
@@ -404,7 +396,15 @@ export const getMotionPrompt = (
     Return JSON:
     {
       "ruling": "GRANTED", "DENIED", or "PARTIALLY GRANTED",
-      "outcome_text": "Explanation.",
+      "decision": {
+        "ruling": "granted" | "denied" | "partially_granted" | "dismissed",
+        "dismissal": {
+          "isDismissed": boolean,
+          "withPrejudice": boolean
+        },
+        "opinion": "Judge reasoning text."
+      },
+      "outcome_text": "Same as decision.opinion.",
       "score": number (0-100),
       "evidence_status_updates": [
         { "id": number, "status": "admissible" or "suppressed" }
@@ -518,6 +518,54 @@ export const getFinalVerdictPrompt = (
         "target": "prosecution" | "defense" | null,
         "reason": "short reason phrase" | null
       }
+    }
+  `;
+};
+
+/**
+ * Builds a lightweight prompt for auto-generating player submissions during playtesting.
+ *
+ * @param {object} params - Prompt parameters.
+ * @param {'motion' | 'argument'} params.stage - Current submission stage.
+ * @param {'legit' | 'absurd'} params.mode - Generation mode.
+ * @param {object} params.caseData - Current docket case data.
+ * @param {string} params.playerRole - Current player role.
+ * @param {string} [params.opposingArgument] - Existing opposing argument to counter.
+ * @returns {string} Prompt text for auto-generation.
+ */
+export const getAutoSubmissionPrompt = ({
+  stage,
+  mode,
+  caseData,
+  playerRole,
+  opposingArgument = '',
+}) => {
+  const stageLabel = stage === 'motion' ? 'PRE-TRIAL MOTION' : 'FINAL ARGUMENT';
+  const modeGuidance =
+    mode === 'absurd'
+      ? `
+    Style: Chaotic, unhinged, and wildly theatrical while staying about this case.
+    Make specific references to the case facts or evidence in bizarre ways.
+    Never mention being auto-generated, absurd mode, prompts, AI, or writing process.
+  `
+      : `
+    Style: Serious, coherent, and plausibly courtroom-ready.
+    Prioritize concise legal framing and direct rebuttal.
+  `;
+
+  return `
+    You are generating a short player submission for fast courtroom game playtesting.
+    Stage: ${stageLabel}.
+    Player Role: ${playerRole}.
+    Case Title: ${caseData?.title ?? 'Untitled Case'}.
+    Charge: ${caseData?.charge ?? 'Unspecified charge'}.
+    Facts: ${JSON.stringify(caseData?.facts ?? [])}.
+    Evidence: ${JSON.stringify(caseData?.evidence ?? [])}.
+    Opposing Counsel Argument: "${opposingArgument || 'None provided yet.'}"
+    ${modeGuidance}
+    Keep it brief (2-4 sentences) and return only valid JSON:
+    {
+      "text": "Generated submission text"
     }
   `;
 };

@@ -79,6 +79,11 @@ describe('llmClient response parsers', () => {
   it('accepts a valid motion response', () => {
     const payload = {
       ruling: 'DENIED',
+      decision: {
+        ruling: 'denied',
+        dismissal: { isDismissed: false, withPrejudice: false },
+        opinion: 'Insufficient basis.',
+      },
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],
@@ -102,6 +107,11 @@ describe('llmClient response parsers', () => {
   it('defaults accountability when missing from motion responses', () => {
     const payload = {
       ruling: 'DENIED',
+      decision: {
+        ruling: 'denied',
+        dismissal: { isDismissed: false, withPrejudice: false },
+        opinion: 'Insufficient basis.',
+      },
       outcome_text: 'Insufficient basis.',
       score: 55,
       evidence_status_updates: [{ id: 1, status: 'admissible' }],

@@ -62,7 +62,7 @@ class DebugOverlayErrorBoundary extends Component {
 const RunShell = ({
   startPayload,
   profile,
-  onExitToMenu,
+  onExitToSetupHub,
   onShellEvent,
   onDebugData,
   onRunInitialized,
@@ -98,6 +98,7 @@ const RunShell = ({
     triggerAiMotionSubmission,
     requestMotionRuling,
     submitArgument,
+    generateAutoSubmission,
     handleCopyFull,
     resetGame,
     toggleStrikeSelection,
@@ -107,8 +108,8 @@ const RunShell = ({
   const notifiedInitRef = useRef(false);
 
   const handleReset = () => {
+    onExitToSetupHub();
     resetGame();
-    onExitToMenu();
   };
 
   const beginRun = useCallback(async (payload) => {
@@ -338,6 +339,8 @@ const RunShell = ({
                   playerRole={config.role}
                   isLoading={Boolean(loadingMsg)}
                   onSubmitStep={submitMotionStep}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'motion')}
+                  showAutoGenerate={debugLogsEnabled}
                 />
               </PhaseSection>
             )}
@@ -350,6 +353,8 @@ const RunShell = ({
                   isLocked={history.trial.locked}
                   isJuryTrial={history.case.is_jury_trial}
                   onSubmit={submitArgument}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'argument')}
+                  showAutoGenerate={debugLogsEnabled}
                   submittedText={history.trial.text}
                 />
               </PhaseSection>
@@ -441,6 +446,8 @@ const RunShell = ({
                   playerRole={config.role}
                   isLoading={Boolean(loadingMsg)}
                   onSubmitStep={submitMotionStep}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'motion')}
+                  showAutoGenerate={debugLogsEnabled}
                 />
               </PhaseSection>
             )}
@@ -453,6 +460,8 @@ const RunShell = ({
                   isLocked={history.trial.locked}
                   isJuryTrial={history.case.is_jury_trial}
                   onSubmit={submitArgument}
+                  onAutoGenerate={(mode) => generateAutoSubmission(mode, 'argument')}
+                  showAutoGenerate={debugLogsEnabled}
                   submittedText={history.trial.text}
                 />
               </PhaseSection>
@@ -517,6 +526,7 @@ export default function PocketCourt() {
   const [runOutcome, setRunOutcome] = useState(null);
   const [debugPayload, setDebugPayload] = useState(null);
   const [debugOverlayMounted, setDebugOverlayMounted] = useState(false);
+  const skipNextRunEndedPostRunRef = useRef(false);
 
   const transitionShell = useCallback((nextState) => {
     if (nextState !== appShellState.Run) {
@@ -529,6 +539,7 @@ export default function PocketCourt() {
   const profileSnapshot = loadPlayerProfile();
 
   const handleStart = (role, difficulty, jurisdiction, courtType) => {
+    skipNextRunEndedPostRunRef.current = false;
     setSetupError(null);
     setRunStartInProgress(true);
     setStartPayload({ role, difficulty, jurisdiction, courtType });
@@ -549,6 +560,7 @@ export default function PocketCourt() {
         setSanctionsSnapshot(event.payload ?? null);
       }
       if (event?.type === 'start_failed') {
+        skipNextRunEndedPostRunRef.current = false;
         setSetupError(event.message ?? 'Unable to start the case.');
         setRunStartInProgress(false);
         setStartPayload(null);
@@ -557,24 +569,31 @@ export default function PocketCourt() {
       if (event?.type === 'RUN_ENDED') {
         setStartPayload(null);
         setRunOutcome(event.payload ?? null);
+        if (skipNextRunEndedPostRunRef.current) {
+          skipNextRunEndedPostRunRef.current = false;
+          transitionShell(appShellState.SetupHub);
+          return;
+        }
         transitionShell(appShellState.PostRun);
       }
     },
     [transitionShell]
   );
 
-  const exitToMenu = useCallback(() => {
+  const exitRunToSetupHub = useCallback(() => {
+    skipNextRunEndedPostRunRef.current = true;
     setStartPayload(null);
     setRunOutcome(null);
-    transitionShell(appShellState.MainMenu);
+    transitionShell(appShellState.SetupHub);
   }, [transitionShell]);
-
   const startNewCase = useCallback(() => {
+    skipNextRunEndedPostRunRef.current = false;
     setRunOutcome(null);
     transitionShell(appShellState.SetupHub);
   }, [transitionShell]);
 
   const returnToMenu = useCallback(() => {
+    skipNextRunEndedPostRunRef.current = false;
     setRunOutcome(null);
     transitionShell(appShellState.MainMenu);
   }, [transitionShell]);
@@ -634,7 +653,7 @@ export default function PocketCourt() {
         <RunShell
           startPayload={startPayload}
           profile={profileSnapshot}
-          onExitToMenu={exitToMenu}
+          onExitToSetupHub={exitRunToSetupHub}
           onShellEvent={handleShellEvent}
           onDebugData={setDebugPayload}
           onRunInitialized={handleRunInitialized}

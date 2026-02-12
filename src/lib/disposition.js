@@ -7,6 +7,16 @@ const normalizeDispositionText = (text) => {
   if (!text) return null;
   const normalized = text.toLowerCase();
   const hasNegatedDismissal = /\b(?:not|no)\s+dismiss(?:ed|al)?\b/.test(normalized);
+  const impliesAcquittal =
+    /\b(?:found|finds?|judg(?:ment)?\s+entered)\s+(?:for|in favor of)\s+(?:the\s+)?(?:defen[cs]e|defendant|accused)\b/.test(
+      normalized
+    ) ||
+    /\b(?:defen[cs]e|defendant|accused)\s+(?:prevails?|wins?)\b/.test(normalized);
+  const impliesConviction =
+    /\b(?:found|finds?|judg(?:ment)?\s+entered)\s+(?:for|in favor of)\s+(?:the\s+)?(?:prosecution|state|people)\b/.test(
+      normalized
+    ) ||
+    /\b(?:prosecution|state|people)\s+(?:prevails?|wins?)\b/.test(normalized);
 
   if (normalized.includes('dismiss') && !hasNegatedDismissal) {
     if (normalized.includes('without prejudice')) {
@@ -26,14 +36,15 @@ const normalizeDispositionText = (text) => {
     return FINAL_DISPOSITIONS.MISTRIAL_CONDUCT;
   }
 
-  if (normalized.includes('not guilty') || normalized.includes('acquit')) {
+  if (normalized.includes('not guilty') || normalized.includes('acquit') || impliesAcquittal) {
     return FINAL_DISPOSITIONS.NOT_GUILTY;
   }
 
   if (
     normalized.includes('guilty') ||
     normalized.includes('liable') ||
-    normalized.includes('convict')
+    normalized.includes('convict') ||
+    impliesConviction
   ) {
     return FINAL_DISPOSITIONS.GUILTY;
   }
@@ -43,10 +54,12 @@ const normalizeDispositionText = (text) => {
 
 const buildDispositionLabel = (type, source) => {
   switch (type) {
-    case FINAL_DISPOSITIONS.DISMISSED:
     case FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE:
+      return 'DISMISSED WITH PREJUDICE';
     case FINAL_DISPOSITIONS.DISMISSED_WITHOUT_PREJUDICE:
-      return source === 'motion' ? 'Dismissed (Pre-Trial Motion Granted)' : 'Dismissed';
+      return 'DISMISSED WITHOUT PREJUDICE';
+    case FINAL_DISPOSITIONS.DISMISSED:
+      return source === 'motion' ? 'DISMISSED (PRE-TRIAL MOTION GRANTED)' : 'DISMISSED';
     case FINAL_DISPOSITIONS.MISTRIAL_HUNG_JURY:
       return 'Mistrial (Hung Jury)';
     case FINAL_DISPOSITIONS.MISTRIAL_CONDUCT:
@@ -70,26 +83,23 @@ export const guardDisposition = (current, next) =>
   isTerminalDisposition(current) ? current : next;
 
 export const deriveDispositionFromMotion = (motion) => {
-  const ruling = motion?.ruling?.ruling?.toLowerCase().replace(/_/g, ' ').trim();
-  if (!ruling || ruling !== 'granted') return null;
-  const outcomeText = motion?.ruling?.outcome_text?.trim();
-  if (!outcomeText) return null;
-  const normalizedOutcome = outcomeText.toLowerCase();
-  if (
-    normalizedOutcome.includes('partial') ||
-    normalizedOutcome.includes('in part') ||
-    normalizedOutcome.includes('some counts')
-  ) {
-    return null;
-  }
-  const type = normalizeDispositionText(outcomeText);
-  if (!type) return null;
+  const ruling = motion?.ruling;
+  if (!ruling || typeof ruling !== 'object') return null;
+
+  const isDismissed = ruling?.decision?.dismissal?.isDismissed === true;
+  if (!isDismissed) return null;
+
+  const withPrejudice = ruling?.decision?.dismissal?.withPrejudice === true;
+  const type = withPrejudice
+    ? FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
+    : FINAL_DISPOSITIONS.DISMISSED_WITHOUT_PREJUDICE;
+  const opinion = ruling?.decision?.opinion?.trim() || ruling?.outcome_text?.trim() || 'No opinion provided.';
 
   return {
     type,
     source: 'motion',
     summary: buildDispositionLabel(type, 'motion'),
-    details: `RULING: ${motion.ruling.ruling} - "${outcomeText}"`,
+    details: `RULING: ${ruling.ruling} - "${opinion}"`,
   };
 };
 

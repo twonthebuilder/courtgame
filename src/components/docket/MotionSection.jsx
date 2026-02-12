@@ -10,6 +10,8 @@ import ResultCard from '../shared/ResultCard';
  *
  * @param {object} props - Component props.
  * @param {(text: string) => void} props.onSubmitStep - Callback to submit the current text.
+ * @param {(mode: 'legit' | 'absurd') => Promise<string>} [props.onAutoGenerate] - Callback to auto-generate text.
+ * @param {boolean} [props.showAutoGenerate] - Whether auto-generation controls should render.
  * @param {MotionResult | null} props.ruling - Judge ruling payload.
  * @param {boolean} props.isLocked - Whether the motion phase is finalized.
  * @param {string} props.motionPhase - Current motion exchange phase.
@@ -23,6 +25,8 @@ import ResultCard from '../shared/ResultCard';
  */
 const MotionSection = ({
   onSubmitStep,
+  onAutoGenerate,
+  showAutoGenerate = false,
   ruling,
   isLocked,
   motionPhase,
@@ -49,6 +53,14 @@ const MotionSection = ({
     : playerRole === 'defense'
       ? 'The defense rebuts the motion by...'
       : 'The prosecution rebuts the motion by...';
+
+  const handleAutoGenerate = async (mode) => {
+    if (!onAutoGenerate) return;
+    const generated = await onAutoGenerate(mode);
+    if (generated) {
+      setText(generated);
+    }
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -148,6 +160,24 @@ const MotionSection = ({
             onChange={(e) => setText(e.target.value)}
           />
           <ActionFooter>
+            {showAutoGenerate && onAutoGenerate && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleAutoGenerate('legit')}
+                  className="bg-slate-200 text-slate-700 px-4 py-2 rounded font-bold text-sm hover:bg-slate-300"
+                >
+                  Auto (Legit)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAutoGenerate('absurd')}
+                  className="bg-fuchsia-600 text-white px-4 py-2 rounded font-bold text-sm hover:bg-fuchsia-700"
+                >
+                  Auto (Absurd)
+                </button>
+              </>
+            )}
             <button
               onClick={() => onSubmitStep(text)}
               disabled={!text.trim()}

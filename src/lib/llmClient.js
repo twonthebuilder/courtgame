@@ -489,7 +489,48 @@ export const parseMotionResponse = (payload) => {
       context: { ruling: payload.ruling },
     });
   }
-  assertString(payload.outcome_text, 'outcome_text', 'motion');
+  if (!payload.decision || typeof payload.decision !== 'object') {
+    throw createLlmError('Motion response is missing a structured decision.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { decision: payload.decision },
+    });
+  }
+
+  if (!['granted', 'denied', 'partially_granted', 'dismissed'].includes(payload.decision.ruling)) {
+    throw createLlmError('Motion decision has an invalid ruling.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { decision: payload.decision },
+    });
+  }
+
+  if (!payload.decision.dismissal || typeof payload.decision.dismissal !== 'object') {
+    throw createLlmError('Motion decision is missing dismissal metadata.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { decision: payload.decision },
+    });
+  }
+
+  if (typeof payload.decision.dismissal.isDismissed !== 'boolean') {
+    throw createLlmError('Motion decision dismissal.isDismissed must be boolean.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { decision: payload.decision },
+    });
+  }
+
+  if (typeof payload.decision.dismissal.withPrejudice !== 'boolean') {
+    throw createLlmError('Motion decision dismissal.withPrejudice must be boolean.', {
+      code: 'INVALID_RESPONSE',
+      userMessage: 'The AI returned an incomplete motion ruling. Please try again.',
+      context: { decision: payload.decision },
+    });
+  }
+
+  assertString(payload.decision.opinion, 'decision.opinion', 'motion');
+  payload.outcome_text = payload.decision.opinion;
   assertNumber(payload.score, 'score', 'motion');
   assertArray(payload.evidence_status_updates, 'evidence_status_updates', 'motion');
 

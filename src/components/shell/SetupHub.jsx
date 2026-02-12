@@ -7,7 +7,7 @@ import {
   JURISDICTION_OPTIONS,
 } from '../../lib/config';
 import { buildBarStatus } from '../../lib/barStatus';
-import { COURT_TYPES, SANCTION_STATES } from '../../lib/constants';
+import { COURT_TYPES, SANCTION_LEVELS, SANCTION_STATES } from '../../lib/constants';
 import { debugEnabled } from '../../lib/debugStore';
 import { AI_PROVIDERS, loadStoredApiKey, persistApiKey } from '../../lib/runtimeConfig';
 import ProfileDrawer from '../profile/ProfileDrawer';
@@ -48,18 +48,27 @@ const SetupHub = ({
   });
   const publicDefenderTimer = barStatus.timers.find((timer) => timer.key === 'public_defender');
   const reinstatementTimer = barStatus.timers.find((timer) => timer.key === 'reinstatement');
-  const isPublicDefenderMode = Boolean(publicDefenderTimer);
+  const sanctionsTier = profile?.sanctions?.level ?? barStatus.level ?? 0;
+  const warningTier = SANCTION_LEVELS[SANCTION_STATES.WARNED];
+  const sanctionedTier = SANCTION_LEVELS[SANCTION_STATES.SANCTIONED];
+  const isPublicDefenderMode = sanctionsTier >= sanctionedTier || Boolean(publicDefenderTimer);
   const effectiveCourtType = isPublicDefenderMode ? COURT_TYPES.NIGHT_COURT : courtType;
+  const courtTypeOptions = isPublicDefenderMode
+    ? [{ value: COURT_TYPES.NIGHT_COURT, label: 'Public Defender' }]
+    : COURT_TYPE_OPTIONS.filter(
+        (option) =>
+          !(sanctionsTier >= warningTier && option.value === COURT_TYPES.SUPREME_COURT)
+      );
   const hasSanctionsSnapshot = Boolean(profile?.sanctions);
   const sanctionsLabel = hasSanctionsSnapshot
     ? `Tier ${barStatus.level ?? 'unknown'} — ${barStatus.label}`
     : 'Tier unknown';
   const pdActive = isPublicDefenderMode;
-  const disbarred = barStatus.state === SANCTION_STATES.PUBLIC_DEFENDER;
+  const disbarred = sanctionsTier >= sanctionedTier;
   const reinstatementRequired =
     barStatus.state === SANCTION_STATES.RECENTLY_REINSTATED || Boolean(reinstatementTimer);
-  const startBlocked = disbarred || reinstatementRequired;
-  const blockTimer = disbarred ? publicDefenderTimer : reinstatementTimer;
+  const startBlocked = reinstatementRequired;
+  const blockTimer = reinstatementTimer;
   const prosecutionDisabled = isPublicDefenderMode || isInitializing || startBlocked;
   const defenseDisabled = isInitializing || startBlocked;
 
@@ -146,9 +155,7 @@ const SetupHub = ({
           <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
             <p className="font-semibold">Start blocked by bar status.</p>
             <p className="mt-1 text-amber-700/90">
-              {disbarred
-                ? 'Your license is suspended pending public defender assignment completion.'
-                : 'Your reinstatement grace period is still active.'}
+              {'Your reinstatement grace period is still active.'}
             </p>
             <p className="mt-1 text-amber-700/90">
               {blockTimer
@@ -262,7 +269,7 @@ const SetupHub = ({
               Court Type
             </label>
             <div className="grid grid-cols-3 gap-2">
-              {COURT_TYPE_OPTIONS.map((option) => (
+              {courtTypeOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => setCourtType(option.value)}

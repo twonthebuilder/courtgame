@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 import ArgumentSection from '../components/docket/ArgumentSection';
 import CaseHeader from '../components/docket/CaseHeader';
 import MotionSection from '../components/docket/MotionSection';
@@ -97,6 +97,78 @@ describe('docket section submitted text rendering', () => {
     expect(screen.getByText("Judge's Ruling")).toBeInTheDocument();
     expect(screen.getByText('Denied')).toBeInTheDocument();
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+
+
+  it('orders motion action buttons as auto then submit', () => {
+    render(
+      <MotionSection
+        isLocked={false}
+        motionPhase="motion_submission"
+        motionText=""
+        motionBy="defense"
+        rebuttalText=""
+        rebuttalBy="prosecution"
+        playerRole="defense"
+        isLoading={false}
+        onSubmitStep={() => {}}
+        onAutoGenerate={() => Promise.resolve('')}
+        showAutoGenerate
+        ruling={null}
+      />
+    );
+
+    const actionButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent?.trim())
+      .filter((label) => ['Auto (Legit)', 'Auto (Absurd)', 'File Defense Motion'].includes(label));
+
+    expect(actionButtons).toEqual(['Auto (Legit)', 'Auto (Absurd)', 'File Defense Motion']);
+  });
+
+  it('orders argument action buttons as auto then submit', () => {
+    render(
+      <ArgumentSection
+        isLocked={false}
+        isJuryTrial={false}
+        onSubmit={() => {}}
+        onAutoGenerate={() => Promise.resolve('')}
+        showAutoGenerate
+        submittedText=""
+      />
+    );
+
+    const actionButtons = screen
+      .getAllByRole('button')
+      .map((button) => button.textContent?.trim())
+      .filter((label) => ['Auto (Legit)', 'Auto (Absurd)', 'Rest Case'].includes(label));
+
+    expect(actionButtons).toEqual(['Auto (Legit)', 'Auto (Absurd)', 'Rest Case']);
+  });
+
+  it('renders debug auto-generate controls and applies generated motion text', async () => {
+    const onAutoGenerate = vi.fn().mockResolvedValue('Auto drafted rebuttal.');
+    render(
+      <MotionSection
+        isLocked={false}
+        motionPhase="rebuttal_submission"
+        motionText="Motion text"
+        motionBy="defense"
+        rebuttalText=""
+        rebuttalBy="prosecution"
+        playerRole="prosecution"
+        isLoading={false}
+        onSubmitStep={() => {}}
+        onAutoGenerate={onAutoGenerate}
+        showAutoGenerate
+        ruling={null}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Auto (Legit)' }));
+
+    expect(await screen.findByDisplayValue('Auto drafted rebuttal.')).toBeInTheDocument();
   });
 
   it('shows the submitted closing argument when locked', () => {

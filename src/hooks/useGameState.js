@@ -40,6 +40,7 @@ import {
   saveRunHistory,
 } from '../lib/persistence';
 import {
+  getAutoSubmissionPrompt,
   getFinalVerdictPrompt,
   getGeneratorPrompt,
   getJuryStrikePrompt,
@@ -222,6 +223,26 @@ const buildAccountabilityEntry = (accountability) => {
     accountability,
   };
 };
+
+const buildDismissalConsequenceEntry = (ruling, motionBy) => {
+  const dismissal = ruling?.decision?.dismissal;
+  if (!dismissal || dismissal.isDismissed !== true) return null;
+  if (!dismissal.withPrejudice) return null;
+
+  const target = motionBy === 'defense' ? 'defense' : 'prosecution';
+
+  return {
+    id: `sanction-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    state: SANCTION_ENTRY_STATES.WARNED,
+    trigger: SANCTION_REASON_CODES.OTHER,
+    docket_text: `The court issues a warning to the ${target} for frivolous motion practice; case dismissed with prejudice.`,
+    visibility: SANCTION_VISIBILITY.PUBLIC,
+    timestamp: new Date().toISOString(),
+  };
+};
+
+const buildSanctionEntryFromOutcome = ({ accountability, ruling = null, motionBy = null } = {}) =>
+  buildAccountabilityEntry(accountability) ?? buildDismissalConsequenceEntry(ruling, motionBy);
 
 const persistSanctionsState = (state) => {
   updatePlayerProfile((profile) => ({
@@ -407,17 +428,6 @@ export const normalizeSanctionsState = (state, nowMs) => {
     lastMisconductMs !== null && nowMs - lastMisconductMs > COOLDOWN_RESET_MS;
 
   if (
-    hydratedState.state === SANCTION_STATES.PUBLIC_DEFENDER &&
-    expiresAtMs &&
-    nowMs >= expiresAtMs
-  ) {
-    return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
-      lastMisconductAt: hydratedState.lastMisconductAt,
-      recidivismCount: hydratedState.recidivismCount,
-    });
-  }
-
-  if (
     hydratedState.state === SANCTION_STATES.RECENTLY_REINSTATED &&
     reinstatedUntilMs &&
     nowMs >= reinstatedUntilMs
@@ -457,6 +467,14 @@ const buildSanctionPromptContext = (sanctionsState, overrides = {}) => ({
   expiresAt: sanctionsState?.expiresAt,
   recentlyReinstatedUntil: sanctionsState?.recentlyReinstatedUntil,
 });
+
+const isTierTwoOrHigherSanction = (sanctionsState) => {
+  const numericLevel =
+    typeof sanctionsState?.level === 'number'
+      ? sanctionsState.level
+      : SANCTION_LEVELS[sanctionsState?.state] ?? 0;
+  return numericLevel >= SANCTION_LEVELS[SANCTION_STATES.SANCTIONED];
+};
 
 const getNextSanctionsState = ({ currentState, entryState, recidivismCount, severe }) => {
   if (currentState === SANCTION_STATES.RECENTLY_REINSTATED) {
@@ -985,6 +1003,7 @@ const createRunId = () =>
  *   triggerAiMotionSubmission: () => Promise<void>,
  *   requestMotionRuling: () => Promise<void>,
  *   submitArgument: (text: string) => Promise<void>,
+ *   generateAutoSubmission: (mode: 'legit' | 'absurd', stage: 'motion' | 'argument') => Promise<string>,
  *   handleCopyFull: (docketNumber?: number) => Promise<void>,
  *   resetGame: () => void,
  *   toggleStrikeSelection: (id: number) => void,
@@ -1096,6 +1115,32 @@ const useGameState = (options = {}) => {
     });
   };
 
+  const appendCaseHistoryEntry = useCallback(
+    ({ disposition, endedAt, sanctionsAfter, docketSnapshot }) => {
+      if (!isTerminalDisposition(disposition)) return;
+      const finalSanctionsCount = Array.isArray(docketSnapshot?.sections?.sanctions)
+        ? docketSnapshot.sections.sanctions.length
+        : 0;
+      updatePlayerProfile((profile) => {
+        const existingHistory = Array.isArray(profile.caseHistory) ? profile.caseHistory : [];
+        const nextEntry = {
+          id: `case-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          caseName: history.case?.title ?? runMeta?.caseTitle ?? 'Untitled case',
+          outcome: disposition?.type ?? null,
+          date: endedAt,
+          finalSanctionsCount,
+          docketSnapshot,
+          sanctionsState: cloneSanctionsSnapshot(sanctionsAfter),
+        };
+        return {
+          ...profile,
+          caseHistory: [nextEntry, ...existingHistory].slice(0, 30),
+        };
+      });
+    },
+    [history.case?.title, runMeta?.caseTitle]
+  );
+
   const recordRunHistoryEntry = useCallback((entry) => {
     const historySnapshot = loadRunHistory();
     const runs = historySnapshot.runs ?? [];
@@ -1143,6 +1188,29 @@ const useGameState = (options = {}) => {
     });
     updateRunStats(Boolean(verdict));
     setRunMeta({ ...runMeta, endedAt });
+  };
+
+  const completeRun = ({
+    verdict = null,
+    disposition,
+    achievementId = null,
+    nextHistory,
+    sanctionsAfter,
+    endedAt,
+  }) => {
+    if (!isTerminalDisposition(disposition)) return;
+    const resolvedEndedAt = endedAt ?? new Date().toISOString();
+    const resolvedSanctionsState = sanctionsAfter ?? sanctionsState;
+    finalizeRunHistoryEntry(verdict, disposition, achievementId);
+    appendCaseHistoryEntry({
+      disposition,
+      endedAt: resolvedEndedAt,
+      sanctionsAfter: resolvedSanctionsState,
+      docketSnapshot: buildDocketSnapshot(nextHistory),
+    });
+    const outcomePayload = buildRunOutcome(disposition, resolvedSanctionsState);
+    setRunOutcome(outcomePayload);
+    emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
   };
 
   useEffect(() => {
@@ -1251,7 +1319,7 @@ const useGameState = (options = {}) => {
       jurisdiction ?? DEFAULT_GAME_CONFIG.jurisdiction
     );
     const resolvedCourtType = normalizeCourtType(courtType ?? DEFAULT_GAME_CONFIG.courtType);
-    const isPublicDefenderMode = sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+    const isPublicDefenderMode = isTierTwoOrHigherSanction(sanctionsState);
     const legacyNightCourt =
       resolvedJurisdiction === JURISDICTIONS.MUNICIPAL_NIGHT_COURT
         ? COURT_TYPES.NIGHT_COURT
@@ -1883,41 +1951,39 @@ const useGameState = (options = {}) => {
         ruling: data?.ruling,
         outcomeText: data?.outcome_text,
       });
-      const accountabilityEntry = buildAccountabilityEntry(data.accountability);
+      const sanctionEntry = buildSanctionEntryFromOutcome({
+        accountability: data.accountability,
+        ruling: data,
+        motionBy: history.motion.motionBy,
+      });
       const rulingDiff = applyMotionRulingDiff(history, data);
       const nextDisposition = deriveDispositionFromMotion({
         ...history.motion,
         ruling: data,
       });
 
-      setHistory((prev) => {
-        const nextRuling = {
-          ...(prev.motion?.ruling ?? {}),
-          ...data,
-          docket_entries: rulingDiff.docketEntries,
-        };
-        const updatedMotion = {
-          ...prev.motion,
-          ruling: nextRuling,
+      const nextHistory = {
+        ...history,
+        motion: {
+          ...(history.motion ?? {}),
+          ruling: {
+            ...(history.motion?.ruling ?? {}),
+            ...data,
+            docket_entries: rulingDiff.docketEntries,
+          },
           motionPhase: 'motion_ruling_locked',
           locked: true,
-        };
-        const nextSanctions = accountabilityEntry
-          ? [...(prev.sanctions ?? []), accountabilityEntry]
-          : prev.sanctions;
-        return {
-          ...prev,
-          motion: updatedMotion,
-          disposition: guardDisposition(prev.disposition, nextDisposition),
-          case: {
-            ...prev.case,
-            evidence: rulingDiff.evidence,
-          },
-          counselNotes: deriveMotionCounselNotes(prev.motion, data, config.role),
-          trial: { ...prev.trial, locked: false },
-          sanctions: nextSanctions,
-        };
-      });
+        },
+        disposition: guardDisposition(history.disposition, nextDisposition),
+        case: {
+          ...history.case,
+          evidence: rulingDiff.evidence,
+        },
+        counselNotes: deriveMotionCounselNotes(history.motion, data, config.role),
+        trial: { ...history.trial, locked: false },
+        sanctions: sanctionEntry ? [...(history.sanctions ?? []), sanctionEntry] : history.sanctions,
+      };
+      setHistory(nextHistory);
       const endedAt = new Date().toISOString();
       setLastAction({
         endedAt,
@@ -1925,12 +1991,14 @@ const useGameState = (options = {}) => {
         result: 'success',
       });
       setLoadingMsg(null);
-      if (isTerminalDisposition(nextDisposition)) {
-        const outcomePayload = buildRunOutcome(nextDisposition, sanctionsState);
-        setRunOutcome(outcomePayload);
-        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
-        finalizeRunHistoryEntry(null, nextDisposition, null);
-      }
+      completeRun({
+        verdict: null,
+        disposition: nextDisposition,
+        achievementId: null,
+        nextHistory,
+        sanctionsAfter: sanctionsState,
+        endedAt,
+      });
     } catch (err) {
       console.error(err);
       const endedAt = new Date().toISOString();
@@ -2000,8 +2068,9 @@ const useGameState = (options = {}) => {
         seatedJurorIds: seatedJurors.map((juror) => juror.id),
         docketJurorIds: (history.case?.jurors ?? []).map((juror) => juror.id),
       });
-      const accountabilityEntry = buildAccountabilityEntry(data.accountability);
+      const sanctionEntry = buildSanctionEntryFromOutcome({ accountability: data.accountability });
       const nextDisposition = deriveDispositionFromVerdict(data);
+      const hasTerminalDisposition = isTerminalDisposition(nextDisposition);
       const verdictText = [
         data.final_ruling,
         data.judge_opinion,
@@ -2018,72 +2087,139 @@ const useGameState = (options = {}) => {
       );
       const isVerdictCompliant = verdictValidation.classification === 'compliant';
 
-      setHistory((prev) => {
-        if (!isVerdictCompliant) {
-          return {
-            ...prev,
-            trial: {
-              ...prev.trial,
-              text,
-              verdict: prev.trial?.verdict,
-              locked: false,
-              rejectedVerdicts: [
-                ...(prev.trial?.rejectedVerdicts ?? []),
-                {
-                  payload: parsed,
-                  reason: 'Verdict referenced off-docket or inadmissible material.',
-                  validation: verdictRecord,
-                  timestamp: new Date().toISOString(),
-                },
-              ],
-            },
-            validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
-          };
-        }
-
-        return {
-          ...prev,
-          trial: { text, verdict: data, locked: true },
-          disposition: guardDisposition(prev.disposition, nextDisposition),
-          counselNotes: deriveVerdictCounselNotes(data, config.role),
-          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
-          sanctions: accountabilityEntry
-            ? [...(prev.sanctions ?? []), accountabilityEntry]
-            : prev.sanctions,
-        };
-      });
       if (!isVerdictCompliant) {
+        setHistory((prev) => ({
+          ...prev,
+          trial: {
+            ...prev.trial,
+            text,
+            verdict: prev.trial?.verdict,
+            locked: false,
+            rejectedVerdicts: [
+              ...(prev.trial?.rejectedVerdicts ?? []),
+              {
+                payload: parsed,
+                reason: 'Verdict referenced off-docket or inadmissible material.',
+                validation: verdictRecord,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        }));
         setError('Verdict rejected for off-docket or inadmissible references.');
         setLoadingMsg(null);
         return;
       }
-      const shouldReinstate =
+      if (!hasTerminalDisposition) {
+        setHistory((prev) => ({
+          ...prev,
+          trial: {
+            ...prev.trial,
+            text,
+            verdict: prev.trial?.verdict,
+            locked: false,
+            rejectedVerdicts: [
+              ...(prev.trial?.rejectedVerdicts ?? []),
+              {
+                payload: parsed,
+                reason: 'Verdict did not provide a terminal disposition.',
+                validation: verdictRecord,
+                timestamp: new Date().toISOString(),
+              },
+            ],
+          },
+          validationHistory: [...(prev.validationHistory ?? []), verdictRecord],
+        }));
+        setError('Verdict rejected because final ruling must resolve to a terminal disposition.');
+        setLoadingMsg(null);
+        return;
+      }
+      const nextHistory = {
+        ...history,
+        trial: { text, verdict: data, locked: hasTerminalDisposition },
+        disposition: guardDisposition(history.disposition, nextDisposition),
+        counselNotes: deriveVerdictCounselNotes(data, config.role),
+        validationHistory: [...(history.validationHistory ?? []), verdictRecord],
+        sanctions: sanctionEntry ? [...(history.sanctions ?? []), sanctionEntry] : history.sanctions,
+      };
+      setHistory(nextHistory);
+      const shouldClearSanctions =
         isMeritReleaseDisposition(nextDisposition) &&
-        sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
-      const nowMs = shouldReinstate ? Date.now() : null;
-      const nextSanctionsState = shouldReinstate
-        ? buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
+        config.caseType === CASE_TYPES.PUBLIC_DEFENDER &&
+        isTierTwoOrHigherSanction(sanctionsState);
+      // eslint-disable-next-line react-hooks/purity
+      const nowMs = shouldClearSanctions ? Date.now() : null;
+      const nextSanctionsState = shouldClearSanctions
+        ? buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
             lastMisconductAt: sanctionsState.lastMisconductAt,
-            recidivismCount: sanctionsState.recidivismCount,
+            recidivismCount: 0,
           })
         : sanctionsState;
-      if (shouldReinstate) {
+      if (shouldClearSanctions) {
         setSanctionsState(nextSanctionsState);
       }
       if (data.achievement_title) {
         appendAchievement(data.achievement_title);
       }
-      finalizeRunHistoryEntry(data, nextDisposition, data.achievement_title ?? null);
-      if (isTerminalDisposition(nextDisposition)) {
-        const outcomePayload = buildRunOutcome(nextDisposition, nextSanctionsState);
-        setRunOutcome(outcomePayload);
-        emitShellEvent({ type: 'RUN_ENDED', payload: outcomePayload });
+      if (hasTerminalDisposition) {
+        completeRun({
+          verdict: data,
+          disposition: nextDisposition,
+          achievementId: data.achievement_title ?? null,
+          nextHistory,
+          sanctionsAfter: nextSanctionsState,
+        });
       }
       setLoadingMsg(null);
     } catch (err) {
       console.error(err);
       setError(getLlmClientErrorMessage(err, 'Verdict failed.'));
       setLoadingMsg(null);
+    }
+  };
+
+  /**
+   * Generate a lightweight auto-drafted player submission for playtesting.
+   *
+   * @param {'legit' | 'absurd'} mode - Generation mode.
+   * @param {'motion' | 'argument'} stage - Submission stage.
+   * @returns {Promise<string>} Generated submission text.
+   */
+  const generateAutoSubmission = async (mode, stage) => {
+    if (!['legit', 'absurd'].includes(mode) || !['motion', 'argument'].includes(stage)) {
+      return '';
+    }
+
+    const opposingArgument =
+      stage === 'motion'
+        ? history.motion?.motionPhase === 'rebuttal_submission'
+          ? history.motion?.motionText ?? ''
+          : ''
+        : history.motion?.rebuttalText || history.motion?.motionText || '';
+
+    setError(null);
+    setLoadingMsg(mode === 'absurd' ? 'Generating chaos...' : 'Generating draft argument...');
+    try {
+      const { parsed } = await requestLlmJson({
+        userPrompt: `Auto ${mode} ${stage}`,
+        systemPrompt: getAutoSubmissionPrompt({
+          stage,
+          mode,
+          caseData: buildDocketPromptCase(history.case),
+          playerRole: config.role,
+          opposingArgument,
+        }),
+        responseLabel: 'auto_submission',
+      });
+      const data = parseMotionTextResponse(parsed);
+      setLoadingMsg(null);
+      return data.text;
+    } catch (err) {
+      console.error(err);
+      setError(getLlmClientErrorMessage(err, 'Auto-generation failed.'));
+      setLoadingMsg(null);
+      return '';
     }
   };
 
@@ -2099,10 +2235,44 @@ const useGameState = (options = {}) => {
   const buildSanctionsSection = (sanctions = []) => {
     if (!sanctions.length) return null;
     const lines = sanctions.map((entry) => {
-      const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
-      return `- ${state}: ${entry.docket_text}`;
-    });
+        const state = entry.state ? entry.state.toUpperCase() : 'NOTICE';
+        return `- ${state}: ${entry.docket_text}`;
+      });
     return `SANCTIONS/STATUS FLAGS:\n${lines.join('\n')}`;
+  };
+
+  const toJsonClone = (value) => JSON.parse(JSON.stringify(value));
+
+  const buildDocketSnapshot = (historyState) => {
+    const snapshot = {
+      case: toJsonClone(historyState.case ?? null),
+      jury: toJsonClone(historyState.jury ?? null),
+      motion: toJsonClone(historyState.motion ?? null),
+      trial: toJsonClone(historyState.trial ?? null),
+      disposition: toJsonClone(historyState.disposition ?? null),
+      sanctions: toJsonClone(historyState.sanctions ?? []),
+      counselNotes: historyState.counselNotes ?? '',
+      validationHistory: toJsonClone(historyState.validationHistory ?? []),
+    };
+
+    return {
+      generatedAt: new Date().toISOString(),
+      sections: {
+        case: snapshot.case,
+        header: {
+          title: snapshot.case?.title ?? null,
+          judge: snapshot.case?.judge?.name ?? null,
+        },
+        facts: snapshot.case?.facts ?? [],
+        jury: snapshot.jury,
+        motion: snapshot.motion,
+        trial: snapshot.trial,
+        disposition: snapshot.disposition,
+        sanctions: snapshot.sanctions,
+        counselNotes: snapshot.counselNotes,
+        validationHistory: snapshot.validationHistory,
+      },
+    };
   };
 
   /**
@@ -2244,6 +2414,7 @@ const useGameState = (options = {}) => {
     triggerAiMotionSubmission,
     requestMotionRuling,
     submitArgument,
+    generateAutoSubmission,
     handleCopyFull,
     resetGame,
     toggleStrikeSelection,

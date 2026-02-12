@@ -112,6 +112,14 @@ const buildMotionBreakdown = (overrides = {}) => ({
 });
 const buildMotionRuling = (overrides = {}) => ({
   ruling: 'DENIED',
+  decision: {
+    ruling: 'denied',
+    dismissal: {
+      isDismissed: false,
+      withPrejudice: false,
+    },
+    opinion: 'Denied',
+  },
   outcome_text: 'Denied',
   score: 50,
   evidence_status_updates: [],
@@ -276,11 +284,12 @@ describe('useGameState transitions', () => {
     );
   });
 
-  it('locks the config when public defender mode is active', async () => {
+  it('locks the config when sanctions tier is 2 or higher', async () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: SANCTION_STATES.PUBLIC_DEFENDER,
+      state: SANCTION_STATES.SANCTIONED,
+      level: 2,
     };
     window.localStorage.setItem(
       PROFILE_STORAGE_KEY,
@@ -303,7 +312,7 @@ describe('useGameState transitions', () => {
     expect(result.current.config.caseType).toBe(CASE_TYPES.PUBLIC_DEFENDER);
   });
 
-  it('reinstates from public defender mode after a not guilty verdict', async () => {
+  it('clears sanctions after winning in public defender mode', async () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
@@ -381,10 +390,8 @@ describe('useGameState transitions', () => {
       await result.current.submitArgument('Closing');
     });
 
-    expect(result.current.sanctionsState.state).toBe(
-      SANCTION_STATES.RECENTLY_REINSTATED
-    );
-    expect(result.current.sanctionsState.recentlyReinstatedUntil).toBeTruthy();
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.CLEAN);
+    expect(result.current.sanctionsState.level).toBe(0);
   });
 
   it('retains public defender mode after a guilty verdict', async () => {
@@ -868,6 +875,93 @@ describe('useGameState transitions', () => {
     expect(runHistory.runs[0].endedAt).toBeTruthy();
   });
 
+  it('rejects non-terminal verdict text and does not finalize run history or stats', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildVerdict({
+            final_ruling: 'Proceed to post-trial briefing.',
+            final_weighted_score: 70,
+            jury_reasoning: 'N/A',
+          })
+        )
+      )
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildVerdict({
+            final_ruling: 'Not Guilty',
+            final_weighted_score: 83,
+            jury_reasoning: 'N/A',
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing one');
+    });
+
+    const profileAfterFirstVerdict = loadPlayerProfile();
+    const runHistoryAfterFirstVerdict = loadRunHistory();
+
+    expect(result.current.history.disposition).toBeNull();
+    expect(result.current.history.trial.locked).toBe(false);
+    expect(result.current.runOutcome).toBeNull();
+    expect(result.current.error).toBe(
+      'Verdict rejected because final ruling must resolve to a terminal disposition.'
+    );
+    expect(profileAfterFirstVerdict.stats).toEqual({
+      runsCompleted: 0,
+      verdictsFinalized: 0,
+      sanctionsIncurred: 0,
+    });
+    expect(runHistoryAfterFirstVerdict.runs).toHaveLength(1);
+    expect(runHistoryAfterFirstVerdict.runs[0].endedAt).toBeNull();
+    expect(runHistoryAfterFirstVerdict.runs[0].outcome).toBeNull();
+
+    await act(async () => {
+      await result.current.submitArgument('Closing two');
+    });
+
+    const profileAfterSecondVerdict = loadPlayerProfile();
+    const runHistoryAfterSecondVerdict = loadRunHistory();
+
+    expect(profileAfterSecondVerdict.stats).toEqual({
+      runsCompleted: 1,
+      verdictsFinalized: 1,
+      sanctionsIncurred: 0,
+    });
+    expect(runHistoryAfterSecondVerdict.runs).toHaveLength(1);
+    expect(runHistoryAfterSecondVerdict.runs[0].outcome).toBe('not_guilty');
+    expect(runHistoryAfterSecondVerdict.runs[0].endedAt).toBeTruthy();
+  });
+
   it('logs structured accountability sanctions from verdict payloads', async () => {
     const accountability = {
       sanction_recommended: true,
@@ -925,6 +1019,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Dismissed with prejudice' },
             outcome_text: 'Dismissed with prejudice',
             evidence_status_updates: [{ id: 1, status: 'admissible' }],
           })
@@ -955,7 +1050,7 @@ describe('useGameState transitions', () => {
     expect(profile.stats).toEqual({
       runsCompleted: 1,
       verdictsFinalized: 0,
-      sanctionsIncurred: 0,
+      sanctionsIncurred: 1,
     });
     expect(runHistory.runs).toHaveLength(1);
     expect(runHistory.runs[0]).toMatchObject({
@@ -972,7 +1067,107 @@ describe('useGameState transitions', () => {
         after: expect.any(Object),
       },
     });
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.WARNED);
     expect(runHistory.runs[0].endedAt).toBeTruthy();
+  });
+
+  it('does not log sanctions for dismissals without prejudice', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            decision: {
+              ruling: 'dismissed',
+              dismissal: { isDismissed: true, withPrejudice: false },
+              opinion: 'Dismissed without prejudice',
+            },
+            outcome_text: 'Dismissed without prejudice',
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const profile = loadPlayerProfile();
+
+    expect(result.current.history.sanctions ?? []).toHaveLength(0);
+    expect(profile.stats.sanctionsIncurred).toBe(0);
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.CLEAN);
+  });
+
+  it('escalates warned counsel to sanctioned for dismissals with prejudice', async () => {
+    const nowMs = Date.now();
+    const warnedProfile = {
+      ...defaultPlayerProfile(),
+      sanctions: {
+        state: SANCTION_STATES.WARNED,
+        level: 1,
+        startedAt: new Date(nowMs - 60_000).toISOString(),
+        expiresAt: new Date(nowMs + 60_000).toISOString(),
+        lastMisconductAt: new Date(nowMs - 60_000).toISOString(),
+        recidivismCount: 1,
+        recentlyReinstatedUntil: null,
+      },
+    };
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(warnedProfile));
+
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            decision: {
+              ruling: 'dismissed',
+              dismissal: { isDismissed: true, withPrejudice: true },
+              opinion: 'Dismissed with prejudice',
+            },
+            outcome_text: 'Dismissed with prejudice',
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.SANCTIONED);
   });
 
   it('updates counsel notes when the jury is seated', async () => {
@@ -1481,7 +1676,8 @@ describe('useGameState transitions', () => {
         rebuttalBy: 'prosecution',
         ruling: {
           ruling: 'GRANTED',
-          outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
+          decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
+            outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
           score: 90,
           evidence_status_updates: [],
           breakdown: buildMotionBreakdown({
@@ -1531,6 +1727,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })
@@ -1572,6 +1769,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })
@@ -1621,6 +1819,13 @@ describe('useGameState transitions', () => {
     expect(result.current.runOutcome.disposition.type).toBe(
       FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE
     );
+    const profile = loadPlayerProfile();
+    expect(profile.caseHistory[0]).toEqual(
+      expect.objectContaining({
+        caseName: 'Bench Trial',
+        outcome: FINAL_DISPOSITIONS.DISMISSED_WITH_PREJUDICE,
+      })
+    );
     expect(result.current.gameState).toBe(GAME_STATES.PLAYING);
   });
 
@@ -1631,6 +1836,7 @@ describe('useGameState transitions', () => {
         buildLlmResponse(
           buildMotionRuling({
             ruling: 'GRANTED',
+            decision: { ruling: 'dismissed', dismissal: { isDismissed: true, withPrejudice: true }, opinion: 'Motion to dismiss granted. Case dismissed with prejudice.' },
             outcome_text: 'Motion to dismiss granted. Case dismissed with prejudice.',
             score: 90,
           })
@@ -1733,6 +1939,51 @@ describe('useGameState transitions', () => {
 
     expect(requestLlmJson).toHaveBeenCalledTimes(3);
     expect(result.current.error).toBeNull();
+  });
+
+
+  it('stores a terminal case docket snapshot in player profile history', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse(buildVerdict({ jury_reasoning: 'N/A' })));
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    act(() => {
+      result.current.history.motion = {
+        motionText: 'Motion text.',
+        motionBy: 'defense',
+        rebuttalText: 'Rebuttal text.',
+        rebuttalBy: 'prosecution',
+        ruling: {
+          ruling: 'DENIED',
+          outcome_text: 'Denied.',
+          score: 45,
+          evidence_status_updates: [],
+          breakdown: buildMotionBreakdown(),
+        },
+        motionPhase: 'motion_ruling_locked',
+        locked: true,
+      };
+    });
+
+    await act(async () => {
+      await result.current.submitArgument('Closing statement.');
+    });
+
+    const profile = loadPlayerProfile();
+    expect(profile.caseHistory).toHaveLength(1);
+    const savedCase = profile.caseHistory[0];
+    expect(savedCase.caseName).toBe('Bench Trial');
+    expect(savedCase.outcome).toBe(FINAL_DISPOSITIONS.NOT_GUILTY);
+    expect(savedCase.finalSanctionsCount).toBe(0);
+    expect(savedCase.docketSnapshot.sections.case.title).toBe('Bench Trial');
+    expect(savedCase.docketSnapshot.sections.trial.text).toBe('Closing statement.');
+    expect(savedCase.docketSnapshot.sections.trial.verdict.final_ruling).toBe('Not Guilty');
   });
 
   it('emits RUN_ENDED with outcome payload after a final verdict', async () => {
@@ -2110,7 +2361,7 @@ describe('useGameState transitions', () => {
 
   it('escalates to public defender mode after repeated procedural violations', () => {
     const nowMs = Date.now();
-    const firstEntryTime = nowMs - 5 * 60 * 1000;
+    const firstEntryTime = nowMs - 4 * 60 * 1000;
     const secondEntryTime = nowMs;
     const sanctionedState = {
       ...__testables.buildDefaultSanctionsState(firstEntryTime),
