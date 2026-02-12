@@ -1067,8 +1067,107 @@ describe('useGameState transitions', () => {
         after: expect.any(Object),
       },
     });
-    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.PUBLIC_DEFENDER);
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.WARNED);
     expect(runHistory.runs[0].endedAt).toBeTruthy();
+  });
+
+  it('does not log sanctions for dismissals without prejudice', async () => {
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            decision: {
+              ruling: 'dismissed',
+              dismissal: { isDismissed: true, withPrejudice: false },
+              opinion: 'Dismissed without prejudice',
+            },
+            outcome_text: 'Dismissed without prejudice',
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    const profile = loadPlayerProfile();
+
+    expect(result.current.history.sanctions ?? []).toHaveLength(0);
+    expect(profile.stats.sanctionsIncurred).toBe(0);
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.CLEAN);
+  });
+
+  it('escalates warned counsel to sanctioned for dismissals with prejudice', async () => {
+    const nowMs = Date.now();
+    const warnedProfile = {
+      ...defaultPlayerProfile(),
+      sanctions: {
+        state: SANCTION_STATES.WARNED,
+        level: 1,
+        startedAt: new Date(nowMs - 60_000).toISOString(),
+        expiresAt: new Date(nowMs + 60_000).toISOString(),
+        lastMisconductAt: new Date(nowMs - 60_000).toISOString(),
+        recidivismCount: 1,
+        recentlyReinstatedUntil: null,
+      },
+    };
+    window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(warnedProfile));
+
+    requestLlmJson
+      .mockResolvedValueOnce(buildLlmResponse(benchCasePayload))
+      .mockResolvedValueOnce(buildLlmResponse({ text: 'Opposing response.' }))
+      .mockResolvedValueOnce(
+        buildLlmResponse(
+          buildMotionRuling({
+            ruling: 'GRANTED',
+            decision: {
+              ruling: 'dismissed',
+              dismissal: { isDismissed: true, withPrejudice: true },
+              opinion: 'Dismissed with prejudice',
+            },
+            outcome_text: 'Dismissed with prejudice',
+            evidence_status_updates: [{ id: 1, status: 'admissible' }],
+          })
+        )
+      );
+
+    const { result } = renderHook(() => useGameState());
+
+    await act(async () => {
+      await result.current.generateCase('defense', 'normal', JURISDICTIONS.USA, COURT_TYPES.STANDARD);
+    });
+
+    await act(async () => {
+      await result.current.submitMotionStep('Suppress evidence');
+    });
+
+    await act(async () => {
+      await result.current.triggerAiMotionSubmission();
+    });
+
+    await act(async () => {
+      await result.current.requestMotionRuling();
+    });
+
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.SANCTIONED);
   });
 
   it('updates counsel notes when the jury is seated', async () => {
