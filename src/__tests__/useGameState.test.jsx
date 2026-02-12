@@ -284,11 +284,12 @@ describe('useGameState transitions', () => {
     );
   });
 
-  it('locks the config when public defender mode is active', async () => {
+  it('locks the config when sanctions tier is 2 or higher', async () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
-      state: SANCTION_STATES.PUBLIC_DEFENDER,
+      state: SANCTION_STATES.SANCTIONED,
+      level: 2,
     };
     window.localStorage.setItem(
       PROFILE_STORAGE_KEY,
@@ -311,7 +312,7 @@ describe('useGameState transitions', () => {
     expect(result.current.config.caseType).toBe(CASE_TYPES.PUBLIC_DEFENDER);
   });
 
-  it('reinstates from public defender mode after a not guilty verdict', async () => {
+  it('clears sanctions after winning in public defender mode', async () => {
     const nowMs = Date.now();
     const storedState = {
       ...__testables.buildDefaultSanctionsState(nowMs),
@@ -389,10 +390,8 @@ describe('useGameState transitions', () => {
       await result.current.submitArgument('Closing');
     });
 
-    expect(result.current.sanctionsState.state).toBe(
-      SANCTION_STATES.RECENTLY_REINSTATED
-    );
-    expect(result.current.sanctionsState.recentlyReinstatedUntil).toBeTruthy();
+    expect(result.current.sanctionsState.state).toBe(SANCTION_STATES.CLEAN);
+    expect(result.current.sanctionsState.level).toBe(0);
   });
 
   it('retains public defender mode after a guilty verdict', async () => {
@@ -2263,7 +2262,7 @@ describe('useGameState transitions', () => {
 
   it('escalates to public defender mode after repeated procedural violations', () => {
     const nowMs = Date.now();
-    const firstEntryTime = nowMs - 5 * 60 * 1000;
+    const firstEntryTime = nowMs - 4 * 60 * 1000;
     const secondEntryTime = nowMs;
     const sanctionedState = {
       ...__testables.buildDefaultSanctionsState(firstEntryTime),
