@@ -430,17 +430,6 @@ export const normalizeSanctionsState = (state, nowMs) => {
     lastMisconductMs !== null && nowMs - lastMisconductMs > COOLDOWN_RESET_MS;
 
   if (
-    hydratedState.state === SANCTION_STATES.PUBLIC_DEFENDER &&
-    expiresAtMs &&
-    nowMs >= expiresAtMs
-  ) {
-    return buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
-      lastMisconductAt: hydratedState.lastMisconductAt,
-      recidivismCount: hydratedState.recidivismCount,
-    });
-  }
-
-  if (
     hydratedState.state === SANCTION_STATES.RECENTLY_REINSTATED &&
     reinstatedUntilMs &&
     nowMs >= reinstatedUntilMs
@@ -480,6 +469,14 @@ const buildSanctionPromptContext = (sanctionsState, overrides = {}) => ({
   expiresAt: sanctionsState?.expiresAt,
   recentlyReinstatedUntil: sanctionsState?.recentlyReinstatedUntil,
 });
+
+const isTierTwoOrHigherSanction = (sanctionsState) => {
+  const numericLevel =
+    typeof sanctionsState?.level === 'number'
+      ? sanctionsState.level
+      : SANCTION_LEVELS[sanctionsState?.state] ?? 0;
+  return numericLevel >= SANCTION_LEVELS[SANCTION_STATES.SANCTIONED];
+};
 
 const getNextSanctionsState = ({ currentState, entryState, recidivismCount, severe }) => {
   if (currentState === SANCTION_STATES.RECENTLY_REINSTATED) {
@@ -1324,7 +1321,7 @@ const useGameState = (options = {}) => {
       jurisdiction ?? DEFAULT_GAME_CONFIG.jurisdiction
     );
     const resolvedCourtType = normalizeCourtType(courtType ?? DEFAULT_GAME_CONFIG.courtType);
-    const isPublicDefenderMode = sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+    const isPublicDefenderMode = isTierTwoOrHigherSanction(sanctionsState);
     const legacyNightCourt =
       resolvedJurisdiction === JURISDICTIONS.MUNICIPAL_NIGHT_COURT
         ? COURT_TYPES.NIGHT_COURT
@@ -2151,18 +2148,19 @@ const useGameState = (options = {}) => {
           : history.sanctions,
       };
       setHistory(nextHistory);
-      const shouldReinstate =
+      const shouldClearSanctions =
         isMeritReleaseDisposition(nextDisposition) &&
-        sanctionsState.state === SANCTION_STATES.PUBLIC_DEFENDER;
+        config.caseType === CASE_TYPES.PUBLIC_DEFENDER &&
+        isTierTwoOrHigherSanction(sanctionsState);
       // eslint-disable-next-line react-hooks/purity
-      const nowMs = shouldReinstate ? Date.now() : null;
-      const nextSanctionsState = shouldReinstate
-        ? buildSanctionsState(SANCTION_STATES.RECENTLY_REINSTATED, nowMs, {
+      const nowMs = shouldClearSanctions ? Date.now() : null;
+      const nextSanctionsState = shouldClearSanctions
+        ? buildSanctionsState(SANCTION_STATES.CLEAN, nowMs, {
             lastMisconductAt: sanctionsState.lastMisconductAt,
-            recidivismCount: sanctionsState.recidivismCount,
+            recidivismCount: 0,
           })
         : sanctionsState;
-      if (shouldReinstate) {
+      if (shouldClearSanctions) {
         setSanctionsState(nextSanctionsState);
       }
       if (data.achievement_title) {
