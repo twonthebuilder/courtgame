@@ -1,11 +1,8 @@
-const GEMINI_STORAGE_KEY = 'pocketcourt.geminiKey';
+import { AI_PROVIDERS } from './config';
 
-/**
- * Supported AI providers for runtime selection.
- *
- * @type {{value: string, label: string}[]}
- */
-export const AI_PROVIDERS = [{ value: 'gemini', label: 'Gemini' }];
+export { AI_PROVIDERS };
+
+const GEMINI_STORAGE_KEY = 'pocketcourt.geminiKey';
 
 let runtimeApiKey = '';
 
