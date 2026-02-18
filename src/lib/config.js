@@ -104,3 +104,101 @@ export const DEFAULT_GAME_CONFIG = {
   role: 'defense',
   caseType: CASE_TYPES.STANDARD,
 };
+
+export const DEFAULT_LLM_PROVIDER = 'gemini';
+export const DEFAULT_LLM_MODEL = 'gemini-2.5-flash-preview-09-2025';
+
+const LLM_ENV_KEYS = {
+  provider: 'VITE_LLM_PROVIDER',
+  model: 'VITE_LLM_MODEL',
+  endpoint: 'VITE_LLM_ENDPOINT',
+};
+
+/**
+ * Supported AI providers for runtime selection.
+ *
+ * @type {{value: string, label: string}[]}
+ */
+export const AI_PROVIDERS = [{ value: DEFAULT_LLM_PROVIDER, label: 'Gemini' }];
+
+const LLM_MODEL_ENDPOINTS = {
+  gemini: {
+    'gemini-2.5-flash-preview-09-2025':
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent',
+    'gemini-2.5-flash':
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+  },
+};
+
+/**
+ * Resolve and validate LLM provider/model/endpoint settings.
+ *
+ * Invalid or missing provider/model values fall back to canonical defaults.
+ * Endpoint overrides must be a valid URL.
+ *
+ * @param {Record<string, string | undefined>} [env] - Environment object (defaults to import.meta.env).
+ * @returns {{provider: string, model: string, endpoint: string, isFallback: boolean, warnings: string[]}}
+ */
+export const resolveLlmConfig = (env = import.meta.env ?? {}) => {
+  const warnings = [];
+  const configuredProvider = env[LLM_ENV_KEYS.provider]?.trim().toLowerCase();
+  const configuredModel = env[LLM_ENV_KEYS.model]?.trim();
+  const configuredEndpoint = env[LLM_ENV_KEYS.endpoint]?.trim();
+
+  let provider = configuredProvider || DEFAULT_LLM_PROVIDER;
+  if (!LLM_MODEL_ENDPOINTS[provider]) {
+    warnings.push(
+      `Unsupported provider "${configuredProvider}". Falling back to ${DEFAULT_LLM_PROVIDER}.`
+    );
+    provider = DEFAULT_LLM_PROVIDER;
+  }
+
+  const providerModels = LLM_MODEL_ENDPOINTS[provider];
+  let model = configuredModel || DEFAULT_LLM_MODEL;
+  if (!providerModels[model]) {
+    warnings.push(
+      `Unsupported model "${configuredModel}" for provider "${provider}". Falling back to ${DEFAULT_LLM_MODEL}.`
+    );
+    model = DEFAULT_LLM_MODEL;
+  }
+
+  const defaultEndpoint = providerModels[model];
+  let endpoint = defaultEndpoint;
+  if (configuredEndpoint) {
+    try {
+      const parsed = new URL(configuredEndpoint);
+      endpoint = parsed.toString();
+    } catch {
+      warnings.push(
+        `Invalid endpoint override "${configuredEndpoint}". Falling back to model default endpoint.`
+      );
+    }
+  }
+
+  return {
+    provider,
+    model,
+    endpoint,
+    isFallback: warnings.length > 0,
+    warnings,
+  };
+};
+
+/**
+ * Strictly validate a model identifier for a provider.
+ *
+ * @param {string} provider - Provider identifier.
+ * @param {string} model - Model identifier.
+ * @returns {{endpoint: string}}
+ */
+export const getEndpointForModel = (provider, model) => {
+  const providerModels = LLM_MODEL_ENDPOINTS[provider];
+  if (!providerModels) {
+    throw new Error(`Unsupported provider: ${provider}`);
+  }
+  const endpoint = providerModels[model];
+  if (!endpoint) {
+    throw new Error(`Unsupported model "${model}" for provider "${provider}"`);
+  }
+  return { endpoint };
+};

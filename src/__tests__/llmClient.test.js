@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { fetchWithRetry } from '../lib/api';
+import { resolveLlmConfig } from '../lib/config';
 import { getActiveApiKey } from '../lib/runtimeConfig';
 import {
   LlmClientError,
@@ -12,6 +13,21 @@ vi.mock('../lib/runtimeConfig', () => ({
   getActiveApiKey: vi.fn(() => 'test-key'),
 }));
 
+vi.mock('../lib/config', async () => {
+  const actual = await vi.importActual('../lib/config');
+  return {
+    ...actual,
+    resolveLlmConfig: vi.fn(() => ({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash-preview-09-2025',
+      endpoint:
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent',
+      isFallback: false,
+      warnings: [],
+    })),
+  };
+});
+
 vi.mock('../lib/api', () => ({
   fetchWithRetry: vi.fn(),
 }));
@@ -20,6 +36,14 @@ describe('llm client wrappers', () => {
   beforeEach(() => {
     fetchWithRetry.mockReset();
     getActiveApiKey.mockReset().mockReturnValue('test-key');
+    resolveLlmConfig.mockReset().mockReturnValue({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash-preview-09-2025',
+      endpoint:
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent',
+      isFallback: false,
+      warnings: [],
+    });
   });
 
   afterEach(() => {
@@ -44,6 +68,28 @@ describe('llm client wrappers', () => {
     expect(result).toEqual({
       parsed: { decision: 'ok' },
       rawText: '{"decision":"ok"}',
+    });
+  });
+
+
+  it('fails when resolved LLM config has no endpoint', async () => {
+    resolveLlmConfig.mockReturnValue({
+      provider: 'gemini',
+      model: 'gemini-2.5-flash-preview-09-2025',
+      endpoint: '',
+      isFallback: true,
+      warnings: ['bad endpoint'],
+    });
+
+    await expect(
+      requestLlmJson({
+        systemPrompt: 'System',
+        userPrompt: 'User',
+        responseLabel: 'case',
+      })
+    ).rejects.toMatchObject({
+      code: 'CONFIG_MISSING',
+      userMessage: 'LLM model configuration is missing. Please check configuration.',
     });
   });
 

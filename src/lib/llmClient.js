@@ -1,8 +1,6 @@
 import { fetchWithRetry } from './api';
+import { resolveLlmConfig } from './config';
 import { getActiveApiKey } from './runtimeConfig';
-
-const GEMINI_ENDPOINT =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
 
 /**
  * Standardized error thrown by the LLM client and response parsers.
@@ -340,8 +338,26 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
     });
   }
 
+  const modelConfig = resolveLlmConfig();
+  if (!modelConfig.endpoint) {
+    throw createLlmError('Missing LLM endpoint configuration.', {
+      code: 'CONFIG_MISSING',
+      userMessage: 'LLM model configuration is missing. Please check configuration.',
+      context: { responseLabel, modelConfig },
+    });
+  }
+
+  if (modelConfig.isFallback && import.meta.env.DEV) {
+    console.warn('Resolved LLM config with fallbacks.', {
+      responseLabel,
+      warnings: modelConfig.warnings,
+      provider: modelConfig.provider,
+      model: modelConfig.model,
+    });
+  }
+
   try {
-    const response = await fetchWithRetry(`${GEMINI_ENDPOINT}?key=${apiKey}`, {
+    const response = await fetchWithRetry(`${modelConfig.endpoint}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
