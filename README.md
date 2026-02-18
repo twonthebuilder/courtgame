@@ -176,10 +176,10 @@ MIT License - feel free to fork and experiment.
 
 ## Acknowledgments
 
-Built in collaboration with Gemini (Google), ChatGPT Codex (OpenAI), and Claude (Anthropic) through rapid iterative prototyping.
+Built using Gemini (Google), ChatGPT Codex (OpenAI), and Claude (Anthropic) through rapid iterative prototyping.
 
 Special thanks to the emergent gameplay gods for making jury psychology actually matter.
 
 ---
 
-**Play a case. Get humbled. Learn something. - Claude**
+**Play a case. Get humbled. Learn something.**
