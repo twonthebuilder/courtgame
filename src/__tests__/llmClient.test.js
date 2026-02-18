@@ -47,6 +47,57 @@ describe('llm client wrappers', () => {
     });
   });
 
+  it('maps timeout failures to a timeout user message', async () => {
+    const timeoutError = new Error('timeout');
+    timeoutError.code = 'REQUEST_TIMEOUT';
+    fetchWithRetry.mockRejectedValue(timeoutError);
+
+    await expect(
+      requestLlmJson({
+        systemPrompt: 'System',
+        userPrompt: 'User',
+        responseLabel: 'case',
+      })
+    ).rejects.toMatchObject({
+      code: 'REQUEST_TIMEOUT',
+      userMessage: 'The AI request timed out. Please try again.',
+    });
+  });
+
+  it('maps rate-limit failures to a rate-limit user message', async () => {
+    const rateLimitError = new Error('429');
+    rateLimitError.status = 429;
+    fetchWithRetry.mockRejectedValue(rateLimitError);
+
+    await expect(
+      requestLlmJson({
+        systemPrompt: 'System',
+        userPrompt: 'User',
+        responseLabel: 'case',
+      })
+    ).rejects.toMatchObject({
+      code: 'RATE_LIMIT',
+      userMessage: 'The AI is rate-limited right now. Please wait a moment and retry.',
+    });
+  });
+
+  it('maps auth failures to an auth-specific user message', async () => {
+    const authError = new Error('403');
+    authError.status = 403;
+    fetchWithRetry.mockRejectedValue(authError);
+
+    await expect(
+      requestLlmJson({
+        systemPrompt: 'System',
+        userPrompt: 'User',
+        responseLabel: 'case',
+      })
+    ).rejects.toMatchObject({
+      code: 'AUTH_FAILED',
+      userMessage: 'AI authentication failed. Please verify your API key and permissions.',
+    });
+  });
+
   it('prefers user-friendly messages from LlmClientError', () => {
     const error = new LlmClientError('Bad response', {
       userMessage: 'Try again later.',

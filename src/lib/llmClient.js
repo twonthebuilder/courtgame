@@ -360,6 +360,34 @@ export const requestLlmJson = async ({ systemPrompt, userPrompt, responseLabel =
     if (error instanceof LlmClientError) {
       throw error;
     }
+
+    if (error?.code === 'REQUEST_TIMEOUT') {
+      throw createLlmError(`LLM request timed out for ${responseLabel}.`, {
+        code: 'REQUEST_TIMEOUT',
+        userMessage: 'The AI request timed out. Please try again.',
+        cause: error,
+        context: { responseLabel },
+      });
+    }
+
+    if (error?.status === 429) {
+      throw createLlmError(`LLM request rate-limited for ${responseLabel}.`, {
+        code: 'RATE_LIMIT',
+        userMessage: 'The AI is rate-limited right now. Please wait a moment and retry.',
+        cause: error,
+        context: { responseLabel, status: error.status },
+      });
+    }
+
+    if (error?.status === 401 || error?.status === 403) {
+      throw createLlmError(`LLM authentication failed for ${responseLabel}.`, {
+        code: 'AUTH_FAILED',
+        userMessage: 'AI authentication failed. Please verify your API key and permissions.',
+        cause: error,
+        context: { responseLabel, status: error.status },
+      });
+    }
+
     throw createLlmError(`LLM request failed for ${responseLabel}.`, {
       code: 'REQUEST_FAILED',
       userMessage: 'The AI request failed. Please try again.',
