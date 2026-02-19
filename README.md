@@ -2,6 +2,9 @@
 
 **An LLM-adjudicated legal strategy game where every case is unique.**
 
+[![PR CI](https://github.com/twonthebuilder/courtgame/actions/workflows/ci-pr.yml/badge.svg)](https://github.com/twonthebuilder/courtgame/actions/workflows/ci-pr.yml)
+[![Full CI](https://github.com/twonthebuilder/courtgame/actions/workflows/ci-full.yml/badge.svg)](https://github.com/twonthebuilder/courtgame/actions/workflows/ci-full.yml)
+
 ![PocketCourt](https://github.com/user-attachments/assets/8025cd3f-1b34-421f-b616-9b799b0c23b8)
 
 ---
@@ -130,10 +133,31 @@ npm run dev
 
 ## Testing
 ```bash
+# Full local suite
 npm test
+
+# Fast smoke suite (used by PR CI)
+npm run test:smoke
 ```
 
 Tests are deterministic under the shared Vitest setup, which stubs `Math.random` to a fixed value and keeps timer/network behavior explicit in test suites.
+
+## CI & Branch Protection Expectations
+
+GitHub Actions now enforces two levels of checks:
+
+- **PR workflow (`CI - Pull Request`)** runs `npm ci`, `npm run lint`, `npm run test:smoke`, and `npm run build`.
+- **Merge workflow (`CI - Full Suite`)** runs `npm ci`, `npm run lint`, `npm run test`, and `npm run build` on pushes to protected branches.
+
+Recommended branch protection settings in GitHub:
+
+1. Add protection for `main` and `moonshots`.
+2. Require pull requests before merging.
+3. Require status checks to pass before merging, including:
+   - `PR checks (lint + smoke + build)`
+4. Optionally require up-to-date branches before merging.
+
+This setup keeps PR feedback fast while still running full coverage on merge to active protected branches.
 
 ---
 
